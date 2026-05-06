@@ -147,17 +147,17 @@ Do not load sections for components you are not working on.
 
 ```
 ✅ 1   migration_001.sql        — complete
-⬜ 2   normalizer.js            — pure functions, no database
-⬜ 3   jwt.js                   — pure functions, Secret Manager keys must exist
-⬜ 4   resolverEngine.js        — standalone module, has database calls
-⬜ 5   GET /health              — proves Cloud Run and Postgres connected
-⬜ 6   orgAuthMiddleware        — org table must exist in schema
-⬜ 7   correlationIdMiddleware  — no dependencies
-⬜ 8   jwtMiddleware            — jwt.js must be complete
-⬜ 9   POST /v1/resolve         — normalizer and resolverEngine must be complete
-⬜ 10  POST /v1/ingest/nfc      — normalizer and resolverEngine must be complete
-⬜ 11  POST /v1/session         — jwt.js complete, fan table in schema
-⬜ 12  GET /v1/fan/:id/profile  — fan table and Firestore fans collection ready
+✅ 2   normalizer.js            — complete
+✅ 3   jwt.js                   — complete
+✅ 4   resolverEngine.js        — complete
+✅ 5   GET /health              — complete
+✅ 6   orgAuthMiddleware        — complete
+✅ 7   correlationIdMiddleware  — complete
+✅ 8   jwtMiddleware            — complete
+✅ 9   POST /v1/resolve         — complete
+✅ 10  POST /v1/ingest/nfc      — complete
+✅ 11  POST /v1/session         — complete
+✅ 12  GET /v1/fan/:id/profile  — complete
 ```
 
 ---
