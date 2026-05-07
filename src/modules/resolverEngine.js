@@ -60,7 +60,8 @@ async function resolverEngine(input) {
     const idempotencyResult = await client.query(
       `SELECT fan_id, match_type, confidence_score, is_new_record, id
        FROM audit_log
-       WHERE idempotency_key = $1 AND org_id = $2`,
+       WHERE idempotency_key = $1 AND org_id = $2
+         AND created_at > NOW() - INTERVAL '24 hours'`,
       [idempotency_key, org_id]
     );
     if (idempotencyResult.rows.length > 0) {

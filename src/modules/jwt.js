@@ -20,8 +20,8 @@ class StartupError extends Error {
 }
 
 // MODULE INIT — throws at startup if keys are absent; prevents Cloud Run start
-const PRIVATE_KEY = process.env.JWT_PRIVATE_KEY;
-const PUBLIC_KEY  = process.env.JWT_PUBLIC_KEY;
+const PRIVATE_KEY = (process.env.JWT_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+const PUBLIC_KEY  = (process.env.JWT_PUBLIC_KEY  || '').replace(/\\n/g, '\n');
 if (!PRIVATE_KEY || !PUBLIC_KEY) {
   throw new StartupError('JWT keys not found — service cannot start');
 }
