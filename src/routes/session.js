@@ -14,18 +14,21 @@ router.post('/v1/session', async (req, res) => {
   // RECEIVE
   const body           = req.body;
   const fan_id         = body.fan_id;
-  const org_id         = body.org_id;
+  const org_id         = req.context.org_id;  // ground truth from orgAuthMiddleware
   const schema_version = body.schema_version;
 
   // GUARD — in-memory only
+  if (body.org_id !== undefined && body.org_id !== org_id) {
+    return res.status(400).json({
+      error: 'org_id mismatch',
+      message: 'request body org_id does not match authenticated org'
+    });
+  }
   if (!fan_id || !String(fan_id).trim()) {
     return res.status(400).json({ error: 'fan_id is required' });
   }
   if (!UUID_RE.test(fan_id)) {
     return res.status(400).json({ error: 'fan_id must be a valid UUID' });
-  }
-  if (!org_id || !UUID_RE.test(org_id)) {
-    return res.status(400).json({ error: 'org_id must be a valid UUID' });
   }
   if (!schema_version || !String(schema_version).trim()) {
     return res.status(400).json({ error: 'schema_version is required' });

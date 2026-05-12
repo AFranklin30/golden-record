@@ -10,23 +10,25 @@ const pool = require('../db/pool');
 const router = express.Router();
 
 const logger  = { error: console.error, warn: console.warn };
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 router.post('/v1/ingest/nfc', async (req, res) => {
   // RECEIVE
   const body           = req.body;
   const nfc_uid        = body.nfc_uid;
-  const org_id         = body.org_id;
   const station_id     = body.station_id;
   const schema_version = body.schema_version;
   const tapped_at      = body.tapped_at || new Date().toISOString();
+  const org_id         = req.context.org_id;  // ground truth from orgAuthMiddleware
 
   // GUARD — in-memory only
+  if (body.org_id !== undefined && body.org_id !== org_id) {
+    return res.status(400).json({
+      error: 'org_id mismatch',
+      message: 'request body org_id does not match authenticated org'
+    });
+  }
   if (!nfc_uid || !String(nfc_uid).trim()) {
     return res.status(400).json({ error: 'nfc_uid is required' });
-  }
-  if (!org_id || !UUID_RE.test(org_id)) {
-    return res.status(400).json({ error: 'org_id must be a valid UUID' });
   }
   if (!station_id || !String(station_id).trim()) {
     return res.status(400).json({ error: 'station_id is required' });

@@ -3,6 +3,7 @@
 require('dotenv').config();
 
 const express   = require('express');
+const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const healthRouter         = require('./src/routes/health');
@@ -16,6 +17,7 @@ const profileRouter        = require('./src/routes/profile');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(helmet());
 app.use(express.json());
 
 // Public routes — no middleware
