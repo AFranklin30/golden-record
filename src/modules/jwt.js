@@ -28,6 +28,8 @@ if (!PRIVATE_KEY || !PUBLIC_KEY) {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const logger = { warn: console.warn };
+
 // RECEIVE
 function signToken(payload) {
   const fan_id = payload.fan_id;
@@ -42,6 +44,8 @@ function signToken(payload) {
   const issuedAt  = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + 15 * 60;
   const claims = {
+    iss: 'golden-record',
+    aud: 'golden-record',
     sub: fan_id,
     org: org_id,
     iat: issuedAt,
@@ -67,7 +71,7 @@ function verifyToken(authHeader) {
   // EXECUTE
   let decoded;
   try {
-    decoded = jwt.verify(token, PUBLIC_KEY, { algorithms: ['RS256'], clockTolerance: 30 });
+    decoded = jwt.verify(token, PUBLIC_KEY, { algorithms: ['RS256'], clockTolerance: 30, issuer: 'golden-record', audience: 'golden-record' });
   } catch (err) {
     if (err.name === 'TokenExpiredError')                                      throw new JWTError('token has expired', 401);
     if (err.name === 'JsonWebTokenError' && err.message === 'invalid signature') throw new JWTError('token signature invalid', 401);
@@ -96,13 +100,18 @@ function jwtMiddleware(req, res, next) {
   // TRY wraps EXECUTE only (Pattern 1 — GUARD has no db calls)
   try {
     const claims = verifyToken(authHeader);
+    if (claims.org_id !== req.context.org_id) {
+      throw new JWTError('org claim does not match authenticated org', 403);
+    }
     req.context.fan_id = claims.fan_id;
     req.context.jti    = claims.jti;
     next();
   } catch (err) {
     if (err instanceof JWTError) {
-      console.warn('JWT verification failed', { reason: err.message, ip: req.ip });
-      return res.status(401).json({ error: 'unauthorized', message: 'invalid or expired token' });
+      logger.warn('JWT verification failed', { reason: err.message, ip: req.ip, correlation_id: req.context?.correlation_id });
+      const status = err.code || 401;
+      const error  = status === 403 ? 'forbidden' : 'unauthorized';
+      return res.status(status).json({ error, message: 'invalid or expired token' });
     }
     throw err;
   }

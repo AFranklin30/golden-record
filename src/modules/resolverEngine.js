@@ -8,6 +8,8 @@ require('dotenv').config();
 
 const firestore = new Firestore({ projectId: process.env.FIRESTORE_PROJECT_ID });
 
+const logger = { error: console.error };
+
 class ConflictError extends Error {
   constructor(message) {
     super(message);
@@ -147,7 +149,7 @@ async function resolverEngine(input) {
           created_at: new Date().toISOString()
         });
       } catch (firestoreErr) {
-        console.error('Firestore sync failed for new fan', {
+        logger.error('Firestore sync failed for new fan', {
           fan_id:  fan_id,
           org_id:  org_id,
           error:   firestoreErr.message
@@ -158,8 +160,8 @@ async function resolverEngine(input) {
 
     // STEP 5 — linked systems query — after COMMIT, outside transaction
     const linkedResult = await pool.query(
-      'SELECT DISTINCT source_system FROM identifier_link WHERE fan_id = $1',
-      [fan_id]
+      'SELECT DISTINCT source_system FROM identifier_link WHERE fan_id = $1 AND org_id = $2',
+      [fan_id, org_id]
     );
     linked_systems = linkedResult.rows.map(row => row.source_system);
     linked_count   = linked_systems.length;
@@ -181,7 +183,7 @@ async function resolverEngine(input) {
         [crypto.randomUUID(), org_id, identifier_type, idempotency_key, err.message]
       );
     } catch {
-      console.error('audit log write failed', { org_id, identifier_type, error: err.message });
+      logger.error('audit log write failed', { org_id, identifier_type, error: err.message });
     }
 
     throw new ResolverError(`resolver failure: ${err.message}`);

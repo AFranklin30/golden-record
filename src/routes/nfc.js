@@ -40,6 +40,22 @@ router.post('/v1/ingest/nfc', async (req, res) => {
     return res.status(400).json({ error: 'schema_version is required' });
   }
 
+  // GUARD — tapped_at bounds (5 min future tolerance, 24 hr past limit)
+  const tappedAtMs   = Date.parse(tapped_at);
+  if (isNaN(tappedAtMs)) {
+    return res.status(400).json({ error: 'tapped_at is not a valid ISO 8601 timestamp' });
+  }
+  const nowMs = Date.now();
+  if (tappedAtMs > nowMs + 5 * 60 * 1000) {
+    return res.status(400).json({ error: 'tapped_at is too far in the future' });
+  }
+  if (tappedAtMs < nowMs - 24 * 60 * 60 * 1000) {
+    return res.status(400).json({ error: 'tapped_at is too far in the past' });
+  }
+
+  // nfc_uid hashed in DLQ payload — raw PII must not persist in ingest_failures
+  const dlqPayload = { ...body, nfc_uid: crypto.createHash('sha256').update(String(nfc_uid)).digest('hex') };
+
   // EXECUTE — TRY/CATCH 1: normalization failure
   let normalized_uid;
   try {
@@ -50,10 +66,10 @@ router.post('/v1/ingest/nfc', async (req, res) => {
         await pool.query(
           `INSERT INTO ingest_failures (id, org_id, source_system, raw_payload, reason_code, error_detail)
            VALUES ($1, $2, 'nfc', $3, 'normalization_error', $4)`,
-          [crypto.randomUUID(), org_id, body, err.message]
+          [crypto.randomUUID(), org_id, dlqPayload, err.message]
         );
       } catch (dlqErr) {
-        logger.error('DLQ write failed after normalization error', { org_id, station_id, error: dlqErr.message });
+        logger.error('DLQ write failed after normalization error', { org_id, station_id, error: dlqErr.message, correlation_id: req.context.correlation_id });
       }
       return res.status(400).json({ error: 'nfc_uid failed normalization', detail: err.message });
     }
@@ -86,14 +102,14 @@ router.post('/v1/ingest/nfc', async (req, res) => {
         await pool.query(
           `INSERT INTO ingest_failures (id, org_id, source_system, raw_payload, reason_code, error_detail)
            VALUES ($1, $2, 'nfc', $3, 'resolver_error', $4)`,
-          [crypto.randomUUID(), org_id, body, err.message]
+          [crypto.randomUUID(), org_id, dlqPayload, err.message]
         );
       } catch (dlqErr) {
-        logger.error('DLQ write failed after resolver error', { org_id, station_id, error: dlqErr.message });
+        logger.error('DLQ write failed after resolver error', { org_id, station_id, error: dlqErr.message, correlation_id: req.context.correlation_id });
       }
       return res.status(500).json({ error: 'resolver internal error' });
     }
-    logger.error('unexpected nfc ingest error', { error: err.message, org_id, station_id });
+    logger.error('unexpected nfc ingest error', { error: err.message, org_id, station_id, correlation_id: req.context.correlation_id });
     return res.status(500).json({ error: 'resolver internal error' });
   }
 

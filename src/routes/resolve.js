@@ -68,10 +68,10 @@ router.post('/v1/resolve', async (req, res) => {
       return res.status(409).json({ error: 'concurrent write conflict — retry request' });
     }
     if (err instanceof ResolverError) {
-      logger.error('resolver engine failure', { error: err.message, org_id });
+      logger.error('resolver engine failure', { error: err.message, org_id, correlation_id: req.context.correlation_id });
       return res.status(500).json({ error: 'resolver internal error' });
     }
-    logger.error('unexpected resolve error', { error: err.message, org_id });
+    logger.error('unexpected resolve error', { error: err.message, org_id, correlation_id: req.context.correlation_id });
     return res.status(500).json({ error: 'resolver internal error' });
   }
 
