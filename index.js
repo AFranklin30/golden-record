@@ -13,6 +13,7 @@ const resolveRouter        = require('./src/routes/resolve');
 const nfcRouter            = require('./src/routes/nfc');
 const sessionRouter        = require('./src/routes/session');
 const profileRouter        = require('./src/routes/profile');
+const conflictsRouter      = require('./src/routes/conflicts');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +41,7 @@ protectedRouter.use(resolveRouter);
 protectedRouter.use(nfcRouter);
 protectedRouter.use(sessionRouter);
 protectedRouter.use(profileRouter);
+protectedRouter.use(conflictsRouter);
 
 app.use(protectedRouter);
 

@@ -69,7 +69,7 @@ router.post('/v1/ingest/nfc', async (req, res) => {
           [crypto.randomUUID(), org_id, dlqPayload, err.message]
         );
       } catch (dlqErr) {
-        logger.error('DLQ write failed after normalization error', { org_id, station_id, error: dlqErr.message, correlation_id: req.context.correlation_id });
+        logger.error('DLQ write failed after normalization error', { event: 'dlq_write_failure', reason_code: 'normalization_error', org_id, station_id, error: dlqErr.message, correlation_id: req.context.correlation_id });
       }
       return res.status(400).json({ error: 'nfc_uid failed normalization', detail: err.message });
     }
@@ -105,7 +105,7 @@ router.post('/v1/ingest/nfc', async (req, res) => {
           [crypto.randomUUID(), org_id, dlqPayload, err.message]
         );
       } catch (dlqErr) {
-        logger.error('DLQ write failed after resolver error', { org_id, station_id, error: dlqErr.message, correlation_id: req.context.correlation_id });
+        logger.error('DLQ write failed after resolver error', { event: 'dlq_write_failure', reason_code: 'resolver_error', org_id, station_id, error: dlqErr.message, correlation_id: req.context.correlation_id });
       }
       return res.status(500).json({ error: 'resolver internal error' });
     }
@@ -114,14 +114,70 @@ router.post('/v1/ingest/nfc', async (req, res) => {
   }
 
   // RETURN
-  return res.status(200).json({
-    fan_id:           result.fan_id,
-    match_type:       result.match_type,
-    confidence_score: result.confidence_score,
-    is_new_record:    result.is_new_record,
-    audit_event_id:   result.audit_event_id,
-    session_ready:    true
-  });
+  const { match_type, is_new_record } = result;
+
+  if (match_type === 'hard' && is_new_record === false) {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'hard',
+      confidence_score: 1.0,
+      is_new_record:    false,
+      requires_review:  false,
+      conflict_id:      null,
+      linked_systems:   result.linked_systems,
+      linked_count:     result.linked_count,
+      audit_event_id:   result.audit_event_id,
+      session_ready:    true
+    });
+  }
+
+  if (match_type === 'hard' && is_new_record === true) {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'hard',
+      confidence_score: 1.0,
+      is_new_record:    true,
+      requires_review:  false,
+      conflict_id:      null,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id,
+      session_ready:    true
+    });
+  }
+
+  if (match_type === 'soft') {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'soft',
+      confidence_score: result.confidence_score,
+      is_new_record:    true,
+      requires_review:  true,
+      conflict_id:      result.conflict_id,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id,
+      session_ready:    true
+    });
+  }
+
+  if (match_type === 'conflict') {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'conflict',
+      confidence_score: result.confidence_score,
+      is_new_record:    true,
+      requires_review:  true,
+      conflict_id:      result.conflict_id,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id,
+      session_ready:    true
+    });
+  }
+
+  logger.error('unexpected match_type in nfc ingest response', { match_type, org_id, correlation_id: req.context.correlation_id });
+  return res.status(500).json({ error: 'resolver internal error' });
 });
 
 module.exports = router;

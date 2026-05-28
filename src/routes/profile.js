@@ -53,7 +53,13 @@ router.get('/v1/fan/:id/profile', jwtMiddleware, async (req, res) => {
     walletData = { loyalty_points: 0, stamps: [], avatar: null };
     try {
       const firestoreDoc = await firestore.collection('fans').doc(jwt_fan_id).get();
-      if (firestoreDoc.exists) walletData = firestoreDoc.data();
+      if (firestoreDoc.exists) {
+        const raw = firestoreDoc.data();
+        if (typeof raw.loyalty_points !== 'number' || !isFinite(raw.loyalty_points) || raw.loyalty_points < 0) raw.loyalty_points = 0;
+        if (!Array.isArray(raw.stamps)) raw.stamps = [];
+        if (raw.avatar !== null && typeof raw.avatar !== 'string') raw.avatar = null;
+        walletData = raw;
+      }
     } catch (fsErr) {
       logger.warn('Firestore read failed — returning empty wallet', { fan_id: jwt_fan_id, error: fsErr.message });
     }

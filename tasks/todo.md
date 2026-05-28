@@ -1,63 +1,77 @@
-# STRIDE Audit — Golden Record Sprint 1
-# OKC Thunder · Thunder Innovations Cohort
-# Date: 2026-05-11 | Auditor: Claude Sonnet 4.6
-# Feeds: Step 7b (OWASP Top 10) · Step 7c (CIA Triad summary)
-# Output file: tasks/stride_audit.md
+# Sprint 2 — Complete Test Suite
+# OKC Thunder · Golden Record Fan Identity Platform
+# Date: 2026-05-28
 
 ---
 
-## Audit Surfaces — 11 total
+## Current State (session start)
 
-- [x] Surface 1  — POST /v1/ingest/nfc (NFC tap resolution endpoint)
-- [x] Surface 2  — Org API key authentication (orgAuthMiddleware)
-- [x] Surface 3  — JWT issuance and verification (jwt.js + jwtMiddleware)
-- [x] Surface 4  — WebView JWT handshake (POST /v1/session → GET /v1/fan/:id/profile)
-- [x] Surface 5  — Fan record merge and resolver transaction (resolverEngine.js)
-- [x] Surface 6  — Dead Letter Queue (ingest_failures table)
-- [x] Surface 7  — Audit log (audit_log table)
-- [x] Surface 8  — Row-level tenant isolation (org_id on every table)
-- [x] Surface 9  — CORS configuration (CORS_ORIGIN pending King/Tanner)
-- [x] Surface 10 — Health endpoint (GET /health — no auth)
-- [x] Surface 11 — BigQuery analytics layer (🔒 Deferred — not yet active)
+All 5 test files already exist from prior sessions.
+94 tests total. 86 passing. 8 failing.
+
+**Root cause of 8 failures:**
+conflicts.test.js `setupSuccessfulConfirm` sets up 2 mock responses:
+  1. SELECT conflict → pendingConflict
+  2. Everything else → { rows: [] } (default)
+
+The R3 fix added a new SELECT fan_id_a.deleted_at call between the
+conflict SELECT and BEGIN. When that call returns { rows: [] },
+`fanAResult.rows.length === 0` → handler returns 404 → all subsequent
+transaction assertions fail.
+
+Fix: add a third mock to setupSuccessfulConfirm that returns
+`{ rows: [{ deleted_at: null }] }` for the fan_id_a SELECT.
+
+**Missing regression tests:**
+- R2 scenarios not in resolverEngine.test.js (2 tests)
+- R3 scenarios not in conflicts.test.js (4 tests)
 
 ---
 
-## Output Checklist
+## Gap Confirmation (pre-flight)
 
-- [x] tasks/stride_audit.md written — full STRIDE tables, all 11 surfaces
-- [x] Risk Summary — top 5 by Likelihood × Impact
-- [x] Remediation Backlog — TASK-NN format, ordered by priority, tagged with blockers
-- [x] tasks/handoff.md updated — 5 lines max
+- [x] GAP-01 — audit_log CHECK constraint fixed in migration_004.sql
+- [x] GAP-02 — crypto import added to correlationIdMiddleware.js
+- [x] GAP-03 — conflict_id: null on idempotency early return
+- [x] GAP-04 — token_without_audit structured log in session.js
+- [x] GAP-05 — event: 'dlq_write_failure' in nfc.js both DLQ blocks
+- [x] GAP-06 — Firestore wallet field validation in profile.js
+- [x] GAP-07 — aud deviation documented in jwt.js
+- [x] R2 fix — AND f.deleted_at IS NULL in resolverEngine.js candidate query
+- [x] R3 fix — fan_id_a deleted_at guard in conflicts.js confirm handler
 
 ---
 
-## Key Findings Confirmed by Source Read
+## Tasks
 
-**Critical — must fix before any multi-org or production use:**
-- [x] TASK-01: body org_id not bound to request.context.org_id (resolve.js:21, nfc.js:19)
-      Fixed: org_id bound to req.context.org_id; body mismatch returns 400. 8 tests pass.
+- [ ] Write plan to tasks/todo.md [THIS FILE — done]
+- [ ] Check in with Aaron before implementation
+- [ ] Fix setupSuccessfulConfirm in conflicts.test.js — add fan_id_a mock
+      (this is the root cause of all 8 failures)
+- [ ] Add R2 regression scenarios to resolverEngine.test.js (2 tests)
+      R2-A: candidate SQL includes AND f.deleted_at IS NULL
+      R2-B: Path B fires when candidate query returns empty rows
+- [ ] Add R3 regression scenarios to conflicts.test.js (4 tests)
+      R3-A: confirm returns 409 when fan_id_a.deleted_at is not null
+      R3-B: no identifiers moved when fan_id_a is deleted (no UPDATE identifier_link)
+      R3-C: fan_id_b record unchanged after 409 (no UPDATE fan)
+      R3-D: conflict_queue status remains pending after 409 (no UPDATE conflict_queue)
+- [ ] Run all tests — target: 100 tests, 100 passing
+- [ ] Update tasks/handoff.md
 
-**High — fix before Sprint 2 data export or analytics:**
-- [ ] TASK-02: No Postgres Row Level Security — isolation is application-layer only
-- [ ] TASK-03: CORS_ORIGIN unconfigured — blocked on King/Tanner
-- [x] TASK-04: PII unredacted in ingest_failures.raw_payload (nfc.js:52)
-      Fixed: nfc_uid sha256-hashed in dlqPayload before both DLQ inserts. tapped_at bounds validation added (5 min future, 24 hr past). (TASK-15 also closed here.)
-- [x] TASK-05: Step 5 linked-systems query missing org_id filter (resolverEngine.js:160)
-      Fixed: AND org_id = $2 added to STEP 5 linked-systems query.
+---
 
-**Medium — fix before Sprint 2 auth expansion:**
-- [ ] TASK-06: No JWT revocation — jti blocklist deferred to Sprint 2
-- [ ] TASK-07: session.js audit INSERT not transactional with signToken (session.js:49-56)
-- [x] TASK-08: Health endpoint discloses queue_depth + error_rate_5m to unauthenticated callers
-      Fixed: tiered response — unauthenticated gets {status, timestamp} only; authenticated gets full payload.
-- [x] TASK-06-pre: jti unique constraint prerequisite — migrations/migration_002.sql created.
-      Partial index: idx_audit_jti_session_unique ON audit_log(jti) WHERE event_type='session_issued'.
-- [ ] TASK-09: No org API key rotation or revocation endpoint
-- [ ] TASK-10: Audit log append-only at application layer only — no DB-level delete constraint
-- [ ] TASK-11: DLQ write failure silently swallowed — no secondary alerting (nfc.js:53-55)
-- [x] TASK-12: iss/aud claims absent from JWT — no cross-service replay prevention (jwt.js:44)
-      Fixed: iss and aud set to 'golden-record' in signToken; issuer + audience verified in verifyToken.
-- [x] TASK-18: Security headers — helmet() already wired in index.js. Confirmed complete.
-- [x] TASK-19: jwtMiddleware org claim check added — 403 returned on org mismatch; err.code used for status.
-- [x] TASK-A07: console.warn replaced with logger.warn in jwt.js; console.error replaced with logger.error in resolverEngine.js.
-- [x] TASK-A09: correlation_id added to JWT failure log, resolve.js resolver failure logs, and all nfc.js failure logs.
+## File Scope
+
+- tests/modules/resolverEngine.test.js — add 2 R2 scenarios
+- tests/routes/conflicts.test.js — fix setupSuccessfulConfirm + add 4 R3 scenarios
+
+No source files touched unless a test reveals broken code.
+Two files only.
+
+---
+
+## Done When
+
+All tests passing. Final count reported. Handoff updated.
+No tests skipped. No tests fixed to match broken code.

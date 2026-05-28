@@ -58,7 +58,18 @@ router.post('/v1/session', async (req, res) => {
       [crypto.randomUUID(), fan_id, org_id, 'session_issued', schema_version, tokenResult.jti, 'success']
     );
   } catch (err) {
-    logger.error('session endpoint failure', { fan_id, org_id, error: err.message });
+    if (tokenResult) {
+      logger.error('token_without_audit', {
+        event:          'token_without_audit',
+        fan_id,
+        org_id,
+        jti:            tokenResult.jti,
+        error:          err.message,
+        correlation_id: req.context.correlation_id
+      });
+    } else {
+      logger.error('session endpoint failure', { fan_id, org_id, error: err.message, correlation_id: req.context.correlation_id });
+    }
     return res.status(500).json({ error: 'session could not be issued' });
   }
 

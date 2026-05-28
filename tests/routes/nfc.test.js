@@ -5,6 +5,10 @@ const request = require('supertest');
 
 const CONTEXT_ORG_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
 const OTHER_ORG_ID   = 'bbbbbbbb-0000-0000-0000-000000000002';
+const FAN_ID         = 'cccccccc-0000-0000-0000-000000000003';
+const AUDIT_ID       = 'dddddddd-0000-0000-0000-000000000004';
+const CONFLICT_ID    = 'eeeeeeee-0000-0000-0000-000000000005';
+const UUID_RE        = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 jest.mock('../../src/modules/normalizer', () => ({
   normalizeIdentifier: (_type, value) => {
@@ -100,5 +104,132 @@ describe('POST /v1/ingest/nfc — TASK-01: org_id binding', () => {
     const call = resolverEngine.mock.calls[0][0];
     expect(call.org_id).toBe(CONTEXT_ORG_ID);
     expect(call.org_id).not.toBe(OTHER_ORG_ID);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component 17 — Sprint 2 response fields: session_ready, requires_review, conflict_id
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /v1/ingest/nfc — Sprint 2 response fields', () => {
+  let app;
+  const { resolverEngine } = require('../../src/modules/resolverEngine');
+
+  beforeEach(() => {
+    app = buildApp();
+    resolverEngine.mockClear();
+  });
+
+  // session_ready present on all four paths
+
+  test('Path A: session_ready true, requires_review false, conflict_id null', async () => {
+    resolverEngine.mockResolvedValueOnce({
+      fan_id: FAN_ID, match_type: 'hard', confidence_score: 1.0,
+      is_new_record: false, linked_systems: ['nfc'], linked_count: 1,
+      audit_event_id: AUDIT_ID, conflict_id: null,
+    });
+
+    const res = await request(app).post('/v1/ingest/nfc').send(validBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body.session_ready).toBe(true);
+    expect(res.body.requires_review).toBe(false);
+    expect(res.body.conflict_id).toBeNull();
+    expect(res.body.match_type).toBe('hard');
+    expect(res.body.is_new_record).toBe(false);
+  });
+
+  test('Path B: session_ready true, requires_review false, conflict_id null', async () => {
+    resolverEngine.mockResolvedValueOnce({
+      fan_id: FAN_ID, match_type: 'hard', confidence_score: 1.0,
+      is_new_record: true, linked_systems: [], linked_count: 0,
+      audit_event_id: AUDIT_ID, conflict_id: null,
+    });
+
+    const res = await request(app).post('/v1/ingest/nfc').send(validBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body.session_ready).toBe(true);
+    expect(res.body.requires_review).toBe(false);
+    expect(res.body.conflict_id).toBeNull();
+    expect(res.body.is_new_record).toBe(true);
+  });
+
+  test('Path C: session_ready true, requires_review true, conflict_id is valid UUID', async () => {
+    resolverEngine.mockResolvedValueOnce({
+      fan_id: FAN_ID, match_type: 'soft', confidence_score: 0.9,
+      is_new_record: true, linked_systems: [], linked_count: 0,
+      audit_event_id: AUDIT_ID, conflict_id: CONFLICT_ID,
+    });
+
+    const res = await request(app).post('/v1/ingest/nfc').send(validBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body.session_ready).toBe(true);
+    expect(res.body.requires_review).toBe(true);
+    expect(res.body.conflict_id).toMatch(UUID_RE);
+    expect(res.body.match_type).toBe('soft');
+  });
+
+  test('Path D: session_ready true, requires_review true, conflict_id is valid UUID', async () => {
+    resolverEngine.mockResolvedValueOnce({
+      fan_id: FAN_ID, match_type: 'conflict', confidence_score: 0.72,
+      is_new_record: true, linked_systems: [], linked_count: 0,
+      audit_event_id: AUDIT_ID, conflict_id: CONFLICT_ID,
+    });
+
+    const res = await request(app).post('/v1/ingest/nfc').send(validBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body.session_ready).toBe(true);
+    expect(res.body.requires_review).toBe(true);
+    expect(res.body.conflict_id).toMatch(UUID_RE);
+    expect(res.body.match_type).toBe('conflict');
+  });
+
+  // session_ready must be present even when requires_review is true
+  test('session_ready present when requires_review is true (Path C)', async () => {
+    resolverEngine.mockResolvedValueOnce({
+      fan_id: FAN_ID, match_type: 'soft', confidence_score: 0.9,
+      is_new_record: true, linked_systems: [], linked_count: 0,
+      audit_event_id: AUDIT_ID, conflict_id: CONFLICT_ID,
+    });
+
+    const res = await request(app).post('/v1/ingest/nfc').send(validBody);
+
+    expect(res.body.requires_review).toBe(true);
+    expect(res.body).toHaveProperty('session_ready');
+    expect(res.body.session_ready).toBe(true);
+  });
+
+  test('session_ready present when requires_review is true (Path D)', async () => {
+    resolverEngine.mockResolvedValueOnce({
+      fan_id: FAN_ID, match_type: 'conflict', confidence_score: 0.65,
+      is_new_record: true, linked_systems: [], linked_count: 0,
+      audit_event_id: AUDIT_ID, conflict_id: CONFLICT_ID,
+    });
+
+    const res = await request(app).post('/v1/ingest/nfc').send(validBody);
+
+    expect(res.body.requires_review).toBe(true);
+    expect(res.body).toHaveProperty('session_ready');
+    expect(res.body.session_ready).toBe(true);
+  });
+
+  test('all paths return fan_id, confidence_score, is_new_record, audit_event_id', async () => {
+    resolverEngine.mockResolvedValueOnce({
+      fan_id: FAN_ID, match_type: 'hard', confidence_score: 1.0,
+      is_new_record: false, linked_systems: [], linked_count: 0,
+      audit_event_id: AUDIT_ID, conflict_id: null,
+    });
+
+    const res = await request(app).post('/v1/ingest/nfc').send(validBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('fan_id');
+    expect(res.body).toHaveProperty('confidence_score');
+    expect(res.body).toHaveProperty('is_new_record');
+    expect(res.body).toHaveProperty('audit_event_id');
+    expect(res.body).toHaveProperty('session_ready');
   });
 });

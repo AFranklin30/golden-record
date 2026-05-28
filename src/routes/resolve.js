@@ -76,15 +76,64 @@ router.post('/v1/resolve', async (req, res) => {
   }
 
   // RETURN
-  return res.status(200).json({
-    fan_id:           result.fan_id,
-    match_type:       result.match_type,
-    confidence_score: result.confidence_score,
-    is_new_record:    result.is_new_record,
-    linked_systems:   result.linked_systems,
-    linked_count:     result.linked_count,
-    audit_event_id:   result.audit_event_id
-  });
+  if (result.match_type === 'hard' && result.is_new_record === false) {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'hard',
+      confidence_score: 1.0,
+      is_new_record:    false,
+      requires_review:  false,
+      conflict_id:      null,
+      linked_systems:   result.linked_systems,
+      linked_count:     result.linked_count,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  if (result.match_type === 'hard' && result.is_new_record === true) {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'hard',
+      confidence_score: 1.0,
+      is_new_record:    true,
+      requires_review:  false,
+      conflict_id:      null,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  if (result.match_type === 'soft') {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'soft',
+      confidence_score: result.confidence_score,
+      is_new_record:    true,
+      requires_review:  true,
+      conflict_id:      result.conflict_id,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  if (result.match_type === 'conflict') {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'conflict',
+      confidence_score: result.confidence_score,
+      is_new_record:    true,
+      requires_review:  true,
+      conflict_id:      result.conflict_id,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  logger.error('unknown match_type in resolver result', { match_type: result.match_type, org_id, correlation_id: req.context.correlation_id });
+  return res.status(500).json({ error: 'resolver internal error' });
 });
 
 module.exports = router;

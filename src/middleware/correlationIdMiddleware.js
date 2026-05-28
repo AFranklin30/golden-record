@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const logger = { error: console.error };
 
 async function correlationIdMiddleware(req, res, next) {

@@ -1,5 +1,5 @@
-Completed: migration_003.sql written — RLS on fan/identifier_link/audit_log/ingest_failures + append-only trigger on audit_log (TASK-10). Not run.
-Next: blocked on GCP credentials — run migration_003.sql when credentials arrive; add rlsContextMiddleware to Node.js stack (see Part 3 in migration_003.sql).
-Blocked: GCP credentials (King/Tanner) block migration_003.sql run, TASK-13, TASK-20 Firestore rule verification; CORS domain blocks TASK-03-cors.
-Decisions: FORCE ROW LEVEL SECURITY applied — covers Cloud SQL service account which connects as table owner and would bypass RLS without FORCE.
-Warnings: Node.js set_config call required before RLS goes live — see Part 3 comment block in migration_003.sql; org table intentionally excluded from RLS (auth deadlock).
+Completed: Sprint 2 tests complete — 100 tests, 100 passing, including R2 and R3 regression scenarios. Root cause of 8 failures was setupSuccessfulConfirm not mocking the R3 fan_id_a SELECT added by the prior session's fix.
+Next: Sprint 3 Option B RLS — migration_005.sql first, then normalizer.js update (components 21-22).
+Blocked: GCP credentials from Tanner — migration_003.sql, 004.sql, 005.sql all pending. Confirm endpoint non-functional in production until migration_005.sql runs (merge_history + merged_from_fan_id missing).
+Decisions: R2-A test checks SQL string contains 'deleted_at IS NULL' — verifies the filter exists in code even without a real DB. R3 setup uses two mockResolvedValueOnce calls; subsequent defaults return { rows: [] } which correctly represents no further writes.
+Warnings: Sprint 2 is CLOSED — all 20 components built, all gaps fixed, all 100 tests passing. Do not modify Sprint 2 source files. Begin Sprint 3 with migration_005.sql.

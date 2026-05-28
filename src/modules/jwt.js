@@ -45,6 +45,7 @@ function signToken(payload) {
   const expiresAt = issuedAt + 15 * 60;
   const claims = {
     iss: 'golden-record',
+    // TODO: align to 'golden-record-webview' before Sprint 4 WebView integration — coordinate with King and Sila (TASK-12)
     aud: 'golden-record',
     sub: fan_id,
     org: org_id,
@@ -71,6 +72,7 @@ function verifyToken(authHeader) {
   // EXECUTE
   let decoded;
   try {
+    // TODO: update audience to 'golden-record-webview' when aud claim above is updated (TASK-12)
     decoded = jwt.verify(token, PUBLIC_KEY, { algorithms: ['RS256'], clockTolerance: 30, issuer: 'golden-record', audience: 'golden-record' });
   } catch (err) {
     if (err.name === 'TokenExpiredError')                                      throw new JWTError('token has expired', 401);
