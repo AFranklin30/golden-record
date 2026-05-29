@@ -1,0 +1,10 @@
+node_modules
+.env
+*.log
+private.key
+public.key
+.git
+tests
+tasks
+seeds
+README.md
