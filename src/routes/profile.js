@@ -2,7 +2,6 @@
 
 const express       = require('express');
 const { Firestore } = require('@google-cloud/firestore');
-const pool          = require('../db/pool');
 const jwtMiddleware = require('../middleware/jwtMiddleware');
 
 const router    = express.Router();
@@ -31,7 +30,7 @@ router.get('/v1/fan/:id/profile', jwtMiddleware, async (req, res) => {
   // EXECUTE
   let fan, linksResult, walletData;
   try {
-    const fanResult = await pool.query(
+    const fanResult = await req.db.query(
       `SELECT id, org_id, stewardship_tier, record_version, created_at, updated_at, deleted_at
        FROM fan WHERE id = $1 AND org_id = $2`,
       [jwt_fan_id, org_id]
@@ -44,7 +43,7 @@ router.get('/v1/fan/:id/profile', jwtMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'fan record has been erased' });
     }
 
-    linksResult = await pool.query(
+    linksResult = await req.db.query(
       `SELECT identifier_type, source_system, confidence_score, first_seen_at, last_seen_at
        FROM identifier_link WHERE fan_id = $1 AND org_id = $2`,
       [jwt_fan_id, org_id]

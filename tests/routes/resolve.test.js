@@ -28,9 +28,10 @@ jest.mock('../../src/modules/resolverEngine', () => ({
 function buildApp() {
   const app = express();
   app.use(express.json());
-  // Simulates orgAuthMiddleware having set authenticated context
+  // Simulates orgAuthMiddleware + rlsContextMiddleware having set authenticated context
   app.use((req, _res, next) => {
     req.context = { org_id: CONTEXT_ORG_ID, org_name: 'Test Org' };
+    req.db = { query: jest.fn().mockResolvedValue({ rows: [] }) };
     next();
   });
   app.use(require('../../src/routes/resolve'));
@@ -63,7 +64,8 @@ describe('POST /v1/resolve — TASK-01: org_id binding', () => {
     expect(res.status).toBe(200);
     expect(res.body.fan_id).toBe('cccccccc-0000-0000-0000-000000000003');
     expect(resolverEngine).toHaveBeenCalledWith(
-      expect.objectContaining({ org_id: CONTEXT_ORG_ID })
+      expect.objectContaining({ org_id: CONTEXT_ORG_ID }),
+      expect.anything()
     );
   });
 
@@ -75,7 +77,8 @@ describe('POST /v1/resolve — TASK-01: org_id binding', () => {
     expect(res.status).toBe(200);
     expect(res.body.fan_id).toBe('cccccccc-0000-0000-0000-000000000003');
     expect(resolverEngine).toHaveBeenCalledWith(
-      expect.objectContaining({ org_id: CONTEXT_ORG_ID })
+      expect.objectContaining({ org_id: CONTEXT_ORG_ID }),
+      expect.anything()
     );
   });
 

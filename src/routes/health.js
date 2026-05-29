@@ -4,6 +4,7 @@ const crypto  = require('crypto');
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/pool');
+const logger  = { error: console.error, warn: console.warn };
 
 // Attempts to authenticate an org API key from the Authorization header.
 // Returns true only if the key maps to an active org. Never throws.
@@ -42,7 +43,7 @@ router.get('/health', async (req, res) => {
     results.db = 'connected';
   } catch (err) {
     results.db = 'disconnected';
-    console.error('health check db probe failed', { error: err.message });
+    logger.error('health check db probe failed', { error: err.message });
   }
 
   // Block 2 — queue depth
@@ -66,8 +67,11 @@ router.get('/health', async (req, res) => {
     const total  = parseInt(totalResult.rows[0].count, 10);
     const errors = parseInt(errorsResult.rows[0].count, 10);
     if (total > 0) results.error_rate_5m = errors / total;
-  } catch {
-    // stays 0.0
+  } catch (err) {
+    logger.warn('health error_rate query failed', {
+      event: 'health_rls_bypass',
+      error: err.message
+    });
   }
 
   // Block 4 — auth check (determines response tier, never throws)

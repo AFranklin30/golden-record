@@ -62,7 +62,7 @@ router.post('/v1/resolve', async (req, res) => {
       schema_version,
       idempotency_key,
       source_system
-    });
+    }, req.db);
   } catch (err) {
     if (err instanceof ConflictError) {
       return res.status(409).json({ error: 'concurrent write conflict — retry request' });

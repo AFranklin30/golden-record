@@ -5,7 +5,6 @@ const express = require('express');
 
 const { normalizeIdentifier, NormalizationError } = require('../modules/normalizer');
 const { resolverEngine, ConflictError, ResolverError } = require('../modules/resolverEngine');
-const pool = require('../db/pool');
 
 const router = express.Router();
 
@@ -63,7 +62,7 @@ router.post('/v1/ingest/nfc', async (req, res) => {
   } catch (err) {
     if (err instanceof NormalizationError) {
       try {
-        await pool.query(
+        await req.db.query(
           `INSERT INTO ingest_failures (id, org_id, source_system, raw_payload, reason_code, error_detail)
            VALUES ($1, $2, 'nfc', $3, 'normalization_error', $4)`,
           [crypto.randomUUID(), org_id, dlqPayload, err.message]
@@ -92,14 +91,14 @@ router.post('/v1/ingest/nfc', async (req, res) => {
       schema_version,
       idempotency_key,
       source_system: 'nfc'
-    });
+    }, req.db);
   } catch (err) {
     if (err instanceof ConflictError) {
       return res.status(409).json({ error: 'concurrent write conflict — retry tap' });
     }
     if (err instanceof ResolverError) {
       try {
-        await pool.query(
+        await req.db.query(
           `INSERT INTO ingest_failures (id, org_id, source_system, raw_payload, reason_code, error_detail)
            VALUES ($1, $2, 'nfc', $3, 'resolver_error', $4)`,
           [crypto.randomUUID(), org_id, dlqPayload, err.message]

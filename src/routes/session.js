@@ -2,7 +2,6 @@
 
 const crypto  = require('crypto');
 const express = require('express');
-const pool    = require('../db/pool');
 const { signToken } = require('../modules/jwt');
 
 const router = express.Router();
@@ -37,7 +36,7 @@ router.post('/v1/session', async (req, res) => {
   // EXECUTE
   let tokenResult;
   try {
-    const fanResult = await pool.query(
+    const fanResult = await req.db.query(
       'SELECT id, org_id, stewardship_tier, deleted_at FROM fan WHERE id = $1 AND org_id = $2',
       [fan_id, org_id]
     );
@@ -51,7 +50,7 @@ router.post('/v1/session', async (req, res) => {
 
     tokenResult = signToken({ fan_id, org_id });
 
-    await pool.query(
+    await req.db.query(
       `INSERT INTO audit_log
          (id, fan_id, org_id, event_type, schema_version, jti, status, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
