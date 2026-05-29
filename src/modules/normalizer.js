@@ -11,7 +11,10 @@ class NormalizationError extends Error {
   }
 }
 
-const ALLOWED_TYPES = ['email', 'phone', 'nfc_uid', 'nba_id', 'ticketmaster_id'];
+const ALLOWED_TYPES = [
+  'email', 'phone', 'nfc_uid', 'nba_id', 'ticketmaster_id',
+  'name', 'dob', 'zip', 'guardian_email', 'guardian_phone'
+];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normalizeEmail(value) {
@@ -47,6 +50,69 @@ function normalizeNfcUid(value) {
   return stripped.match(/.{2}/g).join(':');
 }
 
+function normalizeName(value) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '') {
+    throw new NormalizationError('name cannot be blank');
+  }
+  if (normalized.length > 256) {
+    throw new NormalizationError('name exceeds max length');
+  }
+  return normalized.replace(/\s+/g, ' ');
+}
+
+function normalizeDob(value) {
+  let parsed = null;
+
+  // Try YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    parsed = new Date(`${value.trim()}T00:00:00.000Z`);
+    if (isNaN(parsed.getTime())) parsed = null;
+  }
+
+  // Try MM/DD/YYYY
+  if (parsed === null) {
+    const m = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+      parsed = new Date(`${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}T00:00:00.000Z`);
+      if (isNaN(parsed.getTime())) parsed = null;
+    }
+  }
+
+  // Try DD/MM/YYYY
+  if (parsed === null) {
+    const m = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+      parsed = new Date(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}T00:00:00.000Z`);
+      if (isNaN(parsed.getTime())) parsed = null;
+    }
+  }
+
+  if (parsed === null || isNaN(parsed.getTime())) {
+    throw new NormalizationError(`dob format invalid: ${value}`);
+  }
+
+  const now = new Date();
+  if (parsed > now) {
+    throw new NormalizationError('dob cannot be in the future');
+  }
+
+  const msIn120Years = 120 * 365.25 * 24 * 60 * 60 * 1000;
+  if (now - parsed > msIn120Years) {
+    throw new NormalizationError('dob is not a valid birth date');
+  }
+
+  return parsed.toISOString().split('T')[0];
+}
+
+function normalizeZip(value) {
+  const stripped = value.trim().replace(/[^0-9]/g, '');
+  if (stripped.length !== 5) {
+    throw new NormalizationError(`zip must be 5 digits: ${value}`);
+  }
+  return stripped;
+}
+
 // RECEIVE
 function normalizeIdentifier(type, value) {
   const identifierType = type;
@@ -73,10 +139,15 @@ function normalizeIdentifier(type, value) {
   }
 
   // EXECUTE
-  if (identifierType === 'email')   return normalizeEmail(rawValue);
-  if (identifierType === 'phone')   return normalizePhone(rawValue);
-  if (identifierType === 'nfc_uid') return normalizeNfcUid(rawValue);
+  if (identifierType === 'email')            return normalizeEmail(rawValue);
+  if (identifierType === 'phone')            return normalizePhone(rawValue);
+  if (identifierType === 'nfc_uid')          return normalizeNfcUid(rawValue);
   if (identifierType === 'nba_id' || identifierType === 'ticketmaster_id') return rawValue.trim();
+  if (identifierType === 'name')             return normalizeName(rawValue);
+  if (identifierType === 'dob')              return normalizeDob(rawValue);
+  if (identifierType === 'zip')              return normalizeZip(rawValue);
+  if (identifierType === 'guardian_email')   return normalizeEmail(rawValue);
+  if (identifierType === 'guardian_phone')   return normalizePhone(rawValue);
 
   // RETURN — unreachable but explicit
   throw new NormalizationError(`unhandled identifier_type: ${identifierType}`);
