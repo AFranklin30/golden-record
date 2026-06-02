@@ -42,7 +42,7 @@ function signToken(payload) {
 
   // EXECUTE
   const issuedAt  = Math.floor(Date.now() / 1000);
-  const expiresAt = issuedAt + 15 * 60;
+  const expiresAt = issuedAt + (payload.expiresIn || 15 * 60);
   const claims = {
     iss: 'golden-record',
     // TODO: align to 'golden-record-webview' before Sprint 4 WebView integration — coordinate with King and Sila (TASK-12)
@@ -53,6 +53,8 @@ function signToken(payload) {
     exp: expiresAt,
     jti: crypto.randomUUID()
   };
+  if (payload.acting_as !== undefined) claims.acting_as = payload.acting_as;
+  if (payload.guardian  !== undefined) claims.guardian  = payload.guardian;
   const token = jwt.sign(claims, PRIVATE_KEY, { algorithm: 'RS256' });
 
   // RETURN

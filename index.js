@@ -15,7 +15,9 @@ const nfcRouter            = require('./src/routes/nfc');
 const sessionRouter        = require('./src/routes/session');
 const profileRouter        = require('./src/routes/profile');
 const conflictsRouter      = require('./src/routes/conflicts');
-const householdRouter      = require('./src/routes/household');
+const householdRouter          = require('./src/routes/household');
+const { householdClaimRouter } = householdRouter;
+const adminHouseholdRouter     = require('./src/routes/admin/household');
 const jwtMiddleware        = require('./src/middleware/jwtMiddleware');
 
 const app  = express();
@@ -46,6 +48,7 @@ protectedRouter.use(nfcRouter);
 protectedRouter.use(sessionRouter);
 protectedRouter.use(profileRouter);
 protectedRouter.use(conflictsRouter);
+protectedRouter.use(adminHouseholdRouter);
 
 const householdProtectedRouter = express.Router();
 householdProtectedRouter.use(rateLimiter);
@@ -55,7 +58,18 @@ householdProtectedRouter.use(correlationIdMiddleware);
 householdProtectedRouter.use(jwtMiddleware);
 householdProtectedRouter.use(householdRouter);
 
+// householdPublicRouter — claim endpoint only, no jwtMiddleware
+// Must be mounted BEFORE householdProtectedRouter so Express matches
+// /v1/household/claim/:token here before matching :adult_fan_id below.
+const householdPublicRouter = express.Router();
+householdPublicRouter.use(rateLimiter);
+householdPublicRouter.use(orgAuthMiddleware);
+householdPublicRouter.use(rlsContextMiddleware);
+householdPublicRouter.use(correlationIdMiddleware);
+householdPublicRouter.use(householdClaimRouter);
+
 app.use(protectedRouter);
+app.use(householdPublicRouter);
 app.use(householdProtectedRouter);
 
 app.listen(PORT, () => {

@@ -2527,23 +2527,10 @@ WHERE id = $1 AND org_id = $2",
 )
 IF adult is null:
 RETURN 404 { error: "adult fan record not found" }
-// READ 2 — get or create household
-household = db.query(
-  "SELECT id FROM household
-   WHERE adult_fan_id = $1 AND org_id = $2",
-  [jwt_fan_id, org_id]
-)
-IF household is null:
-  household_id = generateUUID()
-  db.query(
-    "INSERT INTO household
-     (id, org_id, adult_fan_id, created_by, created_at)
-     VALUES ($1,$2,$3,'fan',NOW())",
-    [household_id, org_id, jwt_fan_id]
-  )
-ELSE:
-  household_id = household.id
-
+READ 2 — verify household exists
+  IF not found → 404
+  do NOT auto-create
+  component 27 must be called first
 // READ 3 — check staging for probable match
 staged = db.query(
   "SELECT id, child_name, child_dob, source, raw_data

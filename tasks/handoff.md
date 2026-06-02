@@ -1,5 +1,5 @@
-Completed: Component 26 — POST /v1/conflicts/:id/unmerge built and verified. 15 new tests (including org isolation + non-UUID guard). 179/179 full suite green.
-Next: Component 27 — POST /v1/household (new file: src/routes/household.js — create it, does not exist yet).
-Blocked: GCP credentials from Tanner — migrations 003/004/005 not yet run on Cloud SQL. private.key and public.key sitting locally — do not delete until stored in Secret Manager.
-Decisions: merged_from_fan_id set to NULL after identifier move — provenance cleaned up post-reversal. related_fans written on every unmerge with fan_id_a = fan_id_target, fan_id_b = fan_id_source.
-Warnings: Component 27 starts the household endpoints — new file src/routes/household.js. Create it from scratch. jwtMiddleware IS required for household (fan action, not staff action) — different from conflicts.js middleware stack.
+Completed: migration_006.sql — partial unique index on identifier_link (fan_pass only), RLS on 5 Sprint 3 tables, 3 data integrity indexes on conflict_queue/merge_history/related_fans.
+Next: Run migration_006.sql locally (psql $DATABASE_URL -f migrations/migration_006.sql), then Sprint 3 test suite security regression check on household + admin routes.
+Blocked: GCP credentials from Tanner — migrations 003/004/005/006 not yet run on Cloud SQL.
+Decisions: Partial unique index scoped to source_system = 'fan_pass' only — full index would block multi-source ingest. RLS cross-tenant test uses household as representative table (same policy pattern on all 5 tables).
+Warnings: Run migration_006 locally before Sprint 3 test suite — RLS policies must be active for tenant isolation tests to pass. Run migrations in order: 003 → 004 → 005 → 006.
