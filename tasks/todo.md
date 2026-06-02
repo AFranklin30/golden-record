@@ -1,142 +1,110 @@
-# migration_006.sql — Sprint 3 Schema Enforcement
+# Security Fixes — MEDIUM-1 through MEDIUM-5
 # OKC Thunder · Golden Record Fan Identity Platform
-# Session: 2026-06-01
+# Session: 2026-06-02
 
 ---
 
 ## Goal
 
-Schema-level enforcement for Sprint 3 data integrity.
-Three independent concerns:
-  1. Partial unique index on identifier_link for Fan Pass managed identifiers
-  2. RLS on the five new Sprint 3 tables
-  3. Data integrity constraints on conflict_queue, merge_history, related_fans
-
-One new file: migrations/migration_006.sql
-No application code changes.
+Fix four MEDIUM security findings from the security audit.
+Write tests proving each fix works.
 
 ---
 
-## Files Touched (1 file)
+## Pre-read Findings
 
-1. migrations/migration_006.sql  — new file only
+### Files read
+- [x] tasks/handoff.md
+- [x] src/routes/household.js
+- [x] src/routes/health.js
+- [x] index.js
+- [x] package.json
+- [x] tests/routes/household.test.js (pattern reference)
 
----
+### Key facts established
 
-## Structure Plan
+**MEDIUM-1** — household.js line 1006-1011: logger.info logs raw_token in claim_url
+  and `to: guardianEmail` — both are credentials/PII that must not be in Cloud Logging.
 
-### Safety guard (top of file)
-  Check for existence of uq_identifier_link_managed index.
-  Same DO $$ pattern as migration_003.
-  If index already exists → RAISE EXCEPTION 'migration_006 already applied'.
+**MEDIUM-2** — household.js lines 56-88: POST /v1/household has two separate db.query
+  calls for INSERT household + INSERT audit_log with no transaction. Audit failure is
+  swallowed — household can exist with no audit trail. Violates CLAUDE.md audit law.
 
-### PART 1 — Partial unique index on identifier_link
-  DROP INDEX IF EXISTS uq_identifier_link_fan_type_org;
-    — cleans up any full index that may have been applied as a one-off fix
-  CREATE UNIQUE INDEX uq_identifier_link_managed
-    ON identifier_link (fan_id, identifier_type, org_id)
-    WHERE source_system = 'fan_pass';
-  Comment: Fan Pass identifiers are authoritative (one per type per fan per org).
-           Ingest identifiers are observed — multiples allowed.
-           Full unique index would break ingest from Ticketmaster, NBA app, camps.
+**MEDIUM-3** — index.js line 30: healthRouter is mounted with no rate limiter.
+  Health runs 3 db queries per unauthenticated request. An attacker can exhaust
+  db connections. Fix: 10 req/min stricter limiter on health only.
 
-### PART 2 — RLS on five Sprint 3 tables
-  For each table: ENABLE, CREATE POLICY tenant_isolation, FORCE.
-  Exact same pattern as migration_003 (no deviation).
-  Tables:
-    household
-    household_member
-    staging_household_data
-    merge_history
-    related_fans
+**MEDIUM-4/5** — index.js: no cors package imported or configured.
+  Any origin can make cross-origin requests. Fix: cors middleware, CORS_ORIGIN env
+  controls allowed origin. Default false = fail secure.
 
-  RLS note: same app.current_org_id session variable as migration_003.
-  No new middleware needed — same rlsContextMiddleware from migration_003 covers
-  all tables. No Node.js integration note required here.
-
-### PART 3 — Data integrity constraints
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_conflict_queue_pair
-    ON conflict_queue (fan_id_a, fan_id_b, org_id)
-    WHERE status = 'pending';
-    — prevents duplicate pending pairs only
-    — resolved conflicts can have historical duplicates
-
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_merge_history_active
-    ON merge_history (conflict_id)
-    WHERE status = 'active';
-    — one active merge per conflict at a time
-    — prevents race condition on concurrent unmerge
-
-  CREATE UNIQUE INDEX IF NOT EXISTS uq_related_fans_pair
-    ON related_fans (fan_id_a, fan_id_b, org_id, relationship);
-    — same two fans cannot have the same relationship twice
-
-### Verification queries (bottom of file)
-  1. Partial index exists on identifier_link
-       SELECT indexname FROM pg_indexes
-       WHERE tablename = 'identifier_link'
-         AND indexname = 'uq_identifier_link_managed'
-       Expected: 1 row
-  2. RLS enabled on all five Sprint 3 tables
-       SELECT tablename, rowsecurity FROM pg_tables
-       WHERE tablename IN (
-         'household', 'household_member',
-         'staging_household_data',
-         'merge_history', 'related_fans'
-       )
-       Expected: 5 rows, all rowsecurity = true
-  3. All three data integrity indexes exist
-       SELECT indexname FROM pg_indexes
-       WHERE indexname IN (
-         'uq_conflict_queue_pair',
-         'uq_merge_history_active',
-         'uq_related_fans_pair'
-       )
-       Expected: 3 rows
-  4. RLS cross-tenant block test
-       Same DO $$ pattern as migration_003/005 block test.
-       Set app.current_org_id to a fake UUID.
-       SELECT from each Sprint 3 table.
-       Verify 0 rows returned (RLS blocks cross-tenant).
+**cors not in package.json** — need npm install cors.
 
 ---
 
-## Open Questions (none — everything confirmed in spec)
+## Plan
 
-  - Partial vs full unique index: confirmed partial (source_system = 'fan_pass')
-  - RLS policy name: confirmed 'tenant_isolation' (matches migration_003)
-  - Safety guard sentinel: confirmed uq_identifier_link_managed index
-  - PART 3 scope condition on uq_conflict_queue_pair: confirmed pending only
+### Step 1 — MEDIUM-1: Redact token from age-up email stub log
+File: src/routes/household.js
+- Remove `to: guardianEmail` from logger.info
+- Change `claim_url` from full URL with raw token to `'https://fanpass.thunder.com/claim/[REDACTED]'`
+- Add `email_stub: true`
+
+### Step 2 — MEDIUM-2: Wrap POST /v1/household in transaction
+File: src/routes/household.js
+- Remove inner try/catch around audit INSERT
+- Add `await req.db.query('BEGIN')` before household INSERT
+- Make audit INSERT part of the same outer try block (not nested)
+- Add `await req.db.query('COMMIT')` after audit INSERT
+- Add `await req.db.query('ROLLBACK').catch(() => {})` in outer catch
+- Update setupSuccessfulCreate() mock chain in tests to account for BEGIN/COMMIT
+
+### Step 3 — MEDIUM-3: Rate limit health endpoint
+File: index.js
+- Create healthRateLimiter (windowMs: 60000, max: 10)
+- Create healthLimitedRouter wrapping healthRouter
+- Replace `app.use(healthRouter)` with `app.use(healthLimitedRouter)`
+
+### Step 4 — MEDIUM-4/5: Configure CORS
+File: index.js
+- `npm install cors`
+- `const cors = require('cors')`
+- Mount `app.use(cors(corsOptions))` before all other middleware
+- corsOptions: origin from CORS_ORIGIN env (default false), methods GET/POST/PUT/DELETE,
+  allowedHeaders Content-Type/X-Api-Key/X-Fan-Token/X-Correlation-Id, credentials false
+
+### Step 5 — Write tests
+File: tests/routes/household.test.js
+- Test: email stub log does not contain raw token
+- Test: email stub log does not contain guardian_email
+- Test: POST /v1/household rollback on audit failure — 500 returned
+- Test: POST /v1/household household row does not persist if transaction rolls back
+
+File: tests/routes/health.test.js (new)
+- Test: GET /health returns 429 after 10 requests within 60 seconds
+
+File: tests/index.test.js (new)
+- Test: CORS headers present when CORS_ORIGIN is set
+- Test: CORS blocks requests from unlisted origins
 
 ---
 
-## Build Order
+## Tasks
 
-- [x] tasks/handoff.md read
-- [x] tasks/lessons.md read
-- [x] migration_003.sql read (RLS pattern)
-- [x] migration_005.sql read (structure + verification pattern)
-- [x] Plan written to tasks/todo.md
-- [ ] Aaron approves plan — CHECK IN BEFORE IMPLEMENTATION
-- [ ] Write migrations/migration_006.sql
-- [ ] Visual review: safety guard, all 5 RLS tables, all 3 integrity indexes, 4 verification queries
+- [ ] Step 1 — MEDIUM-1: redact email stub log (household.js)
+- [ ] Step 2 — MEDIUM-2: transaction wrap POST /v1/household (household.js)
+- [ ] Step 3 — MEDIUM-3: health rate limiter (index.js)
+- [ ] Step 4 — MEDIUM-4/5: CORS (npm install + index.js)
+- [ ] Step 5 — Tests (household.test.js, health.test.js, index.test.js)
+- [ ] Run npm test — all pass
+- [ ] Update tasks/lessons.md
 - [ ] Update tasks/handoff.md
-- [ ] Update tasks/lessons.md if any corrections
 
 ---
 
-## Review Checklist
+## Constraints
 
-- [ ] Safety guard aborts on re-run (DO $$ block, checks uq_identifier_link_managed)
-- [ ] DROP INDEX IF EXISTS uq_identifier_link_fan_type_org before create
-- [ ] Partial index predicate: WHERE source_system = 'fan_pass'
-- [ ] RLS on all 5 Sprint 3 tables — none missed
-- [ ] ENABLE → POLICY → FORCE order on each table (matches migration_003)
-- [ ] Policy name exactly 'tenant_isolation' on each table
-- [ ] uq_conflict_queue_pair WHERE status = 'pending'
-- [ ] uq_merge_history_active WHERE status = 'active'
-- [ ] uq_related_fans_pair — no WHERE clause (full dedup)
-- [ ] IF NOT EXISTS on all three PART 3 indexes
-- [ ] 4 verification queries match spec exactly
-- [ ] No application code changes
-- [ ] No existing migration files modified
+- Never fix a test to match broken code — fix code to match test
+- Audit event is always last write in transaction — CLAUDE.md law
+- CORS default must be false — fail secure not fail open
+- Health rate limiter is separate from the global one (stricter)

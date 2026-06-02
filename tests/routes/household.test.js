@@ -54,12 +54,16 @@ describe('POST /v1/household', () => {
     app = buildApp();
   });
 
+  // Call indices: 0=fan SELECT, 1=existing household SELECT,
+  //               2=BEGIN, 3=household INSERT, 4=audit INSERT, 5=COMMIT
   function setupSuccessfulCreate() {
     mockDb.query
-      .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID, org_id: CONTEXT_ORG_ID, adult_fan_id: ADULT_FAN_ID, created_at: householdRow.created_at }] })
-      .mockResolvedValue({ rows: [] });
+      .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] }) // 0 — fan SELECT
+      .mockResolvedValueOnce({ rows: [] })                                        // 1 — existing household SELECT
+      .mockResolvedValueOnce({ rows: [] })                                        // 2 — BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID, org_id: CONTEXT_ORG_ID, adult_fan_id: ADULT_FAN_ID, created_at: householdRow.created_at }] }) // 3 — household INSERT
+      .mockResolvedValueOnce({ rows: [] })                                        // 4 — audit INSERT
+      .mockResolvedValueOnce({ rows: [] });                                       // 5 — COMMIT
   }
 
   test('returns 201 with household_id, adult_fan_id, org_id, created_at on success', async () => {
@@ -121,13 +125,50 @@ describe('POST /v1/household', () => {
   });
 
   test('returns 500 with generic message on db error — no internal detail in response', async () => {
-    mockDb.query.mockRejectedValueOnce(new Error('connection refused'));
+    // First call (fan SELECT) fails. Catch block calls ROLLBACK — needs a mock too.
+    mockDb.query
+      .mockRejectedValueOnce(new Error('connection refused'))
+      .mockResolvedValue({ rows: [] }); // ROLLBACK
 
     const res = await request(app).post('/v1/household').send();
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('household could not be created');
     expect(JSON.stringify(res.body)).not.toContain('connection refused');
+  });
+
+  // MEDIUM-2 — transaction integrity
+  test('calls ROLLBACK and returns 500 when audit INSERT fails', async () => {
+    mockDb.query
+      .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] }) // fan SELECT
+      .mockResolvedValueOnce({ rows: [] })                                        // existing household SELECT
+      .mockResolvedValueOnce({ rows: [] })                                        // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID, org_id: CONTEXT_ORG_ID, adult_fan_id: ADULT_FAN_ID, created_at: householdRow.created_at }] }) // household INSERT
+      .mockRejectedValueOnce(new Error('audit constraint violation'))             // audit INSERT fails
+      .mockResolvedValue({ rows: [] });                                           // ROLLBACK
+
+    const res = await request(app).post('/v1/household').send();
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('household could not be created');
+
+    const allSqls = mockDb.query.mock.calls.map(([sql]) => sql.toUpperCase().trim());
+    expect(allSqls).toContain('ROLLBACK');
+  });
+
+  test('does not return 201 when audit INSERT fails — no household without audit trail', async () => {
+    mockDb.query
+      .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID, org_id: CONTEXT_ORG_ID, adult_fan_id: ADULT_FAN_ID, created_at: householdRow.created_at }] })
+      .mockRejectedValueOnce(new Error('pg: constraint violation'))
+      .mockResolvedValue({ rows: [] });
+
+    const res = await request(app).post('/v1/household').send();
+
+    expect(res.status).not.toBe(201);
+    expect(res.body.household_id).toBeUndefined();
   });
 });
 
@@ -1674,6 +1715,46 @@ describe('POST /v1/household/:adult_fan_id/members/:child_fan_id/age-up', () => 
     expect(allSqls.find(s => s === 'BEGIN')).toBeUndefined();
     expect(allSqls.find(s => s.includes('UPDATE HOUSEHOLD_MEMBER'))).toBeUndefined();
     expect(allSqls.find(s => s === 'COMMIT')).toBeUndefined();
+  });
+
+  // MEDIUM-1 — email stub log security
+  test('email stub log does not contain the raw claim token', async () => {
+    setupSuccessfulAgeUp();
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await request(app)
+      .post(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}/age-up`);
+
+    const stubCall = logSpy.mock.calls.find(([label]) => label === 'AGE-UP EMAIL STUB');
+    expect(stubCall).toBeDefined();
+    const logged = stubCall[1];
+
+    // claim_url must be the literal redacted string — never a real token
+    expect(logged.claim_url).toBe('https://fanpass.thunder.com/claim/[REDACTED]');
+    // A raw token is two UUIDs concatenated — 64+ hex chars, no dashes
+    expect(JSON.stringify(logged)).not.toMatch(/[0-9a-f]{64}/);
+
+    logSpy.mockRestore();
+  });
+
+  test('email stub log does not contain guardian email address', async () => {
+    setupSuccessfulAgeUp();
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await request(app)
+      .post(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}/age-up`);
+
+    const stubCall = logSpy.mock.calls.find(([label]) => label === 'AGE-UP EMAIL STUB');
+    expect(stubCall).toBeDefined();
+    const logged = stubCall[1];
+
+    // 'to' field must be absent — guardian email is PII
+    expect(logged.to).toBeUndefined();
+    // The actual email value from the mock must not appear anywhere in the logged object
+    expect(JSON.stringify(logged)).not.toContain('guardian@example.com');
+    expect(logged.email_stub).toBe(true);
+
+    logSpy.mockRestore();
   });
 });
 

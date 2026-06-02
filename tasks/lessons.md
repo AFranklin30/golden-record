@@ -99,6 +99,88 @@ as a URL parameter (e.g. :adult_fan_id) in the protected router.
 
 ---
 
+## 6 — CHECK constraints block new event_type and identifier_type values (2026-06-02)
+
+When CLAUDE.md says "No schema change needed — event_type is TEXT not enum,
+new values work automatically," this is WRONG if a CHECK constraint exists on
+that column. migration_001.sql defines CHECK constraints on both
+audit_log.event_type and audit_log.identifier_type. Postgres CHECK constraints
+block any value not in the allowed list regardless of column type. Sprint 2+
+and Sprint 3 introduce new values for both columns that violate these constraints.
+
+When migration_005 fixed identifier_link.identifier_type, it missed the identical
+constraint on audit_log.identifier_type. The same identifier_type values are
+written to audit_log by resolverEngine on every resolution — same column name,
+same allowed-values pattern, but a different table. Fixing one table is not
+enough when the same constraint pattern exists on multiple tables.
+
+**Rule:** Before writing a new event_type or identifier_type to audit_log,
+always verify the CHECK constraint in migration_001.sql and any subsequent
+migration that may update it. When adding new values in a new sprint, always
+check if a migration update is needed for ALL columns with CHECK constraints
+that reference the new type — and for ALL tables that have that column.
+
+**Corollary:** When fixing a CHECK constraint for a column name (e.g.
+identifier_type), grep for that column name across ALL tables, not just the
+one in front of you. `grep -n "CHECK.*identifier_type" migrations/` catches
+the same constraint appearing in multiple tables.
+
+**Scope:** applies any time a new sprint adds new values to a CHECK-constrained
+column. Always grep for `CHECK (column_name IN` before claiming no schema change
+is needed.
+
+---
+
+## 7 — Logger must use arrow functions for jest.spyOn to work (2026-06-02)
+
+If the logger is defined as `{ info: console.log }` (direct reference), then
+`jest.spyOn(console, 'log')` cannot intercept calls to `logger.info`. The spy
+replaces the `console.log` property on the console object, but `logger.info`
+holds the original function reference captured at module load time.
+
+**Fix:** define the logger with arrow functions so every call goes through the
+current console property at call time:
+```javascript
+const logger = {
+  error: (...args) => console.error(...args),
+  warn:  (...args) => console.warn(...args),
+  info:  (...args) => console.log(...args),
+};
+```
+Now `jest.spyOn(console, 'log').mockImplementation(() => {})` intercepts all
+`logger.info(...)` calls and `logSpy.mockRestore()` properly restores them.
+
+**Scope:** applies to any logger module defined with direct console references
+that tests need to spy on. This pattern is needed for MEDIUM-1 style "verify
+the log does not contain a secret" tests.
+
+---
+
+## 8 — cors string-origin config sets header statically — use function for server-level enforcement (2026-06-02)
+
+When cors is configured as `origin: 'https://allowed.com'` (a string), the
+`Access-Control-Allow-Origin` header is set to that string on EVERY response
+regardless of the request's `Origin` header. A request from `https://evil.com`
+still gets the header back — the browser enforces the restriction, not the server.
+
+To block at the server level (so the header is absent for non-matching origins),
+use a function-based origin handler:
+```javascript
+origin: (requestOrigin, callback) => {
+  const allowed = process.env.CORS_ORIGIN;
+  if (!requestOrigin) return callback(null, true);   // server-to-server calls
+  if (!allowed)       return callback(null, false);  // no config → fail secure
+  callback(null, requestOrigin === allowed);          // exact match only
+}
+```
+With `callback(null, false)`, cors does NOT set the ACAO header. Tests that
+assert `toBeUndefined()` on the header require this approach.
+
+**Scope:** any future CORS configuration where tests need to verify "unlisted
+origin gets no access-control-allow-origin header."
+
+---
+
 ## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
 
 When the session prompt and CLAUDE.md pseudocode contradict each other on a

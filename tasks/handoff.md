@@ -1,5 +1,5 @@
-Completed: migration_006.sql — partial unique index on identifier_link (fan_pass only), RLS on 5 Sprint 3 tables, 3 data integrity indexes on conflict_queue/merge_history/related_fans.
-Next: Run migration_006.sql locally (psql $DATABASE_URL -f migrations/migration_006.sql), then Sprint 3 test suite security regression check on household + admin routes.
-Blocked: GCP credentials from Tanner — migrations 003/004/005/006 not yet run on Cloud SQL.
-Decisions: Partial unique index scoped to source_system = 'fan_pass' only — full index would block multi-source ingest. RLS cross-tenant test uses household as representative table (same policy pattern on all 5 tables).
-Warnings: Run migration_006 locally before Sprint 3 test suite — RLS policies must be active for tenant isolation tests to pass. Run migrations in order: 003 → 004 → 005 → 006.
+Completed: MEDIUM-1 (redact raw token + guardian_email from age-up log), MEDIUM-2 (POST /v1/household wrapped in transaction), MEDIUM-3 (health rate limiter 10/min), MEDIUM-4/5 (cors function-based origin, fail secure). 336 tests pass.
+Next: HIGH-3 — child session JWT enforcement (jwtMiddleware acting_as claim, household session scope).
+Blocked: GCP credentials from Tanner still pending — migrations 003–007 not run on Cloud SQL.
+Decisions: cors uses function-based origin handler so server blocks unlisted origins at header level (not just browser-level). Logger uses arrow functions so jest.spyOn works in tests.
+Warnings: Run migration_007 locally before continuing. Do not deploy to Cloud SQL until Tanner provides credentials.

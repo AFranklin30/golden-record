@@ -7,7 +7,11 @@ const { normalizeIdentifier, NormalizationError } = require('../modules/normaliz
 const { signToken } = require('../modules/jwt');
 
 const router = express.Router();
-const logger = { error: console.error, warn: console.warn, info: console.log };
+const logger = {
+  error: (...args) => console.error(...args),
+  warn:  (...args) => console.warn(...args),
+  info:  (...args) => console.log(...args),
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,6 +57,9 @@ router.post('/v1/household', async (req, res) => {
       });
     }
 
+    // TRANSACTION — household INSERT and audit are atomic: no household without audit trail
+    await req.db.query('BEGIN');
+
     // DB write 1 — create household
     const insertResult = await req.db.query(
       `INSERT INTO household (id, org_id, adult_fan_id, created_by, created_at)
@@ -62,22 +69,16 @@ router.post('/v1/household', async (req, res) => {
     );
     row = insertResult.rows[0];
 
-    // DB write 2 — audit event — non-fatal if it fails
-    try {
-      await req.db.query(
-        `INSERT INTO audit_log (id, fan_id, org_id, event_type, status, created_at)
-         VALUES (gen_random_uuid(), $1, $2, 'household_created', 'success', NOW())`,
-        [adult_fan_id, org_id]
-      );
-    } catch (auditErr) {
-      logger.error('audit log write failed after household creation', {
-        error:          auditErr.message,
-        fan_id:         adult_fan_id,
-        org_id,
-        correlation_id: req.context.correlation_id
-      });
-    }
+    // DB write 2 — audit event — always last write in transaction
+    await req.db.query(
+      `INSERT INTO audit_log (id, fan_id, org_id, event_type, status, created_at)
+       VALUES (gen_random_uuid(), $1, $2, 'household_created', 'success', NOW())`,
+      [adult_fan_id, org_id]
+    );
+
+    await req.db.query('COMMIT');
   } catch (err) {
+    await req.db.query('ROLLBACK').catch(() => {});
     logger.error('household creation failed', {
       error:          err.message,
       fan_id:         adult_fan_id,
@@ -954,14 +955,13 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/age-up', async (r
     }
     minor_fan_id = member.minor_fan_id;
 
-    // READ 4 — guardian email — non-blocking if null
-    const emailResult = await req.db.query(
+    // READ 4 — guardian email — fetched for email service when real sender is wired up
+    await req.db.query(
       `SELECT identifier_value FROM identifier_link
        WHERE fan_id = $1 AND org_id = $2 AND identifier_type = 'guardian_email'
        LIMIT 1`,
       [minor_fan_id, org_id]
     );
-    const guardianEmail = emailResult.rows[0]?.identifier_value || null;
 
     // GENERATE — before transaction — hash stored, raw token only in email stub log
     raw_token          = crypto.randomUUID() + crypto.randomUUID();
@@ -1002,12 +1002,12 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/age-up', async (r
 
     await req.db.query('COMMIT');
 
-    // EMAIL STUB — after commit, fire and forget — raw token only here
+    // EMAIL STUB — after commit, fire and forget — token is a credential, never logged
     logger.info('AGE-UP EMAIL STUB', {
-      to:         guardianEmail,
       subject:    'Your child can now claim their Thunder account',
-      claim_url:  `https://fanpass.thunder.com/claim/${raw_token}`,
+      claim_url:  'https://fanpass.thunder.com/claim/[REDACTED]',
       expires_at: claim_expires,
+      email_stub: true,
     });
   } catch (err) {
     await req.db.query('ROLLBACK').catch(() => {});
