@@ -2,6 +2,13 @@
 
 require('dotenv').config();
 
+const REQUIRED_ENV = ['DATABASE_URL', 'FIRESTORE_PROJECT_ID'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+}
+
 const cors      = require('cors');
 const express   = require('express');
 const helmet    = require('helmet');
@@ -20,8 +27,10 @@ const householdRouter          = require('./src/routes/household');
 const { householdClaimRouter } = householdRouter;
 const adminHouseholdRouter     = require('./src/routes/admin/household');
 const jwtMiddleware        = require('./src/middleware/jwtMiddleware');
+const pool                 = require('./src/db/pool');
 
 const app  = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // CORS — first middleware: fail secure when CORS_ORIGIN is not set.
@@ -99,8 +108,15 @@ app.use(protectedRouter);
 app.use(householdPublicRouter);
 app.use(householdProtectedRouter);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`golden-record listening on port ${PORT}`);
+});
+
+process.on('SIGTERM', () => {
+  server.close(() => {
+    pool.end();
+    process.exit(0);
+  });
 });
 
 module.exports = app;

@@ -181,6 +181,45 @@ origin gets no access-control-allow-origin header."
 
 ---
 
+## 9 — ON CONFLICT requires an exact matching unique index — verify before shipping (2026-06-02)
+
+`ON CONFLICT (col_a, col_b, col_c) DO UPDATE SET ...` requires a unique index
+or exclusion constraint on exactly those columns (or a partial index with a
+matching WHERE clause). Without it, Postgres rejects the statement at runtime:
+  ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification
+
+Tests that mock req.db.query never hit this error. The bug only surfaces against
+a real database. Component 31 (PUT household member) shipped with this defect —
+no unique index on (fan_id, identifier_type, org_id).
+
+**Rule:** Before writing any ON CONFLICT clause, verify the exact unique index
+exists by querying pg_indexes. A non-unique index on the same columns is not
+enough. A partial index requires a matching WHERE clause in ON CONFLICT.
+
+**Scope:** any upsert with ON CONFLICT. Always run the verification query:
+  SELECT indexname, indexdef FROM pg_indexes WHERE tablename = '<table>';
+
+---
+
+## 10 — RLS must be explicitly extended to every new table added in subsequent migrations (2026-06-02)
+
+migration_003 enabled RLS on Sprint 1 tables. Sprint 2 and Sprint 3 added 6
+new tenant tables (conflict_queue, household, household_member, merge_history,
+related_fans, staging_household_data) but none had RLS enabled. Cross-tenant
+isolation on those tables relies entirely on application WHERE org_id = $N clauses.
+
+**Rule:** Every migration that creates a new table holding org-scoped data must
+include ENABLE ROW LEVEL SECURITY and a CREATE POLICY for that table in the same
+migration — not deferred to a later migration. RLS is not inherited.
+
+**Corollary:** When writing a new sprint migration, grep for all new CREATE TABLE
+statements and confirm each one has a corresponding ENABLE ROW LEVEL SECURITY
+and USING (org_id = ...) policy in the same file.
+
+**Scope:** all future migrations adding tables that join to org or fan.
+
+---
+
 ## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
 
 When the session prompt and CLAUDE.md pseudocode contradict each other on a
