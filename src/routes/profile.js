@@ -6,7 +6,10 @@ const jwtMiddleware = require('../middleware/jwtMiddleware');
 
 const router    = express.Router();
 const logger    = { error: console.error, warn: console.warn };
-const firestore = new Firestore({ projectId: process.env.FIRESTORE_PROJECT_ID });
+const firestore = new Firestore({
+  projectId:  process.env.FIRESTORE_PROJECT_ID,
+  databaseId: 'golden-record',
+});
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

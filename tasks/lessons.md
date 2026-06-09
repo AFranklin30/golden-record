@@ -220,6 +220,30 @@ and USING (org_id = ...) policy in the same file.
 
 ---
 
+## 11 — Firestore databaseId omission causes silent writes to wrong database (2026-06-09)
+
+`new Firestore({ projectId })` connects to Firestore's `(default)` database.
+Firestore now supports multiple named databases per project. If the target collection
+lives in a named database (e.g. `golden-record`), omitting `databaseId` causes every
+`set()` and `get()` to silently hit `(default)` instead — no exception, no log entry.
+
+Symptoms: documents never appear in the expected collection; Cloud Run logs show no
+Firestore errors; Cloud SQL records are created correctly.
+
+**Fix:**
+```javascript
+const firestore = new Firestore({
+  projectId:  process.env.FIRESTORE_PROJECT_ID,
+  databaseId: 'golden-record',   // must match the named database in the console
+});
+```
+
+**Rule:** Every Firestore client initialization in this codebase must include
+`databaseId: 'golden-record'`. Both resolverEngine.js and profile.js were affected.
+If a new file initializes a Firestore client, add `databaseId` immediately.
+
+---
+
 ## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
 
 When the session prompt and CLAUDE.md pseudocode contradict each other on a
