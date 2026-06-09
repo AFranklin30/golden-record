@@ -244,6 +244,31 @@ If a new file initializes a Firestore client, add `databaseId` immediately.
 
 ---
 
+## 12 — CHECK constraints on match_type drift when new paths are added (2026-06-09)
+
+audit_log.match_type was defined in migration_001 with three values:
+'hard', 'soft', 'probabilistic'. Sprint 2 Path D introduced a fourth
+match_type = 'conflict'. The constraint was never updated. Every Path D
+resolution fails in production with a CHECK violation until migration_009 runs.
+
+This is the same class of bug as Lesson 6 (event_type and identifier_type
+constraint drift). The pattern repeats for every constrained column when a new
+sprint adds a new value.
+
+**Rule:** When adding a new path, result type, or status to resolverEngine,
+always grep for CHECK constraints on the column being written:
+  grep -n "CHECK.*match_type" migrations/
+If a constraint exists, write the migration before shipping the code change.
+
+**Corollary:** CHECK constraints must be updated in the same sprint as the code
+that writes the new value — not deferred. A deferred constraint update guarantees
+a production outage on the path that uses the new value.
+
+**Scope:** applies to match_type, event_type, identifier_type, status, and any
+other TEXT column with a CHECK constraint in this codebase.
+
+---
+
 ## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
 
 When the session prompt and CLAUDE.md pseudocode contradict each other on a

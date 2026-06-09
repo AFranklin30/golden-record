@@ -311,7 +311,6 @@ async function resolverEngine(input, db) {
     // STEP 4B — Firestore sync — after COMMIT, outside transaction, new records only
     if (is_new_record === true) {
       try {
-        logger.error('[debug] Firestore sync start', { fan_id, database: 'golden-record', collection: 'golden-record' });
         await firestore.collection('golden-record').doc(fan_id).set({
           fan_id:         fan_id,
           org_id:         org_id,
@@ -320,7 +319,6 @@ async function resolverEngine(input, db) {
           avatar:         null,
           created_at:     new Date().toISOString()
         });
-        logger.error('[debug] Firestore sync complete', { fan_id });
       } catch (firestoreErr) {
         logger.error('Firestore sync failed for new fan', {
           fan_id:  fan_id,
