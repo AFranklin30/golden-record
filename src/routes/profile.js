@@ -51,7 +51,7 @@ router.get('/v1/fan/:id/profile', jwtMiddleware, async (req, res) => {
 
     walletData = { loyalty_points: 0, stamps: [], avatar: null };
     try {
-      const firestoreDoc = await firestore.collection('fans').doc(jwt_fan_id).get();
+      const firestoreDoc = await firestore.collection('golden-record').doc(jwt_fan_id).get();
       if (firestoreDoc.exists) {
         const raw = firestoreDoc.data();
         if (typeof raw.loyalty_points !== 'number' || !isFinite(raw.loyalty_points) || raw.loyalty_points < 0) raw.loyalty_points = 0;

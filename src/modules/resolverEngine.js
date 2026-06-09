@@ -308,7 +308,7 @@ async function resolverEngine(input, db) {
     // STEP 4B — Firestore sync — after COMMIT, outside transaction, new records only
     if (is_new_record === true) {
       try {
-        await firestore.collection('fans').doc(fan_id).set({
+        await firestore.collection('golden-record').doc(fan_id).set({
           fan_id:     fan_id,
           org_id:     org_id,
           loyalty_points: 0,
