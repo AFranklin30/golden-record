@@ -74,7 +74,7 @@ async function resolverEngine(input, db) {
         fan_id:           e.fan_id,
         match_type:       e.match_type,
         confidence_score: e.confidence_score,
-        is_new_record:    e.is_new_record,
+        is_new_record:    false,
         linked_systems:   [],
         linked_count:     0,
         audit_event_id:   e.id,
