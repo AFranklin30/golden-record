@@ -29,10 +29,9 @@ async function tryOrgAuth(req) {
 router.get('/health', async (req, res) => {
   // RECEIVE
   const results = {
-    db:            'disconnected',
-    queue_depth:   0,
-    error_rate_5m: 0.0,
-    timestamp:     new Date().toISOString()
+    db:          'disconnected',
+    queue_depth: 0,
+    timestamp:   new Date().toISOString()
   };
 
   // EXECUTE — independent blocks, never throw
@@ -56,32 +55,13 @@ router.get('/health', async (req, res) => {
     // stays 0
   }
 
-  // Block 3 — error rate (last 5 minutes)
-  try {
-    const totalResult = await pool.query(
-      "SELECT COUNT(*) FROM audit_log WHERE created_at > NOW() - INTERVAL '5 minutes'"
-    );
-    const errorsResult = await pool.query(
-      "SELECT COUNT(*) FROM audit_log WHERE created_at > NOW() - INTERVAL '5 minutes' AND status = 'error'"
-    );
-    const total  = parseInt(totalResult.rows[0].count, 10);
-    const errors = parseInt(errorsResult.rows[0].count, 10);
-    if (total > 0) results.error_rate_5m = errors / total;
-  } catch (err) {
-    logger.warn('health error_rate query failed', {
-      event: 'health_rls_bypass',
-      error: err.message
-    });
-  }
-
   // Block 4 — auth check (determines response tier, never throws)
   const isAuthenticated = await tryOrgAuth(req);
 
   // RETURN
   const isHealthy =
     results.db === 'connected' &&
-    results.queue_depth < 10000 &&
-    results.error_rate_5m < 0.01;
+    results.queue_depth < 10000;
 
   const status     = isHealthy ? 'ok' : 'degraded';
   const httpStatus = isHealthy ? 200 : 503;
@@ -89,10 +69,9 @@ router.get('/health', async (req, res) => {
   if (isAuthenticated) {
     return res.status(httpStatus).json({
       status,
-      db:            results.db,
-      queue_depth:   results.queue_depth,
-      error_rate_5m: results.error_rate_5m,
-      timestamp:     results.timestamp
+      db:          results.db,
+      queue_depth: results.queue_depth,
+      timestamp:   results.timestamp
     });
   }
 
