@@ -1,5 +1,5 @@
-Completed: removed Block 3 (error_rate_5m) from health.js — audit_log has RLS and pool.query can't set app.current_org_id; this also eliminates the pg deprecation warning
-Next: run migration_010.sql on Cloud SQL (psql $DATABASE_URL -f migrations/migration_010.sql), then npm test full suite, commit, rebuild, redeploy
+Completed: pg deprecation warning fix — pool.on('connect') removed, statement_timeout moved to rlsContextMiddleware; 361 tests pass
+Next: npm test (already passing), commit, rebuild Cloud Run image, redeploy, verify no DeprecationWarning in Cloud Run logs
 Blocked: nothing
-Decisions: error rate monitoring belongs in Cloud Logging, not the health endpoint; isHealthy now only checks db connected + queue_depth < 10000
-Warnings: migration_010.sql must still run on Cloud SQL before redeploy — child_session_issued audit INSERT will fail CHECK constraint in production without it
+Decisions: statement_timeout now set via set_config in rlsContextMiddleware alongside app.current_org_id — single atomic awaited query, no concurrent client risk
+Warnings: migration_010.sql still must run on Cloud SQL before redeploy — child_session_issued audit INSERT will fail CHECK constraint in production without it

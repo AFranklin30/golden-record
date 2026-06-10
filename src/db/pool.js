@@ -10,10 +10,4 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-pool.on('connect', (client) => {
-  client.query('SET statement_timeout = 10000').catch(err => {
-    console.error('pool connect statement_timeout failed', err.message);
-  });
-});
-
 module.exports = pool;

@@ -17,7 +17,10 @@ async function rlsContextMiddleware(req, res, next) {
   let client;
   try {
     client = await pool.connect();
-    await client.query('SELECT set_config($1, $2, false)', ['app.current_org_id', org_id]);
+    await client.query(
+      'SELECT set_config($1, $2, false), set_config($3, $4, false)',
+      ['app.current_org_id', org_id, 'statement_timeout', '10000']
+    );
     req.db = client;
 
     let released = false;

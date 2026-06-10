@@ -1,37 +1,73 @@
-# health.js RLS Fix — tasks/todo.md
+# pg Deprecation Warning Fix — tasks/todo.md
 # Session: 2026-06-09
-# Remove Block 3 (error_rate_5m) — audit_log requires RLS context health endpoint cannot provide
+# Remove pool.on('connect') and move statement_timeout to rlsContextMiddleware
 
 ---
 
 ## Problem
 
-Block 3 queries audit_log directly via pool.query.
-audit_log has RLS enabled and requires app.current_org_id to be set
-as a session variable before any query runs. pool.query cannot set
-that variable — the query throws: "unrecognized configuration parameter app.current_org_id"
-This is also the source of the pg deprecation warning.
+pool.on('connect') fires synchronously when a connection is established.
+During Cloud Run startup, multiple connections establish simultaneously.
+Multiple client.query() calls fire before previous ones complete — pg sees
+this as calling query() on a client already executing a query, and logs:
 
-## Plan
+  DeprecationWarning: Calling client.query() when the client is already
+  executing a query is deprecated and will be removed in pg@9.0.
 
-### File touched: src/routes/health.js (1 file, 1 step)
+This is a startup-time warning, not a request-time warning.
 
-### Step 1 — Remove Block 3 and all error_rate_5m references
+## Fix
 
-- [x] Remove `error_rate_5m: 0.0` from results object (line 34)
-- [x] Remove Block 3 entirely (lines 59–75)
-- [x] Remove `results.error_rate_5m < 0.01` from isHealthy calculation (line 84)
-- [x] Remove `error_rate_5m: results.error_rate_5m` from authenticated response (line 95)
+Two files. Two changes.
 
-### isHealthy after change:
-```
-results.db === 'connected' && results.queue_depth < 10000
-```
+### File 1 — src/db/pool.js
+
+- [x] Remove pool.on('connect') handler entirely (lines 13–17)
+- [x] Final state: pool config + module.exports only — no connect handler
+
+### File 2 — src/middleware/rlsContextMiddleware.js
+
+- [x] Extend existing set_config query to also set statement_timeout
+- [x] Replace single set_config call with two-param set_config call in one query
+- [x] Both params set atomically in the same properly-awaited client.query()
+
+Current:
+  await client.query(
+    'SELECT set_config($1, $2, false)',
+    ['app.current_org_id', org_id]
+  );
+
+Target:
+  await client.query(
+    'SELECT set_config($1, $2, false), set_config($3, $4, false)',
+    ['app.current_org_id', org_id, 'statement_timeout', '10000']
+  );
+
+---
+
+## Why This Is Safe
+
+- Health endpoint uses pool.query() directly — no rlsContextMiddleware — lightweight
+  query only, does not need statement_timeout
+- orgAuthMiddleware uses pool.query() directly — same reason
+- All route handlers that do real work go through rlsContextMiddleware
+  — they get statement_timeout via the set_config call
+- rlsContextMiddleware already has a properly awaited client via pool.connect()
+  — adding statement_timeout to the same query runs in a single atomic operation
+  with no concurrent execution risk
+
+---
+
+## Verification
+
+- [x] npm test — 361 tests pass (1 new test added), no regressions
+- [ ] No DeprecationWarning in startup logs — verify after deploy
 
 ---
 
 ## Review
 
-- [x] health.js has no remaining error_rate_5m references
-- [x] isHealthy only checks db and queue_depth
-- [x] Block 3 (lines 59–75) fully removed
+- [x] pool.js has no pool.on('connect') handler
+- [x] rlsContextMiddleware.js sets both app.current_org_id and statement_timeout
+      in a single query
+- [x] All tests pass

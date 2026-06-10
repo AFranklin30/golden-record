@@ -337,6 +337,46 @@ at module load time, not per-request.
 
 ---
 
+## 16 — pool.on('connect') is not safe for queries when multiple connections establish simultaneously (2026-06-09)
+
+`pool.on('connect')` fires synchronously when a connection is established — before
+the client is fully ready for concurrent use. During Cloud Run startup, when the
+pool opens multiple connections simultaneously, overlapping `client.query()` calls
+on the same client trigger:
+
+  DeprecationWarning: Calling client.query() when the client is already executing
+  a query is deprecated and will be removed in pg@9.0.
+
+**Fix:** Remove the `pool.on('connect')` handler. Set connection-level config
+(e.g. `statement_timeout`) inside `rlsContextMiddleware` instead, where the client
+is acquired via `await pool.connect()` and the query is properly awaited — a single
+atomic operation with no concurrent execution risk.
+
+**Why rlsContextMiddleware is the right place:** Every real route handler already
+flows through it. The health endpoint and `orgAuthMiddleware` use `pool.query()`
+directly and run only lightweight queries — they do not need `statement_timeout`.
+
+**Pattern:**
+```javascript
+// In rlsContextMiddleware — set both RLS context and timeout in one query
+await client.query(
+  'SELECT set_config($1, $2, false), set_config($3, $4, false)',
+  ['app.current_org_id', org_id, 'statement_timeout', '10000']
+);
+```
+
+**Test update:** The startup test that asserted `pool.listenerCount('connect') > 0`
+must be inverted to assert `=== 0`, and a source-inspection test added to verify
+`rlsContextMiddleware` sets `statement_timeout`. Never fix a test to match broken
+code — but when the design intentionally changes, update the test to match the new
+correct behavior.
+
+**Scope:** any future connection-level Postgres config. Do not use `pool.on('connect')`
+for queries. Use `rlsContextMiddleware` or a dedicated middleware with a properly
+awaited client.
+
+---
+
 ## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
 
 When the session prompt and CLAUDE.md pseudocode contradict each other on a

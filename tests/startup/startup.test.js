@@ -23,12 +23,29 @@ describe('pool limits (FIX 2)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// FIX 3 — Statement timeout connect listener
+// FIX 3 — Statement timeout via rlsContextMiddleware (not pool.on connect)
+//
+// pool.on('connect') fires synchronously during connection establishment.
+// Multiple simultaneous connections at startup cause concurrent client.query()
+// calls which trigger a pg DeprecationWarning. The fix is to remove the connect
+// handler and set statement_timeout inside rlsContextMiddleware where the client
+// is already fully ready and the query is properly awaited.
 // ---------------------------------------------------------------------------
 
+const fs = require('fs');
+
 describe('pool statement timeout (FIX 3)', () => {
-  test('connect listener is registered for statement_timeout', () => {
-    expect(pool.listenerCount('connect')).toBeGreaterThan(0);
+  test('pool has no connect listener — avoids pg deprecation warning', () => {
+    expect(pool.listenerCount('connect')).toBe(0);
+  });
+
+  test('rlsContextMiddleware sets statement_timeout via set_config', () => {
+    const source = fs.readFileSync(
+      require.resolve('../../src/middleware/rlsContextMiddleware.js'),
+      'utf8'
+    );
+    expect(source).toContain('statement_timeout');
+    expect(source).toContain('set_config');
   });
 });
 
