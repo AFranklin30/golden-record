@@ -7,7 +7,7 @@ const router = express.Router();
 const logger = { error: console.error };
 
 const UUID_RE          = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ALLOWED_STATUSES = ['pending', 'confirmed', 'rejected'];
+const ALLOWED_STATUSES = ['pending', 'confirmed', 'rejected', 'unmerged'];
 
 // COMPONENT 18 — GET /v1/conflicts
 router.get('/v1/conflicts', async (req, res) => {
@@ -21,7 +21,7 @@ router.get('/v1/conflicts', async (req, res) => {
   if (!ALLOWED_STATUSES.includes(status)) {
     return res.status(400).json({
       error:   'invalid status',
-      message: 'status must be one of: pending, confirmed, rejected'
+      message: 'status must be one of: pending, confirmed, rejected, unmerged'
     });
   }
   if (isNaN(limit) || limit < 1) {

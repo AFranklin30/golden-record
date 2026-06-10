@@ -269,6 +269,74 @@ other TEXT column with a CHECK constraint in this codebase.
 
 ---
 
+## 13 — Application-layer status whitelists drift when new status values are added (2026-06-09)
+
+When a new endpoint sets a new value on a status column (e.g. 'unmerged' on
+conflict_queue.status), every application-layer whitelist that reads that column
+must also be updated. In conflicts.js, ALLOWED_STATUSES = ['pending', 'confirmed',
+'rejected'] was never updated when unmerge was added in Sprint 3. Staff cannot
+query GET /v1/conflicts?status=unmerged — they receive 400.
+
+This is the application-layer counterpart to Lesson 6 (CHECK constraint drift at
+the database layer). Both drift in the same direction: a new code path writes a new
+value, but the list of valid values in a gatekeeper is never updated.
+
+**Rule:** When a new status value is written anywhere in the codebase, grep for
+every array/set that enumerates that column's allowed values — at the DB layer
+(CHECK constraints) AND at the application layer (ALLOWED_STATUSES, switch
+statements, conditional branches). Both must be updated in the same sprint.
+
+**Scope:** ALLOWED_STATUSES in conflicts.js, any future status/type enum in a
+route handler that reads from a DB column.
+
+---
+
+## 14 — Never attach module resources to req — import them directly (2026-06-09)
+
+household.js Component 29 guards the Firestore child-fan sync with:
+  if (req.firestore) { ... }
+No middleware in index.js ever sets req.firestore. The guard is always false.
+Every child fan created via household silently gets no Firestore wallet document.
+Tests mock req.db.query and never noticed — the branch is dead code in production.
+
+**Rule:** Module-level resources (Firestore clients, external SDKs, connection pools)
+must be imported directly in the file that uses them, not attached to req and
+read back. req is for per-request context (org_id, fan_id, correlation_id, the db
+client for the current transaction). Stable resources never change per-request and
+do not belong on req.
+
+**Corollary:** When reviewing a new file that reads req.X for something that is not
+request context, check that a middleware actually sets req.X before the handler runs.
+If no middleware does it, the property is always undefined.
+
+**Scope:** any use of req.[non-standard-property] for a module resource.
+
+---
+
+## 15 — jest.clearAllMocks() wipes module-level constructor call history — use source inspection instead (2026-06-09)
+
+When a module initializes a resource at load time (e.g. `const firestore = new Firestore(...)`),
+`jest.clearAllMocks()` in `beforeEach` runs before each test and resets `Firestore.mock.calls`
+to `[]`. By the time the test runs, the constructor call count is 0 — `toHaveBeenCalledWith`
+always fails for module-level initialization patterns.
+
+**Fix:** Use source inspection instead:
+```javascript
+const source = fs.readFileSync(require.resolve('../../src/routes/household.js'), 'utf8');
+expect(source).toContain("databaseId: 'golden-record'");
+expect(source).toContain('new Firestore(');
+```
+Source inspection is authoritative, immune to mock state, and tests the actual file.
+
+**Corollary:** `jest.expect()` does not accept a second label argument the way some test
+frameworks do (Jasmine style). Use separate named `test()` blocks instead of a for-loop
+with labels for better failure attribution.
+
+**Scope:** any test that needs to verify constructor arguments on a resource initialized
+at module load time, not per-request.
+
+---
+
 ## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
 
 When the session prompt and CLAUDE.md pseudocode contradict each other on a

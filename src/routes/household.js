@@ -1,7 +1,8 @@
 'use strict';
 
-const crypto  = require('crypto');
-const express = require('express');
+const crypto    = require('crypto');
+const express   = require('express');
+const { Firestore } = require('@google-cloud/firestore');
 
 const { normalizeIdentifier, NormalizationError } = require('../modules/normalizer');
 const { signToken } = require('../modules/jwt');
@@ -12,6 +13,11 @@ const logger = {
   warn:  (...args) => console.warn(...args),
   info:  (...args) => console.log(...args),
 };
+
+const firestore = new Firestore({
+  projectId:  process.env.FIRESTORE_PROJECT_ID,
+  databaseId: 'golden-record',
+});
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -112,10 +118,13 @@ router.get('/v1/household/:adult_fan_id', async (req, res) => {
   if (url_adult_fan_id !== jwt_fan_id) {
     return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
+  if (isNaN(limit) || limit < 1) {
+    return res.status(400).json({ error: 'limit must be at least 1' });
+  }
   if (limit > 10) {
     return res.status(400).json({ error: 'limit cannot exceed 10' });
   }
-  if (offset < 0) {
+  if (isNaN(offset) || offset < 0) {
     return res.status(400).json({ error: 'offset cannot be negative' });
   }
 
@@ -220,7 +229,7 @@ router.post('/v1/household/:adult_fan_id/members', async (req, res) => {
 
   // GUARD — in-memory only
   if (url_adult_fan_id !== jwt_fan_id) {
-    return res.status(403).json({ error: 'forbidden' });
+    return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
   if (!first_name || !first_name.trim()) {
     return res.status(400).json({ error: 'first_name is required' });
@@ -356,22 +365,20 @@ router.post('/v1/household/:adult_fan_id/members', async (req, res) => {
     await req.db.query('COMMIT');
 
     // FIRESTORE SYNC — after commit, non-fatal
-    if (req.firestore) {
-      try {
-        await req.firestore.collection('fans').doc(minor_fan_id).set({
-          fan_id:         minor_fan_id,
-          org_id,
-          loyalty_points: 0,
-          stamps:         [],
-          avatar:         null,
-          created_at:     new Date().toISOString(),
-        });
-      } catch (firestoreErr) {
-        logger.error('Firestore sync failed for child fan', {
-          fan_id: minor_fan_id,
-          error:  firestoreErr.message,
-        });
-      }
+    try {
+      await firestore.collection('golden-record').doc(minor_fan_id).set({
+        fan_id:         minor_fan_id,
+        org_id,
+        loyalty_points: 0,
+        stamps:         [],
+        avatar:         null,
+        created_at:     new Date().toISOString(),
+      });
+    } catch (firestoreErr) {
+      logger.error('Firestore sync failed for child fan', {
+        fan_id: minor_fan_id,
+        error:  firestoreErr.message,
+      });
     }
   } catch (err) {
     await req.db.query('ROLLBACK').catch(() => {});
@@ -524,7 +531,7 @@ router.put('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, res)
     return res.status(400).json({ error: 'child_fan_id must be a valid UUID' });
   }
   if (url_adult_fan_id !== jwt_fan_id) {
-    return res.status(403).json({ error: 'forbidden' });
+    return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
 
   const nameProvided  = first_name != null || last_name != null;
@@ -628,6 +635,7 @@ router.put('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, res)
             first_seen_at, last_seen_at)
          VALUES ($1, 'name', $2, $3, 'fan_pass', '1.0', 1.0, NOW(), NOW())
          ON CONFLICT (fan_id, identifier_type, org_id)
+           WHERE source_system = 'fan_pass'
          DO UPDATE SET identifier_value = EXCLUDED.identifier_value,
                        last_seen_at     = NOW()`,
         [minor_fan_id, normalized_name, org_id]
@@ -643,6 +651,7 @@ router.put('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, res)
             first_seen_at, last_seen_at)
          VALUES ($1, 'dob', $2, $3, 'fan_pass', '1.0', 1.0, NOW(), NOW())
          ON CONFLICT (fan_id, identifier_type, org_id)
+           WHERE source_system = 'fan_pass'
          DO UPDATE SET identifier_value = EXCLUDED.identifier_value,
                        last_seen_at     = NOW()`,
         [minor_fan_id, normalized_dob, org_id]
@@ -662,6 +671,7 @@ router.put('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, res)
             first_seen_at, last_seen_at)
          VALUES ($1, 'guardian_email', $2, $3, 'fan_pass', '1.0', 1.0, NOW(), NOW())
          ON CONFLICT (fan_id, identifier_type, org_id)
+           WHERE source_system = 'fan_pass'
          DO UPDATE SET identifier_value = EXCLUDED.identifier_value,
                        last_seen_at     = NOW()`,
         [minor_fan_id, normalized_email, org_id]
@@ -677,6 +687,7 @@ router.put('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, res)
             first_seen_at, last_seen_at)
          VALUES ($1, 'guardian_phone', $2, $3, 'fan_pass', '1.0', 1.0, NOW(), NOW())
          ON CONFLICT (fan_id, identifier_type, org_id)
+           WHERE source_system = 'fan_pass'
          DO UPDATE SET identifier_value = EXCLUDED.identifier_value,
                        last_seen_at     = NOW()`,
         [minor_fan_id, normalized_phone, org_id]
@@ -730,7 +741,7 @@ router.delete('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, r
     return res.status(400).json({ error: 'child_fan_id must be a valid UUID' });
   }
   if (url_adult_fan_id !== jwt_fan_id) {
-    return res.status(403).json({ error: 'forbidden' });
+    return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
 
   // EXECUTE
@@ -832,7 +843,7 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/session', async (
     return res.status(400).json({ error: 'child_fan_id must be a valid UUID' });
   }
   if (url_adult_fan_id !== jwt_fan_id) {
-    return res.status(403).json({ error: 'forbidden' });
+    return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
 
   // EXECUTE — Pattern 1: single TRY wraps all db reads and token issuance
@@ -868,7 +879,7 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/session', async (
       return res.status(404).json({ error: 'household member not found' });
     }
 
-    // Issue child JWT — 8-hour expiry, no db writes, no audit event
+    // Issue child JWT — 8-hour expiry
     tokenResult = signToken({
       fan_id:    child_fan_id,
       org_id,
@@ -876,6 +887,13 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/session', async (
       acting_as: 'child',
       guardian:  jwt_fan_id,
     });
+
+    // Audit event — child session issuance
+    await req.db.query(
+      `INSERT INTO audit_log (id, fan_id, org_id, event_type, status, created_at)
+       VALUES (gen_random_uuid(), $1, $2, 'child_session_issued', 'success', NOW())`,
+      [child_fan_id, org_id]
+    );
   } catch (err) {
     logger.error('child session issue failed', {
       error:          err.message,
@@ -912,7 +930,7 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/age-up', async (r
     return res.status(400).json({ error: 'child_fan_id must be a valid UUID' });
   }
   if (url_adult_fan_id !== jwt_fan_id) {
-    return res.status(403).json({ error: 'forbidden' });
+    return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
 
   // EXECUTE — Pattern 1: single TRY wraps all db reads and writes

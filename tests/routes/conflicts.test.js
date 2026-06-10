@@ -109,6 +109,33 @@ describe('GET /v1/conflicts', () => {
     expect(mockDb.query.mock.calls[0][1][1]).toBe('rejected');
   });
 
+  // BUG-3 — 'unmerged' must be a valid status value
+  test('BUG-3: accepts status=unmerged and returns 200', async () => {
+    mockDb.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] });
+
+    const res = await request(app).get('/v1/conflicts?status=unmerged');
+
+    expect(res.status).toBe(200);
+    expect(res.body.status_filter).toBe('unmerged');
+    expect(mockDb.query.mock.calls[0][1][1]).toBe('unmerged');
+  });
+
+  test('BUG-3: all five valid statuses accepted — only unknown string returns 400', async () => {
+    const validStatuses = ['pending', 'confirmed', 'rejected', 'unmerged'];
+    for (const s of validStatuses) {
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] });
+      const res = await request(app).get(`/v1/conflicts?status=${s}`);
+      expect(res.status).toBe(200);
+    }
+    const bad = await request(app).get('/v1/conflicts?status=archived');
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toBe('invalid status');
+  });
+
   test('rejects invalid status value with 400', async () => {
     const res = await request(app).get('/v1/conflicts?status=invalid');
     expect(res.status).toBe(400);

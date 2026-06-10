@@ -1,5 +1,5 @@
-Completed: removed two debug logger.error lines from resolverEngine.js Firestore sync block (lines 314 and 323) — 343/343 tests pass
-Next: commit, rebuild container image, redeploy to Cloud Run
+Completed: pre-presentation fixes — BUG-1 (NaN limit/offset guards), BUG-2 (ON CONFLICT WHERE source_system), BUG-3 (unmerged in ALLOWED_STATUSES), BUG-4 (Firestore direct import + golden-record collection), ROUGH-1 (consistent forbidden 403 message field), ROUGH-3 (child session audit event + migration_010.sql); 360/360 tests green
+Next: run migration_010.sql on Cloud SQL (psql $DATABASE_URL -f migrations/migration_010.sql), then npm test full suite, commit, rebuild, redeploy
 Blocked: nothing
-Decisions: none
-Warnings: this is the final production deploy — verify GET /health and Firestore document creation after redeploy
+Decisions: Firestore imported directly in household.js at module level (same pattern as resolverEngine.js); no shared firestore.js module — Sprint 4 cleanup; ROUGH-1 error shape fix adds message to 5 forbidden 403s (write handlers), leaves GET handlers unchanged; ROUGH-1 test uses source inspection + separate named tests rather than for-loop with labels
+Warnings: migration_010.sql must run on Cloud SQL before redeploy — child_session_issued audit INSERT will fail CHECK constraint in production without it; migration file test block leaves rows in audit_log (append-only) and associated org/fan rows — search for _mig010_test_org if cleanup needed

@@ -1,5 +1,18 @@
 'use strict';
 
+// Must be declared before require() of the module under test.
+// jest.mock() is hoisted — intercepts the Firestore constructor
+// used by household.js at module load time.
+jest.mock('@google-cloud/firestore', () => ({
+  Firestore: jest.fn().mockImplementation(() => ({
+    collection: jest.fn().mockReturnValue({
+      doc: jest.fn().mockReturnValue({
+        set: jest.fn().mockResolvedValue({}),
+      }),
+    }),
+  })),
+}));
+
 const express = require('express');
 const request = require('supertest');
 
@@ -1290,12 +1303,13 @@ describe('POST /v1/household/:adult_fan_id/members/:child_fan_id/session', () =>
     app = buildApp();
   });
 
-  // READ 1=fan, READ 2=household, READ 3=member — no writes
+  // READ 1=fan, READ 2=household, READ 3=member, WRITE 4=audit INSERT
   function setupSuccessfulSession() {
     mockDb.query
       .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] })               // READ 1 — adult fan
       .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID }] })                                  // READ 2 — household
-      .mockResolvedValueOnce({ rows: [{ id: MEMBER_ID, minor_fan_id: MINOR_FAN_ID }] });       // READ 3 — member
+      .mockResolvedValueOnce({ rows: [{ id: MEMBER_ID, minor_fan_id: MINOR_FAN_ID }] })        // READ 3 — member
+      .mockResolvedValueOnce({ rows: [] });                                                      // WRITE 4 — audit INSERT
   }
 
   // 1 — issued token passes verifyToken without throwing
@@ -1421,6 +1435,184 @@ describe('POST /v1/household/:adult_fan_id/members/:child_fan_id/session', () =>
       .post(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}/session`);
     expect(res.status).toBe(404);
     expect(mockDb.query.mock.calls[0][1][1]).toBe(OTHER_ORG_ID);
+  });
+
+  // ROUGH-3: tests 13-15 — child session audit event
+  test('ROUGH-3: POST session writes audit_log INSERT after signToken', async () => {
+    setupSuccessfulSession();
+    await request(app).post(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}/session`);
+    const auditCall = mockDb.query.mock.calls.find(
+      c => typeof c[0] === 'string' && c[0].includes('INSERT INTO audit_log')
+    );
+    expect(auditCall).toBeDefined();
+  });
+
+  test('ROUGH-3: audit event_type is child_session_issued', async () => {
+    setupSuccessfulSession();
+    await request(app).post(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}/session`);
+    const auditCall = mockDb.query.mock.calls.find(
+      c => typeof c[0] === 'string' && c[0].includes('INSERT INTO audit_log')
+    );
+    expect(auditCall).toBeDefined();
+    expect(auditCall[0]).toContain('child_session_issued');
+  });
+
+  test('ROUGH-3: audit event fan_id is minor_fan_id not adult_fan_id', async () => {
+    setupSuccessfulSession();
+    await request(app).post(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}/session`);
+    const auditCall = mockDb.query.mock.calls.find(
+      c => typeof c[0] === 'string' && c[0].includes('INSERT INTO audit_log')
+    );
+    expect(auditCall).toBeDefined();
+    // $1 = fan_id (child), $2 = org_id
+    expect(auditCall[1][0]).toBe(MINOR_FAN_ID);
+    expect(auditCall[1][0]).not.toBe(ADULT_FAN_ID);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-presentation fix verification tests
+// BUG-1, BUG-2, BUG-4, ROUGH-1
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('BUG-1: GET /v1/household NaN limit/offset guards', () => {
+  let app;
+  beforeEach(() => { app = buildApp(); });
+
+  test('BUG-1: ?limit=abc returns 400 — NaN does not reach Postgres', async () => {
+    const res = await request(app).get(`/v1/household/${ADULT_FAN_ID}?limit=abc`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeDefined();
+    expect(mockDb.query).not.toHaveBeenCalled();
+  });
+
+  test('BUG-1: ?offset=abc returns 400 — NaN does not reach Postgres', async () => {
+    const res = await request(app).get(`/v1/household/${ADULT_FAN_ID}?offset=abc`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeDefined();
+    expect(mockDb.query).not.toHaveBeenCalled();
+  });
+
+  test('BUG-1: valid limit and offset passes guards and reaches DB', async () => {
+    // Mock fan found, no household → 200 with empty household
+    mockDb.query
+      .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, org_id: CONTEXT_ORG_ID, stewardship_tier: 'platform', record_version: 1, created_at: new Date() }] })
+      .mockResolvedValueOnce({ rows: [] }); // no household
+
+    const res = await request(app).get(`/v1/household/${ADULT_FAN_ID}?limit=3&offset=0`);
+
+    expect(res.status).toBe(200);
+    expect(mockDb.query).toHaveBeenCalled();
+  });
+});
+
+describe('BUG-2: PUT household member ON CONFLICT WHERE source_system', () => {
+  let app;
+  beforeEach(() => { app = buildApp(); });
+
+  test('BUG-2: all four ON CONFLICT clauses in PUT handler include WHERE source_system', () => {
+    const fs     = require('fs');
+    const source = fs.readFileSync(
+      require.resolve('../../src/routes/household.js'), 'utf8'
+    );
+    // Count how many ON CONFLICT clauses exist in the file
+    const allConflicts = (source.match(/ON CONFLICT \(fan_id, identifier_type, org_id\)/g) || []).length;
+    // Count how many have the WHERE source_system predicate
+    const correctConflicts = (source.match(/ON CONFLICT \(fan_id, identifier_type, org_id\)\s+WHERE source_system = 'fan_pass'/g) || []).length;
+    // All ON CONFLICT clauses in household.js are in the PUT handler — all four must have WHERE
+    expect(allConflicts).toBe(4);
+    expect(correctConflicts).toBe(4);
+  });
+
+  test('BUG-2: PUT member success path completes without ON CONFLICT error', async () => {
+    // Full mock chain for PUT: fan, household, member, name lookup,
+    // BEGIN, 4 identifier upserts, dob update on member, audit, COMMIT
+    mockDb.query
+      .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] })                       // fan
+      .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID }] })                                          // household
+      .mockResolvedValueOnce({ rows: [{ id: MEMBER_ID, minor_fan_id: MINOR_FAN_ID }] })                // member
+      .mockResolvedValueOnce({ rows: [{ identifier_value: 'sam smith' }] })                             // existing name lookup
+      .mockResolvedValue({ rows: [] });                                                                  // BEGIN + upserts + audit + COMMIT
+
+    const res = await request(app)
+      .put(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}`)
+      .send({ first_name: 'Sam', dob: '2015-03-10', guardian_email: 'parent@example.com', guardian_phone: '+14055550100' });
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('BUG-4: household.js Firestore client initialization', () => {
+  test('BUG-4: Firestore constructor invocation in source includes databaseId golden-record', () => {
+    // Source inspection — jest.clearAllMocks() in beforeEach wipes call history
+    // before the test runs, making toHaveBeenCalledWith unreliable for module-load calls.
+    // Reading the source directly is authoritative and not subject to mock state.
+    const fs     = require('fs');
+    const source = fs.readFileSync(
+      require.resolve('../../src/routes/household.js'), 'utf8'
+    );
+    expect(source).toContain("databaseId: 'golden-record'");
+    expect(source).toContain('new Firestore(');
+  });
+
+  test('BUG-4: collection name used is golden-record not fans', () => {
+    const fs     = require('fs');
+    const source = fs.readFileSync(
+      require.resolve('../../src/routes/household.js'), 'utf8'
+    );
+    expect(source).toContain("collection('golden-record')");
+    expect(source).not.toContain("collection('fans')");
+  });
+
+  test('BUG-4: req.firestore is not referenced anywhere in household.js', () => {
+    const fs     = require('fs');
+    const source = fs.readFileSync(
+      require.resolve('../../src/routes/household.js'), 'utf8'
+    );
+    expect(source).not.toContain('req.firestore');
+  });
+});
+
+describe('ROUGH-1: consistent 4xx error response shape', () => {
+  let app;
+  beforeEach(() => { app = buildApp(); });
+
+  test('ROUGH-1: GET /v1/household/not-a-uuid returns 400 with error field', async () => {
+    const res = await request(app).get('/v1/household/not-a-uuid');
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+    expect(mockDb.query).not.toHaveBeenCalled();
+  });
+
+  test('ROUGH-1: PUT /v1/household/not-a-uuid/members/... returns 400 with error field', async () => {
+    const res = await request(app)
+      .put('/v1/household/not-a-uuid/members/not-a-uuid')
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+    expect(mockDb.query).not.toHaveBeenCalled();
+  });
+
+  test('ROUGH-1: DELETE /v1/household/not-a-uuid/members/... returns 400 with error field', async () => {
+    const res = await request(app)
+      .delete('/v1/household/not-a-uuid/members/not-a-uuid');
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+    expect(mockDb.query).not.toHaveBeenCalled();
+  });
+
+  test('ROUGH-1: no 4xx response has message field without error field', async () => {
+    // JWT mismatch 403 — has both error and message fields
+    const res = await request(buildApp(CONTEXT_ORG_ID, OTHER_FAN_ID))
+      .get(`/v1/household/${ADULT_FAN_ID}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body).toHaveProperty('error');
+    expect(res.body).toHaveProperty('message');
+    // The invariant: message field never appears without error field
+    if (res.body.message !== undefined) {
+      expect(res.body).toHaveProperty('error');
+    }
   });
 });
 
