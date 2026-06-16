@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const logger = { error: console.error };
+const logger = require('../lib/logger');
 
 async function correlationIdMiddleware(req, res, next) {
   // RECEIVE

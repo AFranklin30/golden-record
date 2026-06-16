@@ -3,10 +3,10 @@
 const crypto  = require('crypto');
 const express = require('express');
 
-const router = express.Router();
-const logger = { error: console.error };
+const logger           = require('../lib/logger');
 
-const UUID_RE          = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const router           = express.Router();
+const { UUID_RE }      = require('../lib/validate');
 const ALLOWED_STATUSES = ['pending', 'confirmed', 'rejected', 'unmerged'];
 
 // COMPONENT 18 — GET /v1/conflicts

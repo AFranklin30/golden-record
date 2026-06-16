@@ -28,7 +28,7 @@ if (!PRIVATE_KEY || !PUBLIC_KEY) {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const logger = { warn: console.warn };
+const logger = require('../lib/logger');
 
 // RECEIVE
 function signToken(payload) {

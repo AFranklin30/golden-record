@@ -4,7 +4,7 @@ const crypto  = require('crypto');
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/pool');
-const logger  = { error: console.error, warn: console.warn };
+const logger  = require('../lib/logger');
 
 // Attempts to authenticate an org API key from the Authorization header.
 // Returns true only if the key maps to an active org. Never throws.

@@ -2,8 +2,7 @@
 
 const crypto = require('crypto');
 const pool   = require('../db/pool');
-
-const logger = { error: console.error, warn: console.warn };
+const logger = require('../lib/logger');
 
 async function orgAuthMiddleware(req, res, next) {
   // RECEIVE

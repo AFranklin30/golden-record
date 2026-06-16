@@ -5,7 +5,7 @@ const express = require('express');
 const { signToken } = require('../modules/jwt');
 
 const router = express.Router();
-const logger = { error: console.error, warn: console.warn };
+const logger = require('../lib/logger');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

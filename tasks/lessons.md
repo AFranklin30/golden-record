@@ -377,6 +377,75 @@ awaited client.
 
 ---
 
+## 17 — Shared UUID validation — one source of truth (2026-06-16)
+
+Before: `UUID_RE` was defined identically in `conflicts.js` and `household.js`. Two copies
+of the same regex with no connection between them — a silent drift risk if one is ever
+updated.
+
+After: `src/lib/validate.js` exports `UUID_RE` and `isValidUuid`. Both files import
+`{ UUID_RE }` from that module. Only one definition to maintain.
+
+**Why:** Duplicated regex constants are the lowest-friction source of subtle bugs —
+one copy gets updated, the other doesn't, both tests still pass because they test
+different endpoints. Moving to a shared module makes the single source of truth
+explicit and machine-enforceable.
+
+---
+
+## 18 — Shared logger — arrow functions required for jest.spyOn (2026-06-16)
+
+Before: 13 files each defined their own logger literal, with varying shapes:
+`{ error: console.error }`, `{ error, warn }`, `{ warn }`, `{ error, warn, info }`.
+None used arrow functions, which means `jest.spyOn(console, 'error')` cannot
+intercept calls made through any of these loggers (the direct reference is captured
+at module-load time, bypassing the spy). Lesson 7 documents this failure mode.
+
+After: `src/lib/logger.js` exports a single logger using arrow functions so every call
+is routed through the live `console` property at call time. All 13 files import it.
+
+**Why:** Arrow functions make the logger spy-able, which matters for tests that assert
+"this error was or was not logged." Direct-reference loggers silently defeat those tests.
+The shared module also prevents each new file from re-introducing the wrong pattern.
+
+---
+
+## 19 — dotenv.config() belongs only at the application entry point (2026-06-16)
+
+Before: `resolverEngine.js` called `require('dotenv').config()` at the top of the file.
+The root `index.js` already calls this on line 3 before any module is loaded.
+
+After: The call is removed from `resolverEngine.js` entirely.
+
+**Why:** `dotenv.config()` is idempotent (it doesn't re-load if already loaded), so
+calling it twice causes no runtime bug — but it signals incorrect design: a module
+should not know or care how its environment is initialized. Entry-point configuration
+belongs only in the entry point. Module files should simply read `process.env.*`.
+
+---
+
+## 20 — Removing genuinely dead code requires updating the test that proves it runs (2026-06-16)
+
+Before: `normalizer.js` had a DD/MM/YYYY date-parsing branch that ran when the
+MM/DD/YYYY attempt failed (i.e., when the "month" field was > 12). The test
+`'31/03/2000'` → `'2000-03-31'` proved this branch was reachable and exercised it.
+The task description called it "unreachable" — technically incorrect. It was
+reachable but wrong behavior for a US-only platform.
+
+After: The DD/MM/YYYY block (7 lines) is deleted from `normalizeDob`. The test is
+updated: `'31/03/2000'` now throws `NormalizationError('dob format invalid')` as
+expected for a US-only platform.
+
+**Why:** The Thunder is US-only. Silently accepting `31/03/2000` and returning
+`2000-03-31` is incorrect behavior that could corrupt identity records. The fix is
+intentional — not just cleanup.
+
+**Rule:** When removing a code branch, grep the test suite for tests that exercise
+that specific branch. A test proving reachability is proof you need to update the
+test, not just delete the branch.
+
+---
+
 ## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
 
 When the session prompt and CLAUDE.md pseudocode contradict each other on a

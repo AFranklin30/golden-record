@@ -4,8 +4,6 @@ const crypto    = require('crypto');
 const { Firestore } = require('@google-cloud/firestore');
 const { scoreMatch } = require('./probabilisticMatcher');
 
-require('dotenv').config();
-
 const THRESHOLD_PATH_C = 0.85;
 const THRESHOLD_PATH_D = 0.60;
 
@@ -14,7 +12,7 @@ const firestore = new Firestore({
   databaseId: 'golden-record',
 });
 
-const logger = { error: console.error, warn: console.warn };
+const logger = require('../lib/logger');
 
 class ConflictError extends Error {
   constructor(message) {

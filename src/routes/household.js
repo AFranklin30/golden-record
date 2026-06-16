@@ -7,19 +7,16 @@ const { Firestore } = require('@google-cloud/firestore');
 const { normalizeIdentifier, NormalizationError } = require('../modules/normalizer');
 const { signToken } = require('../modules/jwt');
 
+const logger = require('../lib/logger');
+
 const router = express.Router();
-const logger = {
-  error: (...args) => console.error(...args),
-  warn:  (...args) => console.warn(...args),
-  info:  (...args) => console.log(...args),
-};
 
 const firestore = new Firestore({
   projectId:  process.env.FIRESTORE_PROJECT_ID,
   databaseId: 'golden-record',
 });
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const { UUID_RE } = require('../lib/validate');
 
 router.post('/v1/household', async (req, res) => {
   // RECEIVE

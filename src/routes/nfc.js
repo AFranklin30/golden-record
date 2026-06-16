@@ -8,7 +8,7 @@ const { resolverEngine, ConflictError, ResolverError } = require('../modules/res
 
 const router = express.Router();
 
-const logger  = { error: console.error, warn: console.warn };
+const logger  = require('../lib/logger');
 
 router.post('/v1/ingest/nfc', async (req, res) => {
   // RECEIVE

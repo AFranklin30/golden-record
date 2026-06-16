@@ -43,9 +43,9 @@ describe('normalizer — dob', () => {
     expect(normalizeIdentifier('dob', '06/15/2000')).toBe('2000-06-15');
   });
 
-  test('accepts DD/MM/YYYY when month value would be invalid as MM', () => {
-    // 31/03/2000 — month 31 is invalid, so falls through to DD/MM
-    expect(normalizeIdentifier('dob', '31/03/2000')).toBe('2000-03-31');
+  test('rejects DD/MM/YYYY format — US-only platform', () => {
+    expect(() => normalizeIdentifier('dob', '31/03/2000')).toThrow(NormalizationError);
+    expect(() => normalizeIdentifier('dob', '31/03/2000')).toThrow('dob format invalid');
   });
 
   test('always returns YYYY-MM-DD format', () => {

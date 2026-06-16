@@ -5,7 +5,7 @@ const { Firestore } = require('@google-cloud/firestore');
 const jwtMiddleware = require('../middleware/jwtMiddleware');
 
 const router    = express.Router();
-const logger    = { error: console.error, warn: console.warn };
+const logger    = require('../lib/logger');
 const firestore = new Firestore({
   projectId:  process.env.FIRESTORE_PROJECT_ID,
   databaseId: 'golden-record',

@@ -79,15 +79,6 @@ function normalizeDob(value) {
     }
   }
 
-  // Try DD/MM/YYYY
-  if (parsed === null) {
-    const m = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (m) {
-      parsed = new Date(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}T00:00:00.000Z`);
-      if (isNaN(parsed.getTime())) parsed = null;
-    }
-  }
-
   if (parsed === null || isNaN(parsed.getTime())) {
     throw new NormalizationError(`dob format invalid: ${value}`);
   }

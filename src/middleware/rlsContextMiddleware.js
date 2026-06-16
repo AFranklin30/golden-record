@@ -1,7 +1,7 @@
 'use strict';
 
 const pool   = require('../db/pool');
-const logger = { error: console.error };
+const logger = require('../lib/logger');
 
 async function rlsContextMiddleware(req, res, next) {
   // RECEIVE
