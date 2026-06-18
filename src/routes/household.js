@@ -18,6 +18,15 @@ const firestore = new Firestore({
 
 const { UUID_RE } = require('../lib/validate');
 
+// Adult-only guard — child tokens (acting_as: 'child') may never manage household accounts.
+// A child acting as themselves cannot create, view, or modify household relationships.
+router.use((req, res, next) => {
+  if (req.context && req.context.acting_as === 'child') {
+    return res.status(403).json({ error: 'forbidden', message: 'child tokens cannot manage household accounts' });
+  }
+  next();
+});
+
 router.post('/v1/household', async (req, res) => {
   // RECEIVE
   const org_id       = req.context.org_id;

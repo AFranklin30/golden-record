@@ -89,11 +89,12 @@ function verifyToken(authHeader) {
 
   // RETURN
   return {
-    fan_id: decoded.sub,
-    org_id: decoded.org,
-    iat:    decoded.iat,
-    exp:    decoded.exp,
-    jti:    decoded.jti
+    fan_id:    decoded.sub,
+    org_id:    decoded.org,
+    acting_as: decoded.acting_as || null,
+    iat:       decoded.iat,
+    exp:       decoded.exp,
+    jti:       decoded.jti
   };
 }
 
@@ -107,8 +108,9 @@ function jwtMiddleware(req, res, next) {
     if (claims.org_id !== req.context.org_id) {
       throw new JWTError('org claim does not match authenticated org', 403);
     }
-    req.context.fan_id = claims.fan_id;
-    req.context.jti    = claims.jti;
+    req.context.fan_id    = claims.fan_id;
+    req.context.jti       = claims.jti;
+    req.context.acting_as = claims.acting_as;
     next();
   } catch (err) {
     if (err instanceof JWTError) {
