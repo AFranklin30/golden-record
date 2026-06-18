@@ -8,28 +8,29 @@ const { resolverEngine, ConflictError, ResolverError } = require('../modules/res
 
 const router = express.Router();
 
-const logger = { error: console.error, warn: console.warn };
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const logger = require('../lib/logger');
 
 router.post('/v1/resolve', async (req, res) => {
   // RECEIVE
   const body             = req.body;
   const identifier_type  = body.identifier_type;
   const identifier_value = body.identifier_value;
-  const org_id           = body.org_id;
   const schema_version   = body.schema_version;
   const source_system    = body.source_system || 'unknown';
+  const org_id           = req.context.org_id;  // ground truth from orgAuthMiddleware
 
   // GUARD — in-memory only
+  if (body.org_id !== undefined && body.org_id !== org_id) {
+    return res.status(400).json({
+      error: 'org_id mismatch',
+      message: 'request body org_id does not match authenticated org'
+    });
+  }
   if (!identifier_type || !String(identifier_type).trim()) {
     return res.status(400).json({ error: 'identifier_type is required' });
   }
   if (identifier_value === null || identifier_value === undefined || identifier_value === '') {
     return res.status(400).json({ error: 'identifier_value is required' });
-  }
-  if (!org_id || !UUID_RE.test(org_id)) {
-    return res.status(400).json({ error: 'org_id must be a valid UUID' });
   }
   if (!schema_version || !String(schema_version).trim()) {
     return res.status(400).json({ error: 'schema_version is required' });
@@ -61,29 +62,78 @@ router.post('/v1/resolve', async (req, res) => {
       schema_version,
       idempotency_key,
       source_system
-    });
+    }, req.db);
   } catch (err) {
     if (err instanceof ConflictError) {
       return res.status(409).json({ error: 'concurrent write conflict — retry request' });
     }
     if (err instanceof ResolverError) {
-      logger.error('resolver engine failure', { error: err.message, org_id });
+      logger.error('resolver engine failure', { error: err.message, org_id, correlation_id: req.context.correlation_id });
       return res.status(500).json({ error: 'resolver internal error' });
     }
-    logger.error('unexpected resolve error', { error: err.message, org_id });
+    logger.error('unexpected resolve error', { error: err.message, org_id, correlation_id: req.context.correlation_id });
     return res.status(500).json({ error: 'resolver internal error' });
   }
 
   // RETURN
-  return res.status(200).json({
-    fan_id:           result.fan_id,
-    match_type:       result.match_type,
-    confidence_score: result.confidence_score,
-    is_new_record:    result.is_new_record,
-    linked_systems:   result.linked_systems,
-    linked_count:     result.linked_count,
-    audit_event_id:   result.audit_event_id
-  });
+  if (result.match_type === 'hard' && result.is_new_record === false) {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'hard',
+      confidence_score: 1.0,
+      is_new_record:    false,
+      requires_review:  false,
+      conflict_id:      null,
+      linked_systems:   result.linked_systems,
+      linked_count:     result.linked_count,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  if (result.match_type === 'hard' && result.is_new_record === true) {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'hard',
+      confidence_score: 1.0,
+      is_new_record:    true,
+      requires_review:  false,
+      conflict_id:      null,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  if (result.match_type === 'soft') {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'soft',
+      confidence_score: result.confidence_score,
+      is_new_record:    true,
+      requires_review:  true,
+      conflict_id:      result.conflict_id,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  if (result.match_type === 'conflict') {
+    return res.status(200).json({
+      fan_id:           result.fan_id,
+      match_type:       'conflict',
+      confidence_score: result.confidence_score,
+      is_new_record:    true,
+      requires_review:  true,
+      conflict_id:      result.conflict_id,
+      linked_systems:   [],
+      linked_count:     0,
+      audit_event_id:   result.audit_event_id
+    });
+  }
+
+  logger.error('unknown match_type in resolver result', { match_type: result.match_type, org_id, correlation_id: req.context.correlation_id });
+  return res.status(500).json({ error: 'resolver internal error' });
 });
 
 module.exports = router;

@@ -20,13 +20,15 @@ class StartupError extends Error {
 }
 
 // MODULE INIT — throws at startup if keys are absent; prevents Cloud Run start
-const PRIVATE_KEY = process.env.JWT_PRIVATE_KEY;
-const PUBLIC_KEY  = process.env.JWT_PUBLIC_KEY;
+const PRIVATE_KEY = (process.env.JWT_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+const PUBLIC_KEY  = (process.env.JWT_PUBLIC_KEY  || '').replace(/\\n/g, '\n');
 if (!PRIVATE_KEY || !PUBLIC_KEY) {
   throw new StartupError('JWT keys not found — service cannot start');
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const logger = require('../lib/logger');
 
 // RECEIVE
 function signToken(payload) {
@@ -40,14 +42,19 @@ function signToken(payload) {
 
   // EXECUTE
   const issuedAt  = Math.floor(Date.now() / 1000);
-  const expiresAt = issuedAt + 15 * 60;
+  const expiresAt = issuedAt + (payload.expiresIn || 15 * 60);
   const claims = {
+    iss: 'golden-record',
+    // TODO: align to 'golden-record-webview' before Sprint 4 WebView integration — coordinate with King and Sila (TASK-12)
+    aud: 'golden-record',
     sub: fan_id,
     org: org_id,
     iat: issuedAt,
     exp: expiresAt,
     jti: crypto.randomUUID()
   };
+  if (payload.acting_as !== undefined) claims.acting_as = payload.acting_as;
+  if (payload.guardian  !== undefined) claims.guardian  = payload.guardian;
   const token = jwt.sign(claims, PRIVATE_KEY, { algorithm: 'RS256' });
 
   // RETURN
@@ -67,7 +74,8 @@ function verifyToken(authHeader) {
   // EXECUTE
   let decoded;
   try {
-    decoded = jwt.verify(token, PUBLIC_KEY, { algorithms: ['RS256'], clockTolerance: 30 });
+    // TODO: update audience to 'golden-record-webview' when aud claim above is updated (TASK-12)
+    decoded = jwt.verify(token, PUBLIC_KEY, { algorithms: ['RS256'], clockTolerance: 30, issuer: 'golden-record', audience: 'golden-record' });
   } catch (err) {
     if (err.name === 'TokenExpiredError')                                      throw new JWTError('token has expired', 401);
     if (err.name === 'JsonWebTokenError' && err.message === 'invalid signature') throw new JWTError('token signature invalid', 401);
@@ -81,11 +89,12 @@ function verifyToken(authHeader) {
 
   // RETURN
   return {
-    fan_id: decoded.sub,
-    org_id: decoded.org,
-    iat:    decoded.iat,
-    exp:    decoded.exp,
-    jti:    decoded.jti
+    fan_id:    decoded.sub,
+    org_id:    decoded.org,
+    acting_as: decoded.acting_as || null,
+    iat:       decoded.iat,
+    exp:       decoded.exp,
+    jti:       decoded.jti
   };
 }
 
@@ -96,13 +105,19 @@ function jwtMiddleware(req, res, next) {
   // TRY wraps EXECUTE only (Pattern 1 — GUARD has no db calls)
   try {
     const claims = verifyToken(authHeader);
-    req.context.fan_id = claims.fan_id;
-    req.context.jti    = claims.jti;
+    if (claims.org_id !== req.context.org_id) {
+      throw new JWTError('org claim does not match authenticated org', 403);
+    }
+    req.context.fan_id    = claims.fan_id;
+    req.context.jti       = claims.jti;
+    req.context.acting_as = claims.acting_as;
     next();
   } catch (err) {
     if (err instanceof JWTError) {
-      console.warn('JWT verification failed', { reason: err.message, ip: req.ip });
-      return res.status(401).json({ error: 'unauthorized', message: 'invalid or expired token' });
+      logger.warn('JWT verification failed', { reason: err.message, ip: req.ip, correlation_id: req.context?.correlation_id });
+      const status = err.code || 401;
+      const error  = status === 403 ? 'forbidden' : 'unauthorized';
+      return res.status(status).json({ error, message: 'invalid or expired token' });
     }
     throw err;
   }

@@ -315,24 +315,13 @@ COMMENT ON COLUMN ingest_failures.status IS
 
 
 -- =============================================================================
--- SEED: default org record for development
+-- SEED: see migrations/seed_dev.sql
 --
--- Provides a working org row for local development and Cloud Run smoke testing.
--- org_api_key_hash is sha256("dev-api-key-replace-in-prod")
---
--- IMPORTANT: Replace this seed with real org records before production.
--- The dev API key must never be deployed to production Cloud Run.
+-- Dev org seed has been moved to seed_dev.sql to prevent known credentials
+-- from reaching production Cloud SQL.
+-- Run seed_dev.sql manually in local and staging environments only.
 -- Production org records are inserted via admin tooling, not migrations.
 -- =============================================================================
-
-INSERT INTO org (name, is_active, org_api_key_hash)
-VALUES (
-  'OKC Thunder (Dev)',
-  true,
-  -- sha256("dev-api-key-replace-in-prod")
-  -- Generated with: echo -n "dev-api-key-replace-in-prod" | sha256sum
-  'a3d6e2b1c9f4a7d8e5b2c0f3a6d9e1b4c7f0a3d6e2b1c9f4a7d8e5b2c0f3a6'
-);
 
 
 -- =============================================================================

@@ -48,7 +48,7 @@ rate limiter
 |---|---|
 | orgAuthMiddleware | org_id, org_name |
 | correlationIdMiddleware | org_id, org_name, correlation_id |
-| jwtMiddleware | org_id, org_name, correlation_id, fan_id |
+| jwtMiddleware | org_id, org_name, correlation_id, fan_id, acting_as |
 
 ---
 
@@ -218,6 +218,11 @@ No write ever exists without a corresponding audit event.
 - fan_id in URL params is always verified against JWT claim before any db call
 - Parameterized queries ($1, $2) everywhere — never concatenate values into SQL strings
 - deleted_at check required before issuing JWT or returning profile
+- Child tokens (`acting_as: 'child'`) must never be allowed to manage household accounts —
+  every route file that accepts household management (create, view, modify, sever, age-up)
+  must reject `acting_as === 'child'` with 403 before any handler logic runs.
+  The enforcement point is a router-level `router.use()` guard at the top of the route file,
+  not inside individual handlers. This prevents silent omissions when new routes are added.
 
 ---
 

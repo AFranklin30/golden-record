@@ -2,12 +2,14 @@
 
 const express       = require('express');
 const { Firestore } = require('@google-cloud/firestore');
-const pool          = require('../db/pool');
 const jwtMiddleware = require('../middleware/jwtMiddleware');
 
 const router    = express.Router();
-const logger    = { error: console.error, warn: console.warn };
-const firestore = new Firestore({ projectId: process.env.FIRESTORE_PROJECT_ID });
+const logger    = require('../lib/logger');
+const firestore = new Firestore({
+  projectId:  process.env.FIRESTORE_PROJECT_ID,
+  databaseId: 'golden-record',
+});
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -31,7 +33,7 @@ router.get('/v1/fan/:id/profile', jwtMiddleware, async (req, res) => {
   // EXECUTE
   let fan, linksResult, walletData;
   try {
-    const fanResult = await pool.query(
+    const fanResult = await req.db.query(
       `SELECT id, org_id, stewardship_tier, record_version, created_at, updated_at, deleted_at
        FROM fan WHERE id = $1 AND org_id = $2`,
       [jwt_fan_id, org_id]
@@ -44,7 +46,7 @@ router.get('/v1/fan/:id/profile', jwtMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'fan record has been erased' });
     }
 
-    linksResult = await pool.query(
+    linksResult = await req.db.query(
       `SELECT identifier_type, source_system, confidence_score, first_seen_at, last_seen_at
        FROM identifier_link WHERE fan_id = $1 AND org_id = $2`,
       [jwt_fan_id, org_id]
@@ -52,8 +54,14 @@ router.get('/v1/fan/:id/profile', jwtMiddleware, async (req, res) => {
 
     walletData = { loyalty_points: 0, stamps: [], avatar: null };
     try {
-      const firestoreDoc = await firestore.collection('fans').doc(jwt_fan_id).get();
-      if (firestoreDoc.exists) walletData = firestoreDoc.data();
+      const firestoreDoc = await firestore.collection('golden-record').doc(jwt_fan_id).get();
+      if (firestoreDoc.exists) {
+        const raw = firestoreDoc.data();
+        if (typeof raw.loyalty_points !== 'number' || !isFinite(raw.loyalty_points) || raw.loyalty_points < 0) raw.loyalty_points = 0;
+        if (!Array.isArray(raw.stamps)) raw.stamps = [];
+        if (raw.avatar !== null && typeof raw.avatar !== 'string') raw.avatar = null;
+        walletData = raw;
+      }
     } catch (fsErr) {
       logger.warn('Firestore read failed — returning empty wallet', { fan_id: jwt_fan_id, error: fsErr.message });
     }
