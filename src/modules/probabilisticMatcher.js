@@ -105,7 +105,7 @@ function scoreMatch(candidateRecord, inboundIdentifiers) {
       if (similarity >= 0.8) {
         const recency  = getRecencyMultiplier(candidate.email_last_seen_at);
         const adjusted = SIGNAL_WEIGHTS.email_similarity * recency;
-        score = Math.max(score, adjusted);
+        score = Math.min(1.0, score + adjusted);
         signals_matched.push({
           signal:             'email_similarity',
           raw_score:          SIGNAL_WEIGHTS.email_similarity,
@@ -126,7 +126,7 @@ function scoreMatch(candidateRecord, inboundIdentifiers) {
       if (nameMatch && dobMatch) {
         const recency  = getRecencyMultiplier(candidate.name_last_seen_at);
         const adjusted = SIGNAL_WEIGHTS.name_plus_dob * recency;
-        score = Math.max(score, adjusted);
+        score = Math.min(1.0, score + adjusted);
         signals_matched.push({
           signal:             'name_plus_dob',
           raw_score:          SIGNAL_WEIGHTS.name_plus_dob,
@@ -146,7 +146,7 @@ function scoreMatch(candidateRecord, inboundIdentifiers) {
       if (nameMatch && zipMatch) {
         const recency  = getRecencyMultiplier(candidate.name_last_seen_at);
         const adjusted = SIGNAL_WEIGHTS.name_plus_zip * recency;
-        score = Math.max(score, adjusted);
+        score = Math.min(1.0, score + adjusted);
         signals_matched.push({
           signal:             'name_plus_zip',
           raw_score:          SIGNAL_WEIGHTS.name_plus_zip,
@@ -161,7 +161,7 @@ function scoreMatch(candidateRecord, inboundIdentifiers) {
       if (inbound.guardian_email === candidate.guardian_email) {
         const recency  = getRecencyMultiplier(candidate.guardian_email_last_seen_at);
         const adjusted = SIGNAL_WEIGHTS.guardian_email * recency;
-        score = Math.max(score, adjusted);
+        score = Math.min(1.0, score + adjusted);
         signals_matched.push({
           signal:             'guardian_email',
           raw_score:          SIGNAL_WEIGHTS.guardian_email,
@@ -176,7 +176,7 @@ function scoreMatch(candidateRecord, inboundIdentifiers) {
       if (inbound.device_id === candidate.device_id) {
         const recency  = getRecencyMultiplier(candidate.device_last_seen_at);
         const adjusted = SIGNAL_WEIGHTS.device_id * recency;
-        score = Math.max(score, adjusted);
+        score = Math.min(1.0, score + adjusted);
         signals_matched.push({
           signal:             'device_id',
           raw_score:          SIGNAL_WEIGHTS.device_id,
@@ -191,7 +191,7 @@ function scoreMatch(candidateRecord, inboundIdentifiers) {
       if (normalizedNameMatch(inbound.name, candidate.name)) {
         const recency  = getRecencyMultiplier(candidate.name_last_seen_at);
         const adjusted = SIGNAL_WEIGHTS.name_alone * recency;
-        score = Math.max(score, adjusted);
+        score = Math.min(1.0, score + adjusted);
         signals_matched.push({
           signal:             'name_alone',
           raw_score:          SIGNAL_WEIGHTS.name_alone,

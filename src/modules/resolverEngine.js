@@ -28,6 +28,54 @@ class ResolverError extends Error {
   }
 }
 
+// Checks whether a candidate has enough signal potential to be worth scoring.
+// Existence-only check — no similarity math runs here.
+// STRONG signals: email_similarity, name_plus_dob, guardian_email
+// WEAK signals:   name_plus_zip, device_id, name_alone
+// PASS if >= 1 strong OR >= 2 weak. FAIL otherwise — skip candidate entirely.
+function passesSignalEligibilityGate(candidate, inbound) {
+  let strongCount = 0;
+  let weakCount   = 0;
+
+  // email_similarity — strong
+  if (inbound.email != null && candidate.email != null) {
+    strongCount++;
+  }
+
+  // name_plus_dob — strong
+  if (
+    inbound.name != null && inbound.dob != null &&
+    candidate.name != null && candidate.dob != null
+  ) {
+    strongCount++;
+  }
+
+  // guardian_email — strong
+  if (inbound.guardian_email != null && candidate.guardian_email != null) {
+    strongCount++;
+  }
+
+  // name_plus_zip — weak
+  if (
+    inbound.name != null && inbound.zip != null &&
+    candidate.name != null && candidate.zip != null
+  ) {
+    weakCount++;
+  }
+
+  // device_id — weak
+  if (inbound.device_id != null && candidate.device_id != null) {
+    weakCount++;
+  }
+
+  // name_alone — weak
+  if (inbound.name != null && candidate.name != null) {
+    weakCount++;
+  }
+
+  return strongCount >= 1 || weakCount >= 2;
+}
+
 // RECEIVE
 async function resolverEngine(input, db) {
   const identifier_type  = input.identifier_type;
@@ -87,8 +135,13 @@ async function resolverEngine(input, db) {
     await db.query('BEGIN');
 
     const linkResult = await db.query(
-      `SELECT fan_id, confidence_score FROM identifier_link
-       WHERE identifier_type = $1 AND identifier_value = $2 AND org_id = $3`,
+      `SELECT il.fan_id, il.confidence_score
+       FROM identifier_link il
+       JOIN fan f ON f.id = il.fan_id
+       WHERE il.identifier_type = $1
+         AND il.identifier_value = $2
+         AND il.org_id = $3
+         AND f.deleted_at IS NULL`,
       [identifier_type, identifier_value, org_id]
     );
 
@@ -152,15 +205,18 @@ async function resolverEngine(input, db) {
         [org_id]
       );
 
-      // Build inbound object — maps current identifier to signal fields
+      // Build inbound object — singular identifier_type mapping always wins
+      // (it drives the hard-match lookup above and must not be overridden).
+      // Additional fields fall back to input.identifiers when provided.
+      const extra = input.identifiers || {};
       const inbound = {
         org_id:         org_id,
-        email:          identifier_type === 'email'          ? identifier_value : null,
-        name:           identifier_type === 'name'           ? identifier_value : null,
-        dob:            identifier_type === 'dob'            ? identifier_value : null,
-        zip:            identifier_type === 'zip'            ? identifier_value : null,
-        device_id:      identifier_type === 'device_id'      ? identifier_value : null,
-        guardian_email: identifier_type === 'guardian_email' ? identifier_value : null,
+        email:          identifier_type === 'email'          ? identifier_value : (extra.email          ?? null),
+        name:           identifier_type === 'name'           ? identifier_value : (extra.name           ?? null),
+        dob:            identifier_type === 'dob'            ? identifier_value : (extra.dob            ?? null),
+        zip:            identifier_type === 'zip'            ? identifier_value : (extra.zip            ?? null),
+        device_id:      identifier_type === 'device_id'      ? identifier_value : (extra.device_id      ?? null),
+        guardian_email: identifier_type === 'guardian_email' ? identifier_value : (extra.guardian_email ?? null),
       };
 
       // STEP 2 — score each candidate, track best
@@ -169,6 +225,9 @@ async function resolverEngine(input, db) {
       let bestSignals = [];
 
       for (const candidate of candidateRows.rows) {
+        if (!passesSignalEligibilityGate(candidate, inbound)) {
+          continue;
+        }
         const result = scoreMatch(candidate, inbound);
         if (result.score > bestScore) {
           bestScore   = result.score;
@@ -340,6 +399,44 @@ async function resolverEngine(input, db) {
     if (err instanceof ConflictError || err.code === '40001') {
       await db.query('ROLLBACK').catch(() => {});
       throw new ConflictError('record_version conflict — concurrent write');
+    }
+
+    // 23505 — unique_violation on identifier_link (uq_identifier_per_org).
+    // The losing concurrent writer's transaction (including any orphan fan row
+    // it inserted in PATH B/C/D) is rolled back here. The winning request has
+    // already committed that identifier, so the PATH A re-query below finds it.
+    // This is a successful resolution to an existing fan — not an error.
+    if (err.code === '23505') {
+      await db.query('ROLLBACK').catch(() => {});
+      const winnerResult = await db.query(
+        `SELECT il.fan_id FROM identifier_link il
+         JOIN fan f ON f.id = il.fan_id
+         WHERE il.identifier_type = $1 AND il.identifier_value = $2
+           AND il.org_id = $3 AND f.deleted_at IS NULL`,
+        [identifier_type, identifier_value, org_id]
+      );
+      if (winnerResult.rows.length > 0) {
+        const winner_fan_id = winnerResult.rows[0].fan_id;
+        const audit_id      = crypto.randomUUID();
+        await db.query(
+          `INSERT INTO audit_log
+             (id, fan_id, org_id, event_type, match_type, confidence_score,
+              is_new_record, idempotency_key, identifier_type, schema_version, status, created_at)
+           VALUES ($1, $2, $3, 'resolution', 'hard', 1.0, false, $4, $5, $6, 'success', NOW())`,
+          [audit_id, winner_fan_id, org_id, idempotency_key, identifier_type, schema_version]
+        );
+        return {
+          fan_id:           winner_fan_id,
+          match_type:       'hard',
+          confidence_score: 1.0,
+          is_new_record:    false,
+          linked_systems:   [],
+          linked_count:     0,
+          audit_event_id:   audit_id,
+          conflict_id:      null
+        };
+      }
+      // re-query found nothing (should not happen after 23505) — fall through to error path
     }
 
     await db.query('ROLLBACK').catch(() => {});

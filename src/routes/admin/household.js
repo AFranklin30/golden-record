@@ -65,8 +65,19 @@ router.get('/v1/admin/household/:fan_id', async (req, res) => {
       [fan_id, org_id]
     );
 
-    // COMPUTE — soft_links derived from READ 3 results, no extra db round-trip
-    const softLinks = allMembers.filter(m => m.link_type === 'soft');
+    // READ 5 — staging_household_data: probable matches not yet promoted
+    // Only unpromoted rows — outstanding items staff still needs to act on.
+    // Uses req.db so RLS context from rlsContextMiddleware is in scope.
+    const stagingResult = await req.db.query(
+      `SELECT id, adult_fan_id, child_name, child_dob,
+              source, confidence, created_at
+       FROM staging_household_data
+       WHERE adult_fan_id = $1
+         AND org_id       = $2
+         AND promoted_at  IS NULL
+       ORDER BY confidence DESC, created_at DESC`,
+      [fan_id, org_id]
+    );
 
     // RETURN
     return res.status(200).json({
@@ -94,13 +105,14 @@ router.get('/v1/admin/household/:fan_id', async (req, res) => {
         severed_by:             m.severed_by,
         created_at:             m.created_at,
       })),
-      soft_links:   softLinks.map(m => ({
-        member_id:   m.id,
-        adult_fan_id: m.adult_fan_id,
-        minor_fan_id: m.minor_fan_id,
-        link_type:   m.link_type,
-        status:      m.status,
-        created_at:  m.created_at,
+      soft_links:   stagingResult.rows.map(s => ({
+        staging_id:   s.id,
+        adult_fan_id: s.adult_fan_id,
+        child_name:   s.child_name,
+        child_dob:    s.child_dob,
+        source:       s.source,
+        confidence:   s.confidence,
+        created_at:   s.created_at,
       })),
       related_fans: relatedResult.rows.map(r => ({
         record_id:    r.id,

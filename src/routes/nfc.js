@@ -17,6 +17,7 @@ router.post('/v1/ingest/nfc', async (req, res) => {
   const station_id     = body.station_id;
   const schema_version = body.schema_version;
   const tapped_at      = body.tapped_at || new Date().toISOString();
+  const identifiers    = body.identifiers || null;
   const org_id         = req.context.org_id;  // ground truth from orgAuthMiddleware
 
   // GUARD — in-memory only
@@ -87,6 +88,7 @@ router.post('/v1/ingest/nfc', async (req, res) => {
     result = await resolverEngine({
       identifier_type:  'nfc_uid',
       identifier_value: normalized_uid,
+      identifiers,
       org_id,
       schema_version,
       idempotency_key,

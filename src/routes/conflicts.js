@@ -135,6 +135,29 @@ router.post('/v1/conflicts/:id/confirm', async (req, res) => {
       });
     }
 
+    // GUARD — fan_id_a must not have already absorbed a previous merge.
+    // Multi-hop merges are not supported: identifier_link.merged_from_fan_id
+    // is a single column, not a chain. A second merge confirm overwrites the
+    // provenance marker set by the first, making the first merge unrestorable
+    // via unmerge (the identifier UPDATE WHERE merged_from_fan_id = original_source
+    // returns 0 rows because that column was stomped). This is a defensive block,
+    // not a complete chain-history solution — that requires a schema change for a
+    // later sprint.
+    const priorMergeResult = await req.db.query(
+      `SELECT id FROM merge_history
+       WHERE fan_id_target = $1
+         AND org_id = $2
+         AND status = 'active'
+       LIMIT 1`,
+      [conflict.fan_id_a, org_id]
+    );
+    if (priorMergeResult.rows.length > 0) {
+      return res.status(409).json({
+        error: 'multi-hop merge not supported',
+        message: 'this fan has already absorbed a previous merge and cannot absorb another until that merge is reviewed or reversed'
+      });
+    }
+
     await req.db.query('BEGIN');
 
     // STEP 1 — move fan_id_b identifiers to fan_id_a AND track provenance for unmerge
@@ -234,14 +257,18 @@ router.post('/v1/conflicts/:id/reject', async (req, res) => {
 
     await req.db.query('BEGIN');
 
-    // STEP 1 — close conflict as rejected
+    // STEP 1 — close conflict as rejected (CAS — only if still pending)
     // Both fan records stay separate — no identifier moves, no soft delete
-    await req.db.query(
+    const rejectResult = await req.db.query(
       `UPDATE conflict_queue
        SET status = 'rejected', reviewed_at = NOW()
-       WHERE id = $1`,
+       WHERE id = $1 AND status = 'pending'`,
       [conflict_id]
     );
+    if (rejectResult.rowCount === 0) {
+      await req.db.query('ROLLBACK').catch(() => {});
+      return res.status(409).json({ error: 'conflict already resolved' });
+    }
 
     // STEP 2 — audit event — always last write in transaction
     await req.db.query(
@@ -354,15 +381,19 @@ router.post('/v1/conflicts/:id/unmerge', async (req, res) => {
       [conflict_id]
     );
 
-    // STEP 4 — update merge_history status to reversed
-    await req.db.query(
+    // STEP 4 — update merge_history status to reversed (CAS — only if still active)
+    const unmergeResult = await req.db.query(
       `UPDATE merge_history
        SET status = 'reversed',
            reversed_at = NOW(),
            reversed_by = $1
-       WHERE id = $2`,
+       WHERE id = $2 AND status = 'active'`,
       [req.context.org_name, mergeRecord.id]
     );
+    if (unmergeResult.rowCount === 0) {
+      await req.db.query('ROLLBACK').catch(() => {});
+      return res.status(409).json({ error: 'unmerge already completed' });
+    }
 
     // STEP 5 — write to related_fans
     await req.db.query(

@@ -237,6 +237,14 @@ router.post('/v1/household/:adult_fan_id/members', async (req, res) => {
   if (url_adult_fan_id !== jwt_fan_id) {
     return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
+  for (const [name, val] of [
+    ['first_name', first_name], ['last_name', last_name], ['dob', dob],
+    ['guardian_email', guardian_email], ['guardian_phone', guardian_phone],
+  ]) {
+    if (val !== undefined && val !== null && typeof val !== 'string') {
+      return res.status(400).json({ error: `${name} must be a string` });
+    }
+  }
   if (!first_name || !first_name.trim()) {
     return res.status(400).json({ error: 'first_name is required' });
   }
@@ -309,6 +317,29 @@ router.post('/v1/household/:adult_fan_id/members', async (req, res) => {
       [jwt_fan_id, org_id, normalized_name.toLowerCase(), normalized_dob]
     );
     staged_id = stagingResult.rows[0] ? stagingResult.rows[0].id : null;
+
+    // READ 4 — cross-household duplicate child guard.
+    // MVP rule: one active guardian per child per org.
+    const existingGuardianResult = await req.db.query(
+      `SELECT hm.id, hm.adult_fan_id, hm.minor_fan_id
+       FROM household_member hm
+       JOIN identifier_link il_name
+         ON il_name.fan_id          = hm.minor_fan_id
+         AND il_name.identifier_type = 'name'
+         AND il_name.org_id          = $1
+       WHERE LOWER(il_name.identifier_value) = $2
+         AND hm.dob      = $3
+         AND hm.org_id   = $1
+         AND hm.status   = 'active'
+       LIMIT 1`,
+      [org_id, normalized_name.toLowerCase(), normalized_dob]
+    );
+    if (existingGuardianResult.rows.length > 0) {
+      return res.status(409).json({
+        error:   'child already has a guardian',
+        message: 'this child already has an active guardian in this organization; shared custody is not yet supported'
+      });
+    }
 
     // TRANSACTION
     await req.db.query('BEGIN');
@@ -540,6 +571,15 @@ router.put('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, res)
     return res.status(403).json({ error: 'forbidden', message: 'token does not match requested household' });
   }
 
+  for (const [name, val] of [
+    ['first_name', first_name], ['last_name', last_name], ['dob', dob],
+    ['guardian_email', guardian_email], ['guardian_phone', guardian_phone],
+  ]) {
+    if (val !== undefined && val !== null && typeof val !== 'string') {
+      return res.status(400).json({ error: `${name} must be a string` });
+    }
+  }
+
   const nameProvided  = first_name != null || last_name != null;
   const dobProvided   = dob != null;
   const emailProvided = guardian_email != null;
@@ -615,8 +655,8 @@ router.put('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, res)
       const spaceIdx  = existing.indexOf(' ');
       const exFirst   = spaceIdx >= 0 ? existing.slice(0, spaceIdx) : existing;
       const exLast    = spaceIdx >= 0 ? existing.slice(spaceIdx + 1) : '';
-      const newFirst  = first_name != null ? first_name.trim() : exFirst;
-      const newLast   = last_name  != null ? last_name.trim()  : exLast;
+      const newFirst  = typeof first_name === 'string' ? first_name.trim() : exFirst;
+      const newLast   = typeof last_name  === 'string' ? last_name.trim()  : exLast;
 
       try {
         normalized_name = normalizeIdentifier('name', `${newFirst} ${newLast}`);
@@ -789,17 +829,21 @@ router.delete('/v1/household/:adult_fan_id/members/:child_fan_id', async (req, r
     // TRANSACTION
     await req.db.query('BEGIN');
 
-    // STEP 1 — sever household_member link
+    // STEP 1 — sever household_member link (CAS — only if still active)
     // Child fan record, identifier_link rows, and Firestore wallet are untouched
     const updateRes = await req.db.query(
       `UPDATE household_member
        SET status     = 'severed',
            severed_at = NOW(),
            severed_by = 'guardian'
-       WHERE id = $1
+       WHERE id = $1 AND status = 'active'
        RETURNING id, minor_fan_id, severed_at, severed_by`,
       [member.id]
     );
+    if (updateRes.rowCount === 0) {
+      await req.db.query('ROLLBACK');
+      return res.status(409).json({ error: 'member is not active' });
+    }
     updateResult = updateRes.rows[0];
 
     // STEP 2 — audit event — always last write in transaction
@@ -996,6 +1040,8 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/age-up', async (r
     await req.db.query('BEGIN');
 
     // STEP 1 — update household_member — store hash, never raw token
+    // CAS: AND status = 'active' ensures only one concurrent writer wins.
+    // The loser sees rowCount = 0 and rolls back before writing related_fans / audit.
     const updateResult = await req.db.query(
       `UPDATE household_member
        SET status                 = 'aged_up',
@@ -1003,10 +1049,14 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/age-up', async (r
            aged_up_initiated_by   = 'guardian',
            claim_token            = $1,
            claim_token_expires_at = $2
-       WHERE id = $3
+       WHERE id = $3 AND status = 'active'
        RETURNING id, minor_fan_id, aged_up_at, aged_up_initiated_by, claim_token_expires_at`,
       [token_hash, claim_expires, member.id]
     );
+    if (updateResult.rowCount === 0) {
+      await req.db.query('ROLLBACK');
+      return res.status(409).json({ error: 'member already aged up' });
+    }
     updated = updateResult.rows[0];
 
     // STEP 2 — write to related_fans — meaningful transition worth recording
@@ -1133,13 +1183,20 @@ claimRouter.get('/v1/household/claim/:token', async (req, res) => {
     await req.db.query('BEGIN');
 
     // STEP 1 — clear claim token — single use
-    await req.db.query(
+    // CAS: AND claim_token IS NOT NULL ensures only the first concurrent writer wins.
+    // The loser finds the token already cleared (rowCount=0) and is rejected before
+    // the JWT is issued or the audit row is written.
+    const claimResult = await req.db.query(
       `UPDATE household_member
        SET claim_token = NULL,
            claim_token_expires_at = NULL
-       WHERE id = $1`,
+       WHERE id = $1 AND claim_token IS NOT NULL`,
       [member.id]
     );
+    if (claimResult.rowCount === 0) {
+      await req.db.query('ROLLBACK');
+      return res.status(410).json({ error: 'claim token has expired' });
+    }
 
     // STEP 2 — issue standard 15-minute fan JWT (pure computation — no db write)
     tokenResult = signToken({ fan_id: member.minor_fan_id, org_id });

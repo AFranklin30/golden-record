@@ -17,6 +17,7 @@ router.post('/v1/resolve', async (req, res) => {
   const identifier_value = body.identifier_value;
   const schema_version   = body.schema_version;
   const source_system    = body.source_system || 'unknown';
+  const identifiers      = body.identifiers || null;
   const org_id           = req.context.org_id;  // ground truth from orgAuthMiddleware
 
   // GUARD — in-memory only
@@ -34,6 +35,24 @@ router.post('/v1/resolve', async (req, res) => {
   }
   if (!schema_version || !String(schema_version).trim()) {
     return res.status(400).json({ error: 'schema_version is required' });
+  }
+  if (identifiers !== null && identifiers !== undefined) {
+    if (typeof identifiers !== 'object' || Array.isArray(identifiers)) {
+      return res.status(400).json({
+        error: 'identifiers must be an object',
+        message: 'identifiers, when provided, must be a JSON object of signal fields',
+      });
+    }
+    const IDENTIFIER_FIELDS = ['email', 'name', 'dob', 'zip', 'device_id', 'guardian_email'];
+    for (const field of IDENTIFIER_FIELDS) {
+      const v = identifiers[field];
+      if (v !== undefined && v !== null && typeof v !== 'string') {
+        return res.status(400).json({
+          error: 'identifiers field must be a string',
+          message: `identifiers.${field} must be a string when provided`,
+        });
+      }
+    }
   }
 
   // GUARD — normalization (own try/catch, produces 400)
@@ -58,6 +77,7 @@ router.post('/v1/resolve', async (req, res) => {
     result = await resolverEngine({
       identifier_type,
       identifier_value: normalized_value,
+      identifiers,
       org_id,
       schema_version,
       idempotency_key,
