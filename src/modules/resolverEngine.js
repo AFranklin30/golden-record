@@ -205,6 +205,8 @@ async function resolverEngine(input, db) {
         [org_id]
       );
 
+      console.log('[POOL]', JSON.stringify(candidateRows.rows.map(r => ({ id: r.id, name: r.name, dob: r.dob }))));
+
       // Build inbound object — singular identifier_type mapping always wins
       // (it drives the hard-match lookup above and must not be overridden).
       // Additional fields fall back to input.identifiers when provided.
@@ -218,6 +220,7 @@ async function resolverEngine(input, db) {
         device_id:      identifier_type === 'device_id'      ? identifier_value : (extra.device_id      ?? null),
         guardian_email: identifier_type === 'guardian_email' ? identifier_value : (extra.guardian_email ?? null),
       };
+      console.log('[INBOUND]', JSON.stringify({ name: inbound.name, dob: inbound.dob }));
 
       // STEP 2 — score each candidate, track best
       let bestMatch   = null;
