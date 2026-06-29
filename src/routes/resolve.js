@@ -55,6 +55,29 @@ router.post('/v1/resolve', async (req, res) => {
     }
   }
 
+  // GUARD — normalize identifiers fields (device_id excluded — not in normalizer ALLOWED_TYPES)
+  let normalizedIdentifiers = null;
+  if (identifiers !== null && identifiers !== undefined) {
+    normalizedIdentifiers = {};
+    const NORMALIZABLE_FIELDS = ['email', 'name', 'dob', 'zip', 'guardian_email'];
+    try {
+      for (const field of NORMALIZABLE_FIELDS) {
+        const v = identifiers[field];
+        if (v != null) {
+          normalizedIdentifiers[field] = normalizeIdentifier(field, v);
+        }
+      }
+    } catch (err) {
+      if (err instanceof NormalizationError) {
+        return res.status(400).json({ error: 'identifiers field failed normalization', detail: err.message });
+      }
+      throw err;
+    }
+    if (identifiers.device_id != null) {
+      normalizedIdentifiers.device_id = identifiers.device_id;
+    }
+  }
+
   // GUARD — normalization (own try/catch, produces 400)
   let normalized_value;
   try {
@@ -77,7 +100,7 @@ router.post('/v1/resolve', async (req, res) => {
     result = await resolverEngine({
       identifier_type,
       identifier_value: normalized_value,
-      identifiers,
+      identifiers: normalizedIdentifiers,
       org_id,
       schema_version,
       idempotency_key,

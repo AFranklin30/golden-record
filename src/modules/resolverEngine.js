@@ -225,9 +225,7 @@ async function resolverEngine(input, db) {
       let bestSignals = [];
 
       for (const candidate of candidateRows.rows) {
-        if (!passesSignalEligibilityGate(candidate, inbound)) {
-          continue;
-        }
+        if (!passesSignalEligibilityGate(candidate, inbound)) continue;
         const result = scoreMatch(candidate, inbound);
         if (result.score > bestScore) {
           bestScore   = result.score;
