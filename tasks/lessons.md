@@ -4,25 +4,6 @@
 
 ---
 
-## 1 — Mock ROLLBACK in 500 error tests (2026-05-29)
-
-When testing a db error path that triggers the catch block, the catch block
-calls `req.db.query('ROLLBACK').catch(() => {})`. If no mock is set up for
-that call, `jest.fn()` returns `undefined` and `undefined.catch()` throws a
-TypeError before the 500 response is sent — the response body is empty.
-
-**Fix:** In any 500 error test, add a ROLLBACK mock after the rejection:
-```javascript
-mockDb.query
-  .mockRejectedValueOnce(new Error('some db error'))  // the failing query
-  .mockResolvedValueOnce({ rows: [] });               // ROLLBACK
-```
-
-**Scope:** applies to every handler that has `ROLLBACK` in its catch block.
-Components 19, 20, 26, 29 — and all future handlers with transactions.
-
----
-
 ## 3 — Never auto-create parent records — return 404 (2026-05-29)
 
 When a handler needs a parent record (e.g. household before adding a member),
@@ -459,3 +440,50 @@ wrong about guardian_email/guardian_phone. Both are required because:
 - guardian_phone is required for probabilistic matching signal
 
 **Rule:** flag contradictions in the plan, check in, build after confirmation.
+
+---
+
+## 21 — Chained-merge fan building fails against two independent guards — verify empirically before designing around it (2026-08-02)
+
+When a seed/fixture script needs a fan holding multiple identifier types
+(e.g. `name` + `dob`), the intuitive approach — resolve one field, resolve
+the second field with the first passed via `identifiers` for scoring,
+confirm the resulting conflict — silently assumes the eligibility gate and
+the merge system have no hidden caps. Both failed this session, on two
+separate runs, for two separate reasons:
+
+1. `passesSignalEligibilityGate` requires composite signals
+   (`name_plus_dob`, `name_plus_zip`) to have BOTH fields already present on
+   the CANDIDATE, not just the inbound tap. A fan holding only `name` can
+   never be scored against an inbound `dob` — there is no sequence of two
+   resolves that builds a two-field fan from nothing. Only
+   `email_similarity` and `guardian_email` are single-field STRONG signals,
+   so only those can ever bootstrap a fresh fan.
+2. `conflicts.js`'s multi-hop merge block allows a fan to absorb at most one
+   confirmed merge, ever (`identifier_link.merged_from_fan_id` is a single
+   column, not a chain). A merge's loser is always a freshly-minted
+   single-identifier fan. So even a fan that successfully bootstraps via
+   email caps at exactly 2 identifier types — a second merge onto the same
+   target 409s.
+
+Neither failure was visible from reading the code in isolation — both only
+surfaced by actually running the sequence against a real database and
+reading the real error. The fix that worked: stop building fans through
+chained live merges entirely. Insert fixture fans directly via SQL (they
+represent "what a touchpoint already knows"), and reserve live API calls for
+the RESOLUTION DECISIONS being demonstrated (the scoring, the veto, the
+pending conflict, the confirm) — those are the genuine artifact, not the
+fixture's pre-existing state.
+
+**Rule:** before designing a fixture/seed script around resolverEngine's
+merge mechanics, run the proposed sequence once against a real local
+database and read the actual response, rather than deriving it purely from
+reading `resolverEngine.js` and `conflicts.js`. Multi-step stateful flows
+(gate → score → conflict → confirm) can have caps that are only visible in
+their composition, not in either guard read alone. Documented as a new Open
+item in CLAUDE.md ("Merge-built fans cap at two identifier types") rather
+than fixed — both guards are individually correct.
+
+**Scope:** any future seed script, fixture builder, or test helper that
+tries to assemble a multi-identifier fan via resolve+confirm rather than
+direct SQL.

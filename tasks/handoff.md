@@ -1,5 +1,5 @@
-Completed: Resolve fuzz probe 24/24; household fuzz probe + non-string field validation fix (components 29 & 31, typeof guard before .trim(), line-582 both-names-non-string path closed): validation.householdFields 27/27, fuzz.household 17/17 zero hard gaps. All three hardening legs (concurrency, invariant, fuzz) closed across resolution, conflict, and household endpoint groups. Coverage boundary documented in .claude/CLAUDE.md Open section.
-Next: identifier_link uniqueness gap (migration adding uq_identifier_per_org index — see CLAUDE.md Open section; check for pre-existing dupes before adding index)
-Blocked: nothing
-Decisions: Coverage boundary is a triaged decision — session, health, and middleware excluded from dedicated hardening passes (low-complexity, low-risk surfaces with defenses already present; see Open/deferred in .claude/CLAUDE.md).
-Warnings: Nothing new — proceed to identifier_link uniqueness migration.
+Completed: Housekeeping — 11 uncommitted files + untracked work (Stage 7, eval harness, demo seed, docs) committed in 4 logical chunks (9fdf5a8, d7779a6, 0026787, + docs commit). Removed the console.log('[DIAG resolverEngine]...') finally (Aaron-approved exception), deleted both throwaway diag scripts. Established jest baseline: 11 failed / 465 passed / 476 total, confirming the earlier "11 pre-existing failures" claim.
+Next: fix the 2 failing suites (tests/modules/resolverEngine.test.js — 2 tests; tests/routes/household.test.js — 9 tests) against the new committed baseline, or continue Stage 7 (nfc.js identifiers normalization / two-arg→three-arg scoreMatch call remain separately flagged, not scheduled).
+Blocked: Nothing.
+Decisions: .claude/CLAUDE.md's project-knowledge-tail removal was confirmed a legitimate agent-rule cleanup (not project-knowledge creep) and kept. ARCHITECTURE_REVIEW.md left untouched, Aaron's call pending.
+Warnings: Working tree still shows ARCHITECTURE_REVIEW.md as untracked (deliberately deferred) — everything else committed.
