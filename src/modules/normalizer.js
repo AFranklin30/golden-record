@@ -104,6 +104,8 @@ function normalizeZip(value) {
   return stripped;
 }
 
+const NORMALIZATION_VERSION = 'v1';
+
 // RECEIVE
 function normalizeIdentifier(type, value) {
   const identifierType = type;
@@ -144,4 +146,4 @@ function normalizeIdentifier(type, value) {
   throw new NormalizationError(`unhandled identifier_type: ${identifierType}`);
 }
 
-module.exports = { normalizeIdentifier, NormalizationError };
+module.exports = { normalizeIdentifier, NormalizationError, NORMALIZATION_VERSION };

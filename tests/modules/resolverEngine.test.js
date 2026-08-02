@@ -14,7 +14,8 @@ jest.mock('@google-cloud/firestore', () => ({
 }));
 
 jest.mock('../../src/modules/probabilisticMatcher', () => ({
-  scoreMatch: jest.fn(),
+  scoreMatch:     jest.fn(),
+  SCORER_VERSION: 'v1+testmock',
 }));
 
 const { scoreMatch } = require('../../src/modules/probabilisticMatcher');
@@ -464,6 +465,42 @@ describe('resolverEngine — inbound object construction', () => {
       expect.anything(),
       expect.objectContaining({ org_id: ORG_ID })
     );
+  });
+
+});
+
+describe('resolverEngine — trace failure is non-fatal', () => {
+
+  test('trace INSERT failure does not throw or alter the resolution result', async () => {
+    const logger   = require('../../src/lib/logger');
+    const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => {});
+
+    // PATH B (no candidates) — minimal setup. Force only the trace INSERT to fail.
+    mockDb.query = jest.fn().mockImplementation((sql) => {
+      if (typeof sql === 'string' && sql.includes('resolution_trace')) {
+        return Promise.reject(new Error('forced trace failure'));
+      }
+      if (typeof sql === 'string' && sql.includes('FROM org')) {
+        return Promise.resolve({ rows: [{ id: ORG_ID, is_active: true }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const result = await resolverEngine(baseInput, mockDb);
+
+    // Resolution succeeded despite trace failure
+    expect(result.fan_id).toMatch(UUID_RE);
+    expect(result.match_type).toBe('hard');
+    expect(result.is_new_record).toBe(true);
+    expect(result.audit_event_id).toMatch(UUID_RE);
+
+    // logger.error called with the trace-specific message
+    expect(errorSpy).toHaveBeenCalledWith(
+      'resolution_trace write failed',
+      expect.objectContaining({ error: 'forced trace failure' })
+    );
+
+    errorSpy.mockRestore();
   });
 
 });

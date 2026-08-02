@@ -2,7 +2,8 @@
 
 const crypto    = require('crypto');
 const { Firestore } = require('@google-cloud/firestore');
-const { scoreMatch } = require('./probabilisticMatcher');
+const { scoreMatch, SCORER_VERSION } = require('./probabilisticMatcher');
+const { NORMALIZATION_VERSION }      = require('./normalizer');
 
 const THRESHOLD_PATH_C = 0.85;
 const THRESHOLD_PATH_D = 0.60;
@@ -94,6 +95,20 @@ async function resolverEngine(input, db) {
   let linked_systems   = [];
   let linked_count     = 0;
 
+  const trace = {
+    resolution_path:       null,
+    scoring_status:        'skipped',
+    skip_reason:           'deterministic_match',
+    inbound:               null,
+    candidate_ids:         [],
+    candidates_considered: 0,
+    candidates_gated:      0,
+    candidates_scored:     0,
+    best_signals:          null,
+    best_candidate_id:     null,
+    best_score:            null,
+  };
+
   // OUTER TRY — Pattern 2: wraps GUARD and EXECUTE together
   try {
 
@@ -151,6 +166,9 @@ async function resolverEngine(input, db) {
       match_type       = 'hard';
       confidence_score = 1.0;
       is_new_record    = false;
+
+      trace.resolution_path = 'A';
+      trace.inbound         = { [identifier_type]: identifier_value };
 
       await db.query(
         `UPDATE identifier_link SET last_seen_at = NOW()
@@ -218,20 +236,41 @@ async function resolverEngine(input, db) {
         device_id:      identifier_type === 'device_id'      ? identifier_value : (extra.device_id      ?? null),
         guardian_email: identifier_type === 'guardian_email' ? identifier_value : (extra.guardian_email ?? null),
       };
+      trace.inbound = inbound;
 
       // STEP 2 — score each candidate, track best
       let bestMatch   = null;
       let bestScore   = 0.0;
       let bestSignals = [];
 
+      trace.candidates_considered = candidateRows.rows.length;
       for (const candidate of candidateRows.rows) {
-        if (!passesSignalEligibilityGate(candidate, inbound)) continue;
+        trace.candidate_ids.push(candidate.id);
+        if (!passesSignalEligibilityGate(candidate, inbound)) {
+          trace.candidates_gated++;
+          continue;
+        }
+        trace.candidates_scored++;
         const result = scoreMatch(candidate, inbound);
         if (result.score > bestScore) {
           bestScore   = result.score;
           bestMatch   = candidate;
           bestSignals = result.signals_matched;
         }
+      }
+
+      if (trace.candidates_considered === 0) {
+        trace.scoring_status = 'skipped';
+        trace.skip_reason    = 'no_candidates';
+      } else if (trace.candidates_scored === 0) {
+        trace.scoring_status = 'skipped';
+        trace.skip_reason    = 'all_candidates_gated';
+      } else {
+        trace.scoring_status    = 'performed';
+        trace.skip_reason       = null;
+        trace.best_score        = bestScore;
+        trace.best_signals      = bestSignals;
+        trace.best_candidate_id = bestMatch ? bestMatch.id : null;
       }
 
       // Soft link detection — guardian_email signal triggers staging write
@@ -266,6 +305,7 @@ async function resolverEngine(input, db) {
 
       if (bestScore >= THRESHOLD_PATH_C) {
         // PATH C — high confidence soft match, hold for staff review (priority 1)
+        trace.resolution_path = 'C';
         const new_fan_id = crypto.randomUUID();
         fan_id           = new_fan_id;
         match_type       = 'soft';
@@ -297,6 +337,7 @@ async function resolverEngine(input, db) {
 
       } else if (bestScore >= THRESHOLD_PATH_D) {
         // PATH D — lower confidence possible match, hold for staff review (priority 2)
+        trace.resolution_path = 'D';
         const new_fan_id = crypto.randomUUID();
         fan_id           = new_fan_id;
         match_type       = 'conflict';
@@ -328,6 +369,7 @@ async function resolverEngine(input, db) {
 
       } else {
         // PATH B — no match, new record (score below THRESHOLD_PATH_D or no candidates)
+        trace.resolution_path = 'B';
         const new_fan_id = crypto.randomUUID();
 
         await db.query(
@@ -382,6 +424,54 @@ async function resolverEngine(input, db) {
         });
         // do NOT throw — Postgres record is committed and valid
       }
+    }
+
+    // STEP 4C — resolution trace — after COMMIT, outside transaction,
+    // diagnostic only. A failure here MUST NOT affect the resolution,
+    // which is already committed. Best-effort by design (Stage 7 decision B).
+    try {
+      await db.query(
+        `INSERT INTO resolution_trace
+           (id, org_id, audit_event_id, resolution_path, scoring_status,
+            skip_reason, inbound_identifiers, candidate_ids,
+            candidates_considered, candidates_gated, candidates_scored,
+            signal_results, best_candidate_id, best_score,
+            threshold_path_c, threshold_path_d, scorer_version,
+            normalization_version, scoring_clock, resulting_fan_id,
+            is_new_record, conflict_id, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+                 $18, NOW(), $19, $20, $21, NOW())`,
+        [
+          crypto.randomUUID(),
+          org_id,
+          audit_event_id,
+          trace.resolution_path,
+          trace.scoring_status,
+          trace.skip_reason,
+          JSON.stringify(trace.inbound),
+          trace.candidate_ids,
+          trace.candidates_considered,
+          trace.candidates_gated,
+          trace.candidates_scored,
+          trace.best_signals ? JSON.stringify(trace.best_signals) : null,
+          trace.best_candidate_id,
+          trace.best_score,
+          THRESHOLD_PATH_C,
+          THRESHOLD_PATH_D,
+          SCORER_VERSION,
+          NORMALIZATION_VERSION,
+          fan_id,
+          is_new_record,
+          conflict_id
+        ]
+      );
+    } catch (traceErr) {
+      logger.error('resolution_trace write failed', {
+        fan_id:  fan_id,
+        org_id:  org_id,
+        error:   traceErr.message
+      });
+      // do NOT throw — resolution is committed and valid
     }
 
     // STEP 5 — linked systems query — after COMMIT, outside transaction
@@ -459,4 +549,11 @@ async function resolverEngine(input, db) {
            linked_systems, linked_count, audit_event_id, conflict_id };
 }
 
-module.exports = { resolverEngine, ConflictError, ResolverError };
+module.exports = {
+  resolverEngine,
+  ConflictError,
+  ResolverError,
+  passesSignalEligibilityGate,
+  THRESHOLD_PATH_C,
+  THRESHOLD_PATH_D,
+};
