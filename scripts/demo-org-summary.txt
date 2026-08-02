@@ -1,0 +1,65 @@
+Org created: aaaaaaaa-0000-0000-0000-000000000001 (Demo Org)
+
+=== Scenario 1 — clean hard match (PATH A) ===
+  fixture fan: a76b59a0-ffdf-46f3-ba50-0a14c3969fc2  Alice Chen — PATH A fixture
+  resolve: fan_id=a76b59a0-ffdf-46f3-ba50-0a14c3969fc2 match_type=hard is_new_record=false
+
+=== Scenario 2 — soft match requiring review (left pending) ===
+  fixture fan: 4b6d6ba2-681b-425d-92e4-9c0b5f8042b2  Marcus Webb — fixture (name + dob)
+  NFC tap: fan_id=97e82dc4-64b8-4604-a4aa-7b4d4b6da07e match_type=conflict confidence=0.7 conflict_id=bc6869e4-7c0a-4000-b4d0-0bac3ec63404 — LEFT PENDING
+
+=== Scenario 3 — DOB veto blocking a bad merge (headline) ===
+  fixture fan: a20573c6-9d1e-4bc9-8c9c-55fcd4e5b50c  John Smith — fixture fan A (DOB veto candidate)
+  fixture fan: 47d8aa77-d955-48d7-a691-6ca54d426d08  John Smyth — fixture fan B (winning candidate)
+  NFC tap: fan_id=1702cdd1-ba66-4a05-bdad-ce18a7eef7e6 match_type=conflict confidence=0.7 audit_event_id=3ef13feb-6e54-4ff9-9fbb-e667fa4e5332
+  resolution_trace id: f71a4a01-f65a-434f-9abd-f8773fb6ed73
+  fan A considered: true   best_candidate_id: 47d8aa77-d955-48d7-a691-6ca54d426d08   best_score: 0.700
+
+=== Scenario 4 — household with a child ===
+  adult fan: ae7b6c22-1159-4b94-9172-f241e845ea72
+  household id: 520622ec-b1ce-473f-86ac-d062e41777f0
+  child fan: b510abda-801b-450e-9542-80cd153ee122
+
+=== Scenario 5 — confirmed merge with history (left merged) ===
+  fixture fan: e9247025-f0f6-4f71-b7b3-5b258124f017  Dana Park — fixture fan (email)
+  resolve (name, scored via identifiers.email against fixture): fan_id=eb1aab94-2072-4230-81f8-f1f7def9718c match_type=conflict conflict_id=977a4e4c-381d-4c3b-9303-b8a98c597f90
+  confirmed merge: merged_into=e9247025-f0f6-4f71-b7b3-5b258124f017 — NOT unmerged
+
+=== evaluation_corpus — 8 synthetic pairs ===
+  pair 1: match — All three strong identifiers (email, name, dob) agree exactly — unambiguous same person.
+  pair 2: match — Name is a one-character typo ('jon' vs 'john', similarity 0.9 clears the 0.85 threshold); dob and zip both agree exactly — same person.
+  pair 3: not_match — Emails differ by one character — Sprint 5 made email comparison exact-only; a near-miss email is a different person, not a typo, even with a matching name.
+  pair 4: not_match — DOB conflict is an absolute veto invariant — a conflicting date of birth overrides the matching email and name.
+  pair 5: not_match — Shared/family email address but the names are unrelated people — a shared inbox is not proof of shared identity.
+  pair 6: not_match — Device ID alone is weak evidence (shared/borrowed hardware) — not sufficient on its own to declare a match. device_id is intentionally excluded from normalizer ALLOWED_TYPES for this reason.
+  pair 7: not_match — Same guardian_email (siblings sharing a parent contact) but different children — guardian_email intentionally allows multiple children per household and must not merge siblings into one fan.
+  pair 8: match — Email alone is a strong, exact signal; the candidate is otherwise sparse but has nothing to contradict it.
+  (pairs 9-16 pending Monique — not inserted; see TODO in this file)
+
+=== SUMMARY ===
+org_id: aaaaaaaa-0000-0000-0000-000000000001
+org_name: Demo Org
+raw API key (send as "Authorization: Bearer <key>"): demo-seed-key-do-not-use-in-production
+
+Fans:
+  a76b59a0-ffdf-46f3-ba50-0a14c3969fc2  Alice Chen — clean hard match (PATH A)
+  4b6d6ba2-681b-425d-92e4-9c0b5f8042b2  Marcus Webb — fixture fan (name + dob)
+  97e82dc4-64b8-4604-a4aa-7b4d4b6da07e  Marcus Webb — new fan minted by pending NFC-tap conflict, needs staff review
+  a20573c6-9d1e-4bc9-8c9c-55fcd4e5b50c  John Smith (fan A) — DOB veto candidate, correctly did NOT win
+  47d8aa77-d955-48d7-a691-6ca54d426d08  John Smyth (fan B) — winning candidate via name_plus_dob (~0.7)
+  1702cdd1-ba66-4a05-bdad-ce18a7eef7e6  John Smith — new fan minted by the NFC tap, pending conflict against fan B
+  ae7b6c22-1159-4b94-9172-f241e845ea72  household.parent@example.com — adult fan with household
+  b510abda-801b-450e-9542-80cd153ee122  Casey Park — child fan (fan_pass identifiers, guardian_email household.parent@example.com)
+  e9247025-f0f6-4f71-b7b3-5b258124f017  Dana Park — confirmed-merge survivor (fixture)
+  eb1aab94-2072-4230-81f8-f1f7def9718c  Dana Park duplicate — merged in and soft-deleted (loser)
+
+Conflicts:
+  bc6869e4-7c0a-4000-b4d0-0bac3ec63404  pending    (Scenario 2 — Marcus Webb NFC-tap conflict, needs staff review)
+  f1a59597-ac63-4320-98d2-29021d138d56  pending    (Scenario 3 — fan B vs NFC-tap fan, needs staff review)
+  977a4e4c-381d-4c3b-9303-b8a98c597f90  confirmed  (Scenario 5 — Dana Park merge, merge_history id 52b89a38-695e-46c5-9547-2417d38a72ae)
+
+Traces:
+  f71a4a01-f65a-434f-9abd-f8773fb6ed73  Scenario 3 — DOB veto headline trace (audit_event_id-linked)
+
+evaluation_corpus rows: 8
+household_id (Scenario 4): 520622ec-b1ce-473f-86ac-d062e41777f0
