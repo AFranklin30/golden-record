@@ -19,11 +19,12 @@
 
 require('dotenv').config();
 
+const crypto = require('crypto');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { Client } = require('pg');
 
-const { scoreMatch } = require('../src/modules/probabilisticMatcher');
+const { scoreMatch, SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
 const { FROZEN_CLOCK } = require('../eval/harness');
 const { buildRun } = require('../eval/runCorpus');
 
@@ -224,35 +225,230 @@ describe('seedDemoOrg — permanent demo org', () => {
     expect(loserFan.rows[0].deleted_at).not.toBeNull();
   });
 
-  // 8/9 — evaluation_corpus: exactly 8 synthetic rows, correct 14-key shape
+  // 8/9 — evaluation_corpus: the seed script's contract is "insert exactly 8
+  // SYNTHETIC rows, correctly shaped" — not "the corpus contains N rows".
+  // Rows added later by other tools (e.g. scripts/promoteTraceToCorpus.js,
+  // Monique's labeled pairs) are not this script's business and must not be
+  // asserted here. See tests/promoteTraceToCorpus.test.js for that script's
+  // own contract.
   let corpusRows;
   beforeAll(async () => {
     const result = await client.query(
-      `SELECT source, candidate_snapshot FROM evaluation_corpus WHERE org_id = $1`,
+      `SELECT source, trace_id, candidate_snapshot, expected_verdict, scorer_version
+       FROM evaluation_corpus WHERE org_id = $1`,
       [DEMO_ORG_ID]
     );
     corpusRows = result.rows;
   });
 
-  test('evaluation_corpus has exactly 8 synthetic rows with non-null candidate_snapshot', () => {
-    expect(corpusRows.length).toBe(8);
-    expect(corpusRows.every(r => r.source === 'synthetic')).toBe(true);
-    expect(corpusRows.every(r => r.candidate_snapshot != null)).toBe(true);
-  });
+  test('seedDemoOrg writes exactly 8 synthetic evaluation_corpus rows, correctly shaped', () => {
+    const syntheticRows = corpusRows.filter(r => r.source === 'synthetic');
+    expect(syntheticRows.length).toBe(8);
 
-  test('every candidate_snapshot has exactly the 14 candidate-SELECT keys', () => {
-    for (const row of corpusRows) {
+    expect(syntheticRows.every(r => r.trace_id === null)).toBe(true);
+    expect(syntheticRows.every(r => r.candidate_snapshot != null)).toBe(true);
+
+    for (const row of syntheticRows) {
       const keys = Object.keys(row.candidate_snapshot).sort();
       expect(keys).toEqual(CANDIDATE_SNAPSHOT_KEYS);
     }
+
+    // CORPUS_PAIRS in scripts/seedDemoOrg.js: pairs 1, 2, 8 are 'match';
+    // pairs 3, 4, 5, 6, 7 are 'not_match' — verified against the script,
+    // not assumed.
+    const verdictCounts = syntheticRows.reduce((acc, r) => {
+      acc[r.expected_verdict] = (acc[r.expected_verdict] || 0) + 1;
+      return acc;
+    }, {});
+    expect(verdictCounts.match).toBe(3);
+    expect(verdictCounts.not_match).toBe(5);
+
+    // scorer_version — seedEvaluationCorpus's INSERT now stamps SCORER_VERSION
+    // on every synthetic row, and main()'s guarded backfill repairs any rows
+    // seeded before that change. Every synthetic row must carry the current
+    // scorer_version — a null here means the backfill didn't run.
+    expect(syntheticRows.every(r => r.scorer_version === SCORER_VERSION)).toBe(true);
   });
 
-  // 10 — eval/runCorpus.js against DEMO_ORG_ID
-  test('eval/runCorpus.js buildRun produces counts.total === 8 and counts.synthetic === 8', async () => {
+  // 8b — regression: the backfill must never touch the promoted row's
+  // scorer_version, which came from its trace and records what actually
+  // produced that resolution, not the current constant.
+  test("the backfill does not alter the promoted row's scorer_version", async () => {
+    const promotedRows = corpusRows.filter(r => r.source === 'promoted_trace');
+    expect(promotedRows.length).toBeGreaterThanOrEqual(1);
+    const beforeVersion = promotedRows[0].scorer_version;
+
+    // Re-run the backfill directly (idempotent — WHERE scorer_version IS NULL
+    // means a second run is a no-op) and confirm the promoted row is untouched.
+    await client.query(
+      `UPDATE evaluation_corpus SET scorer_version = $1
+        WHERE org_id = $2 AND source = 'synthetic' AND scorer_version IS NULL`,
+      [SCORER_VERSION, DEMO_ORG_ID]
+    );
+
+    const afterResult = await client.query(
+      `SELECT scorer_version FROM evaluation_corpus WHERE org_id = $1 AND source = 'promoted_trace'`,
+      [DEMO_ORG_ID]
+    );
+    expect(afterResult.rows[0].scorer_version).toBe(beforeVersion);
+  });
+
+  // 8c — eval/runCorpus.js's buildRun must report zero unknown-scorer-version
+  // rows for the demo org now that every synthetic row is stamped.
+  test('buildRun reports zero scorer_version_unknown rows for the demo org', async () => {
     const runObject = await buildRun(client, DEMO_ORG_ID);
-    expect(runObject.counts.total).toBe(8);
+    expect(runObject.counts.scorer_version_unknown).toBe(0);
+  });
+
+  // 8d — proves the drift check is live, not vacuously true: a disposable
+  // temp org (fresh UUID, never DEMO_ORG_ID) with a synthetic row stamped
+  // with an intentionally-wrong scorer_version must report drift === true.
+  test('buildRun reports scorer_version_drift for a row stamped with a stale version', async () => {
+    const tempOrgId  = crypto.randomUUID();
+    const apiKeyHash = crypto.randomBytes(32).toString('hex');
+    const minimalSnapshot = {
+      id: crypto.randomUUID(), org_id: tempOrgId,
+      email: null, email_last_seen_at: null,
+      name: null, name_last_seen_at: null,
+      dob: null, dob_last_seen_at: null,
+      zip: null, zip_last_seen_at: null,
+      device_id: null, device_last_seen_at: null,
+      guardian_email: null, guardian_email_last_seen_at: null,
+    };
+
+    try {
+      await client.query(
+        `INSERT INTO org (id, name, is_active, org_api_key_hash) VALUES ($1, 'temp-drift-org', true, $2)`,
+        [tempOrgId, apiKeyHash]
+      );
+      await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [tempOrgId]);
+      await client.query(
+        `INSERT INTO evaluation_corpus
+           (id, org_id, source, trace_id, inbound_identifiers, candidate_snapshot,
+            expected_verdict, rationale, created_by, scorer_version)
+         VALUES ($1, $2, 'synthetic', NULL, '{}'::jsonb, $3, 'match', 'drift-check fixture', 'test', 'v1+deadbeef')`,
+        [crypto.randomUUID(), tempOrgId, JSON.stringify(minimalSnapshot)]
+      );
+
+      const runObject = await buildRun(client, tempOrgId);
+      const row = runObject.rows.find(r => r.state === 'synthetic');
+      expect(row).toBeDefined();
+      expect(row.scorer_version_drift).toBe(true);
+    } finally {
+      // evaluation_corpus has no append-only trigger — safe to clean up.
+      await client.query(`DELETE FROM evaluation_corpus WHERE org_id = $1`, [tempOrgId]);
+      // No fan/resolution_trace rows were created for this org, so unlike
+      // the future-proofing test above, the org row itself can be deleted.
+      await client.query(`DELETE FROM org WHERE id = $1`, [tempOrgId]);
+    }
+  }, 30000);
+
+  // eval/runCorpus.js's buildRun computes counts.synthetic independently
+  // per-row (counts[row.state]++), so it reflects only what seedDemoOrg
+  // wrote regardless of anything else promoted into the same org.
+  // counts.total and counts.promoted_with_snapshot are intentionally left
+  // unasserted — both count promoted_trace rows, which are not this script's
+  // contract.
+  test("eval/runCorpus.js buildRun's counts.synthetic reflects the seed script's 8 rows", async () => {
+    const runObject = await buildRun(client, DEMO_ORG_ID);
     expect(runObject.counts.synthetic).toBe(8);
   });
+
+  // 10 — future-proofing: prove the above assertions stay true no matter how
+  // many more promoted_trace rows land later, WITHOUT touching DEMO_ORG_ID's
+  // corpus rows (the cleanup rule for this permanent org forbids deleting
+  // them). Built against a disposable temporary org instead. That org and
+  // every resolution_trace row it accumulates are left permanently stranded
+  // on purpose: resolution_trace is append-only (trigger-enforced) and org
+  // has an inbound FK from it (default RESTRICT), so neither can ever be
+  // deleted — same shape as the demo org itself, just inert under a fresh
+  // UUID nothing else queries. Only evaluation_corpus rows (no append-only
+  // trigger) are cleaned up.
+  test('assertions scoped by source=synthetic are unaffected by additional promoted_trace rows landing later', async () => {
+    const tempOrgId  = crypto.randomUUID();
+    const apiKeyHash = crypto.randomBytes(32).toString('hex');
+
+    const minimalSnapshot = {
+      id: crypto.randomUUID(), org_id: tempOrgId,
+      email: null, email_last_seen_at: null,
+      name: null, name_last_seen_at: null,
+      dob: null, dob_last_seen_at: null,
+      zip: null, zip_last_seen_at: null,
+      device_id: null, device_last_seen_at: null,
+      guardian_email: null, guardian_email_last_seen_at: null,
+    };
+
+    async function insertTrace() {
+      const traceId = crypto.randomUUID();
+      await client.query(
+        `INSERT INTO resolution_trace
+           (id, org_id, resolution_path, scoring_status, skip_reason,
+            inbound_identifiers, best_score, threshold_path_c, threshold_path_d,
+            scorer_version, normalization_version, scoring_clock, is_new_record)
+         VALUES ($1, $2, 'B', 'skipped', 'test_fixture', '{}'::jsonb, NULL, 0.85, 0.60,
+                 'v1+test', 'v1', now(), true)`,
+        [traceId, tempOrgId]
+      );
+      return traceId;
+    }
+
+    async function insertPromotedRow() {
+      const traceId = await insertTrace();
+      await client.query(
+        `INSERT INTO evaluation_corpus
+           (id, org_id, source, trace_id, inbound_identifiers, candidate_snapshot,
+            expected_verdict, rationale, created_by)
+         VALUES ($1, $2, 'promoted_trace', $3, '{}'::jsonb, $4, 'match', 'temp-org future-proof fixture', 'test')`,
+        [crypto.randomUUID(), tempOrgId, traceId, JSON.stringify(minimalSnapshot)]
+      );
+    }
+
+    async function readSyntheticCount() {
+      const result = await client.query(
+        `SELECT source FROM evaluation_corpus WHERE org_id = $1`,
+        [tempOrgId]
+      );
+      return result.rows.filter(r => r.source === 'synthetic').length;
+    }
+
+    try {
+      await client.query(
+        `INSERT INTO org (id, name, is_active, org_api_key_hash) VALUES ($1, 'temp-future-proof-org', true, $2)`,
+        [tempOrgId, apiKeyHash]
+      );
+      await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [tempOrgId]);
+
+      // 2 synthetic rows, standing in for "the seed script's N rows"
+      for (const verdict of ['match', 'not_match']) {
+        await client.query(
+          `INSERT INTO evaluation_corpus
+             (id, org_id, source, trace_id, inbound_identifiers, candidate_snapshot,
+              expected_verdict, rationale, created_by)
+           VALUES ($1, $2, 'synthetic', NULL, '{}'::jsonb, $3, $4, 'temp-org future-proof fixture', 'test')`,
+          [crypto.randomUUID(), tempOrgId, JSON.stringify(minimalSnapshot), verdict]
+        );
+      }
+
+      // 1 promoted row already present at the first reading
+      await insertPromotedRow();
+      expect(await readSyntheticCount()).toBe(2);
+
+      // A second and third promoted_trace row land later — the exact future
+      // scenario this test exists to prove doesn't break the contract-scoped
+      // assertion.
+      await insertPromotedRow();
+      await insertPromotedRow();
+      expect(await readSyntheticCount()).toBe(2);
+    } finally {
+      // evaluation_corpus has no append-only trigger — safe to clean up.
+      await client.query(`DELETE FROM evaluation_corpus WHERE org_id = $1`, [tempOrgId]);
+      // resolution_trace is append-only (trigger-enforced) and the temp org
+      // row can never be deleted while a trace still references it (FK,
+      // default RESTRICT) — both are left permanently stranded on purpose.
+      // Do NOT attempt either delete here; a failed trace DELETE must not
+      // abort this cleanup block.
+    }
+  }, 30000);
 
   // 11 — resetLocalDb.sh refuses non-localhost DATABASE_URL
   test('resetLocalDb.sh refuses to run when DATABASE_URL does not contain localhost', () => {

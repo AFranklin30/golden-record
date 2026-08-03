@@ -75,6 +75,7 @@ const request = require('supertest');
 const { Client } = require('pg');
 
 const pool = require('../src/db/pool');
+const { SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
 
 const orgAuthMiddleware       = require('../src/middleware/orgAuthMiddleware');
 const rlsContextMiddleware    = require('../src/middleware/rlsContextMiddleware');
@@ -517,8 +518,8 @@ async function seedEvaluationCorpus(client) {
     await client.query(
       `INSERT INTO evaluation_corpus
          (id, org_id, source, trace_id, inbound_identifiers, candidate_snapshot,
-          expected_verdict, rationale, created_by)
-       VALUES ($1, $2, 'synthetic', NULL, $3, $4, $5, $6, 'aaron')`,
+          expected_verdict, rationale, created_by, scorer_version)
+       VALUES ($1, $2, 'synthetic', NULL, $3, $4, $5, $6, 'aaron', $7)`,
       [
         crypto.randomUUID(),
         DEMO_ORG_ID,
@@ -526,6 +527,7 @@ async function seedEvaluationCorpus(client) {
         JSON.stringify(pair.candidate),
         pair.expected_verdict,
         pair.rationale,
+        SCORER_VERSION,
       ]
     );
     log(`  pair ${pair.n}: ${pair.expected_verdict} — ${pair.rationale}`);
@@ -543,6 +545,21 @@ async function main() {
     // ONE-SHOT GUARD — no partial seeding, no delete, no throw.
     const existing = await client.query('SELECT id FROM org WHERE id = $1', [DEMO_ORG_ID]);
     if (existing.rows.length > 0) {
+      // Guarded backfill — repairs synthetic evaluation_corpus rows seeded
+      // before this script stamped scorer_version at INSERT time. This is
+      // the only path that repairs an already-seeded demo org without a full
+      // DB reset. Idempotent (WHERE scorer_version IS NULL) — safe to run on
+      // every invocation. Scoped to source='synthetic' — the promoted row's
+      // scorer_version came from its trace and must never be overwritten.
+      await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [DEMO_ORG_ID]);
+      const backfillResult = await client.query(
+        `UPDATE evaluation_corpus SET scorer_version = $1
+          WHERE org_id = $2 AND source = 'synthetic' AND scorer_version IS NULL`,
+        [SCORER_VERSION, DEMO_ORG_ID]
+      );
+      if (backfillResult.rowCount > 0) {
+        console.log(`Backfilled scorer_version on ${backfillResult.rowCount} synthetic evaluation_corpus row(s).`);
+      }
       console.log(
         'Demo org already seeded. To reseed: bash scripts/resetLocalDb.sh,\n' +
         're-run this script.'
