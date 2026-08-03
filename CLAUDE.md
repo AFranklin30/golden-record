@@ -573,6 +573,20 @@ BigQuery is not in use. What's shipped:
   production? (Found seeding `scripts/seedDemoOrg.js`, 2026-08-02 — confirmed empirically:
   two independent attempts to build a name+dob fan via chained resolve+confirm calls both
   failed, one against each guard.)
+- **Trace records the winner, not why others lost.** (Found promoting Scenario 3's trace
+  into `evaluation_corpus`, 2026-08-02.) `best_candidate_id` records the winning candidate
+  only. Losing candidates appear in `candidate_ids` as bare UUIDs with no per-candidate
+  outcome — nothing distinguishes a candidate that was DOB-vetoed from one that was gated or
+  simply out-scored. `signal_results` holds only the best candidate's signals. Consequence:
+  **the DOB veto is NOT reconstructable from a trace.** Scenario 3's trace shows fan B won at
+  0.700; it cannot show that fan A was hard-blocked rather than out-scored. For evaluation,
+  "why did this candidate lose" is often the more useful question and the trace cannot answer
+  it. Same family as `scoreMatch`'s `conflicts_detected`/`penalties_applied` being computed
+  and then discarded (see Scoring — "resolverEngine reads only `score` and `signals_matched`;
+  extra keys are ignored by design") — both are the trace recording the winning path rather
+  than the reasoning that eliminated alternatives. Fix shape if it ships: a per-candidate
+  outcome array (candidate_id, gate_status, score, veto flag). Schema change, and it grows
+  trace rows materially. Deferred.
 
 **Deferred with known fix paths:**
 
