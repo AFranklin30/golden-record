@@ -9,6 +9,11 @@ const request = require('supertest');
 // Function-based origin gives server-level enforcement (not just browser-level).
 
 function buildCorsApp(corsOriginEnv) {
+  // No allowedHeaders here — this file only exercises origin behavior, never
+  // header contents (no assertion below reads access-control-allow-headers).
+  // allowedHeaders coverage lives in tests/cors.preflight.test.js against the
+  // real index.js app and its exported ALLOWED_HEADERS, so there's one source
+  // of truth instead of a mirrored array that can drift.
   const corsOptions = {
     origin: (requestOrigin, callback) => {
       const allowed = corsOriginEnv;
@@ -16,9 +21,8 @@ function buildCorsApp(corsOriginEnv) {
       if (!allowed)       return callback(null, false);  // no config → block all browser origins
       callback(null, requestOrigin === allowed);          // exact-match only
     },
-    methods:        ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'X-Api-Key', 'X-Fan-Token', 'X-Correlation-Id'],
-    credentials:    false,
+    methods:     ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: false,
   };
 
   const app = express();

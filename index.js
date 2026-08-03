@@ -36,6 +36,13 @@ const PORT = process.env.PORT || 3000;
 // CORS — first middleware: fail secure when CORS_ORIGIN is not set.
 // Function-based origin so unlisted origins are blocked at the server level,
 // not just at the browser level (static-string config always sends the header).
+// X-Correlation-Id removed 2026-08-02 — correlationIdMiddleware only ever
+// SETS this header on the response, never reads an inbound value, so
+// allowing it through preflight was permitted-but-unread (same shape as the
+// X-Api-Key removal above). Accepting an inbound value for cross-system
+// tracing is a real feature but a behavior change to this middleware —
+// deferred to its own prompt if it ever ships.
+const ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Fan-Token'];
 const corsOptions = {
   origin: (requestOrigin, callback) => {
     const allowed = process.env.CORS_ORIGIN;
@@ -44,10 +51,11 @@ const corsOptions = {
     callback(null, requestOrigin === allowed);          // exact-match only
   },
   methods:        ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'X-Api-Key', 'X-Fan-Token', 'X-Correlation-Id'],
+  allowedHeaders: ALLOWED_HEADERS,
   credentials:    false,
 };
 app.use(cors(corsOptions));
+app.ALLOWED_HEADERS = ALLOWED_HEADERS;
 
 app.use(helmet());
 app.use(express.json());

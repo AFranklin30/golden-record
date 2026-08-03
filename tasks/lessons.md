@@ -4,31 +4,6 @@
 
 ---
 
-## 3 — Never auto-create parent records — return 404 (2026-05-29)
-
-When a handler needs a parent record (e.g. household before adding a member),
-do NOT auto-create it if it does not exist. Return 404 and tell the caller
-which endpoint to call first.
-
-Auto-creation bypasses deliberate fan actions and breaks the audit trail.
-The household in Component 29 must exist because POST /v1/household is a
-separate fan-initiated action with its own audit event. Silently creating it
-would mean no audit record for the household creation.
-
-**Pattern:**
-```javascript
-if (!parentRecord) {
-  return res.status(404).json({
-    error:   'parent not found',
-    message: 'create it first via POST /v1/parent-endpoint',
-  });
-}
-```
-
-**Scope:** any endpoint that requires a prior fan action (household, wallet, etc.)
-
----
-
 ## 4 — SQL substring assertions: use regex when column names contain table names (2026-05-31)
 
 When asserting "no UPDATE on fan table" by filtering all SQL strings for
@@ -427,22 +402,6 @@ test, not just delete the branch.
 
 ---
 
-## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
-
-When the session prompt and CLAUDE.md pseudocode contradict each other on a
-guard rule (e.g. "at least one of X or Y" vs "both required"), do not guess
-and do not pick the more permissive rule. Write the plan, flag the conflict
-explicitly, and check in before touching code.
-
-Aaron confirmed 2026-05-29: pseudocode is authoritative. Session prompt was
-wrong about guardian_email/guardian_phone. Both are required because:
-- guardian_email is required for aging-up claim link (Component 34)
-- guardian_phone is required for probabilistic matching signal
-
-**Rule:** flag contradictions in the plan, check in, build after confirmation.
-
----
-
 ## 21 — Chained-merge fan building fails against two independent guards — verify empirically before designing around it (2026-08-02)
 
 When a seed/fixture script needs a fan holding multiple identifier types
@@ -487,3 +446,67 @@ than fixed — both guards are individually correct.
 **Scope:** any future seed script, fixture builder, or test helper that
 tries to assemble a multi-identifier fan via resolve+confirm rather than
 direct SQL.
+
+---
+
+## 22 — Server-to-server tests cannot catch browser-enforced CORS behavior (2026-08-02)
+
+`corsOptions.allowedHeaders` in index.js listed `X-Api-Key` (dead — nothing
+reads it) but not `Authorization` (the header orgAuthMiddleware actually
+reads). 75+ existing tests never caught this because every one of them uses
+supertest with no `Origin` header — the `cors` package only engages its
+preflight/allowedHeaders logic when it sees an `Origin` header on the
+request. No Origin means no preflight means `allowedHeaders` is never
+exercised, no matter how many requests the suite sends. This is a
+browser-only failure mode: it costs nothing in supertest and blocks every
+real cross-origin fetch/XHR call from a frontend.
+
+**Fix pattern:** a dedicated test that sends a real `OPTIONS` request with an
+`Origin` header (`tests/cors.preflight.test.js`), asserting on
+`access-control-allow-headers` in the response. Confirmed via source read of
+`node_modules/cors/lib/index.js` (`configureAllowedHeaders`) that when
+`allowedHeaders` is a static array, the response reflects that exact array
+regardless of what `Access-Control-Request-Headers` asked for — so the test
+doesn't need to vary the requested header per assertion, just confirm the
+static list is right.
+
+**General form:** when a config allowlist exists (CORS headers, CHECK
+constraints — see Lesson 6/12, ALLOWED_STATUSES — see Lesson 13),
+identify every actual reader/writer and assert they agree with the list.
+Allowlists drift in both directions — an entry with no reader (X-Api-Key
+here) is the same class of bug as a reader whose entry is missing
+(Authorization here), just silent instead of loud.
+
+**Scope:** any CORS config change; any future allowlist-shaped config where
+the thing enforcing it (browser, DB constraint, application whitelist) is
+different from the thing that owns the test suite's request path.
+
+---
+
+## 23 — "Single source of truth" doesn't require every consumer to import the real thing (2026-08-02)
+
+Proposed plan: fix `cors.test.js`'s stale `allowedHeaders` mirror by importing
+`ALLOWED_HEADERS` from `index.js`, matching the "import it if usable" pattern
+`cors.preflight.test.js` already uses. Aaron corrected it: `index.js` calls
+`app.listen()` unconditionally at require-time (no `require.main` guard) and
+requires `DATABASE_URL`/`FIRESTORE_PROJECT_ID`/JWT keys at load — importing
+it turns a fast, isolated, dependency-free unit test into one that boots the
+whole app, for a fixture whose `allowedHeaders` value nothing in that file
+even asserts against.
+
+Correct fix: export the constant from `index.js` (one declaration, one source
+of truth) but let each consumer decide whether the coupling to the full app
+boot is worth it. `cors.preflight.test.js` already pays that cost because it
+needs the real app's actual preflight behavior. `cors.test.js` never tested
+header contents at all — so the right fix there was deleting the dead mirror
+plus a comment pointing at where real coverage lives, not building a
+substitute source of the same value.
+
+**Rule:** when killing a hardcoded mirror, first check whether anything in
+the file actually asserts against it. If nothing does, delete it — importing
+the real source to replace an assertion that doesn't exist just relocates the
+drift risk into an unnecessary dependency instead of removing it.
+
+**Scope:** any future "point the test at the real config" fix. Don't default
+to importing the heaviest available source of truth; import only as much as
+the file's own assertions need.
