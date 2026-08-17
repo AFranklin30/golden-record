@@ -7,6 +7,7 @@ const { NORMALIZATION_VERSION }      = require('./normalizer');
 
 const THRESHOLD_PATH_C = 0.85;
 const THRESHOLD_PATH_D = 0.60;
+const BLOCK_SIZE_CAP   = 50;
 
 const firestore = new Firestore({
   projectId:  process.env.FIRESTORE_PROJECT_ID,
@@ -77,6 +78,110 @@ function passesSignalEligibilityGate(candidate, inbound) {
   return strongCount >= 1 || weakCount >= 2;
 }
 
+/**
+ * Retrieval narrowing — finds fan_ids worth scoring instead of scanning.
+ *
+ * Three exact keys, unioned:
+ *   email          — identifier_link exact probe
+ *   guardian_email — identifier_link exact probe
+ *   name_dob       — self-join on name_last_word + dob (migration_016)
+ *
+ * A key is "available" when the inbound carries the field(s) to build it.
+ * A block larger than BLOCK_SIZE_CAP is DROPPED WHOLE, not truncated: at that
+ * size the key failed to discriminate, and scoring near-random members risks a
+ * false conflict, which is worse than a missed duplicate.
+ *
+ * Each probe joins fan and filters deleted_at IS NULL, so reported block sizes
+ * reflect live fans only. Filtering in the downstream join instead would make
+ * block_size lie.
+ *
+ * DEFERRED: a materialized blocking_key (fan_id, key_type, key_value, org_id)
+ * table is the production answer. Self-join at query time is the narrow version.
+ *
+ * @returns {{ fanIds: string[], blockResults: object[], keysAvailable: string[] }}
+ *   blockResults entries: { key, block_size, dropped }
+ */
+async function findBlockCandidates(inbound, org_id, db) {
+  const keysAvailable = [];
+  if (inbound.email != null)          keysAvailable.push('email');
+  if (inbound.guardian_email != null) keysAvailable.push('guardian_email');
+  if (inbound.name != null && inbound.dob != null) keysAvailable.push('name_dob');
+
+  if (keysAvailable.length === 0) {
+    return { fanIds: [], blockResults: [], keysAvailable: [] };
+  }
+
+  const probeLimit  = BLOCK_SIZE_CAP + 1;
+  const blockResults = [];
+  const fanIdSet      = new Set();
+
+  for (const key of keysAvailable) {
+    let rows;
+
+    if (key === 'email') {
+      const result = await db.query(
+        `SELECT il.fan_id
+         FROM identifier_link il
+         JOIN fan f ON f.id = il.fan_id
+         WHERE il.org_id = $1
+           AND il.identifier_type = 'email'
+           AND il.identifier_value = $2
+           AND f.deleted_at IS NULL
+         LIMIT $3`,
+        [org_id, inbound.email, probeLimit]
+      );
+      rows = result.rows;
+
+    } else if (key === 'guardian_email') {
+      const result = await db.query(
+        `SELECT il.fan_id
+         FROM identifier_link il
+         JOIN fan f ON f.id = il.fan_id
+         WHERE il.org_id = $1
+           AND il.identifier_type = 'guardian_email'
+           AND il.identifier_value = $2
+           AND f.deleted_at IS NULL
+         LIMIT $3`,
+        [org_id, inbound.guardian_email, probeLimit]
+      );
+      rows = result.rows;
+
+    } else {
+      // name_dob
+      const lastWord = String(inbound.name).trim().split(/\s+/).pop();
+      const result = await db.query(
+        `SELECT il_n.fan_id
+         FROM identifier_link il_n
+         JOIN identifier_link il_d
+           ON il_d.fan_id = il_n.fan_id
+          AND il_d.org_id = il_n.org_id
+          AND il_d.identifier_type = 'dob'
+          AND il_d.identifier_value = $3
+         JOIN fan f ON f.id = il_n.fan_id
+         WHERE il_n.org_id = $1
+           AND il_n.identifier_type = 'name'
+           AND il_n.name_last_word = $2
+           AND f.deleted_at IS NULL
+         LIMIT $4`,
+        [org_id, lastWord, inbound.dob, probeLimit]
+      );
+      rows = result.rows;
+    }
+
+    const block_size = rows.length;
+    const dropped     = block_size > BLOCK_SIZE_CAP;
+    blockResults.push({ key, block_size, dropped });
+
+    if (!dropped) {
+      for (const row of rows) {
+        fanIdSet.add(row.fan_id);
+      }
+    }
+  }
+
+  return { fanIds: Array.from(fanIdSet), blockResults, keysAvailable };
+}
+
 // RECEIVE
 async function resolverEngine(input, db) {
   const identifier_type  = input.identifier_type;
@@ -95,6 +200,14 @@ async function resolverEngine(input, db) {
   let linked_systems   = [];
   let linked_count     = 0;
 
+  // One resolution, one moment. Every scoreMatch call in the candidate loop
+  // and the scoring_clock stamped on the trace all read this same value, so
+  // a resolution is internally consistent and the trace records the instant
+  // scoring actually happened — not the instant the trace row was inserted
+  // after COMMIT. created_at is the insert time; these are deliberately
+  // different columns (see migration_014).
+  const scoring_clock = Date.now();
+
   const trace = {
     resolution_path:       null,
     scoring_status:        'skipped',
@@ -107,6 +220,10 @@ async function resolverEngine(input, db) {
     best_signals:          null,
     best_candidate_id:     null,
     best_score:            null,
+    block_keys_available:  [],
+    block_results:         null,
+    blocks_dropped:        0,
+    block_size_cap:        null,
   };
 
   // OUTER TRY — Pattern 2: wraps GUARD and EXECUTE together
@@ -177,52 +294,6 @@ async function resolverEngine(input, db) {
       );
 
     } else {
-      // STEP 1 — find candidates for probabilistic scoring (module call before any db write)
-      const candidateRows = await db.query(
-        `SELECT f.id, f.org_id,
-                il_email.identifier_value    AS email,
-                il_email.last_seen_at        AS email_last_seen_at,
-                il_name.identifier_value     AS name,
-                il_name.last_seen_at         AS name_last_seen_at,
-                il_dob.identifier_value      AS dob,
-                il_dob.last_seen_at          AS dob_last_seen_at,
-                il_zip.identifier_value      AS zip,
-                il_zip.last_seen_at          AS zip_last_seen_at,
-                il_device.identifier_value   AS device_id,
-                il_device.last_seen_at       AS device_last_seen_at,
-                il_gemail.identifier_value   AS guardian_email,
-                il_gemail.last_seen_at       AS guardian_email_last_seen_at
-         FROM fan f
-         LEFT JOIN identifier_link il_email
-           ON il_email.fan_id = f.id
-           AND il_email.identifier_type = 'email'
-           AND il_email.org_id = $1
-         LEFT JOIN identifier_link il_name
-           ON il_name.fan_id = f.id
-           AND il_name.identifier_type = 'name'
-           AND il_name.org_id = $1
-         LEFT JOIN identifier_link il_dob
-           ON il_dob.fan_id = f.id
-           AND il_dob.identifier_type = 'dob'
-           AND il_dob.org_id = $1
-         LEFT JOIN identifier_link il_zip
-           ON il_zip.fan_id = f.id
-           AND il_zip.identifier_type = 'zip'
-           AND il_zip.org_id = $1
-         LEFT JOIN identifier_link il_device
-           ON il_device.fan_id = f.id
-           AND il_device.identifier_type = 'device_id'
-           AND il_device.org_id = $1
-         LEFT JOIN identifier_link il_gemail
-           ON il_gemail.fan_id = f.id
-           AND il_gemail.identifier_type = 'guardian_email'
-           AND il_gemail.org_id = $1
-         WHERE f.org_id = $1
-           AND f.deleted_at IS NULL
-         LIMIT 100`,
-        [org_id]
-      );
-
       // Build inbound object — singular identifier_type mapping always wins
       // (it drives the hard-match lookup above and must not be overridden).
       // Additional fields fall back to input.identifiers when provided.
@@ -238,11 +309,71 @@ async function resolverEngine(input, db) {
       };
       trace.inbound = inbound;
 
+      // STEP 1 — find candidates for probabilistic scoring (module call before any db write)
+      // Blocking: narrow to fans sharing an exact key with the inbound, then score
+      // within that set. Replaces the LIMIT 100 scan, which took 100 arbitrary fans
+      // per org and at Thunder scale essentially never contained the true match.
+      const block = await findBlockCandidates(inbound, org_id, db);
+
+      trace.block_keys_available = block.keysAvailable;
+      trace.block_results        = block.blockResults;
+      trace.blocks_dropped       = block.blockResults.filter(r => r.dropped).length;
+      trace.block_size_cap       = BLOCK_SIZE_CAP;
+
+      let candidateRows = { rows: [] };
+      if (block.fanIds.length > 0) {
+        candidateRows = await db.query(
+          `SELECT f.id, f.org_id,
+                  il_email.identifier_value    AS email,
+                  il_email.last_seen_at        AS email_last_seen_at,
+                  il_name.identifier_value     AS name,
+                  il_name.last_seen_at         AS name_last_seen_at,
+                  il_dob.identifier_value      AS dob,
+                  il_dob.last_seen_at          AS dob_last_seen_at,
+                  il_zip.identifier_value      AS zip,
+                  il_zip.last_seen_at          AS zip_last_seen_at,
+                  il_device.identifier_value   AS device_id,
+                  il_device.last_seen_at       AS device_last_seen_at,
+                  il_gemail.identifier_value   AS guardian_email,
+                  il_gemail.last_seen_at       AS guardian_email_last_seen_at
+           FROM fan f
+           LEFT JOIN identifier_link il_email
+             ON il_email.fan_id = f.id
+             AND il_email.identifier_type = 'email'
+             AND il_email.org_id = $1
+           LEFT JOIN identifier_link il_name
+             ON il_name.fan_id = f.id
+             AND il_name.identifier_type = 'name'
+             AND il_name.org_id = $1
+           LEFT JOIN identifier_link il_dob
+             ON il_dob.fan_id = f.id
+             AND il_dob.identifier_type = 'dob'
+             AND il_dob.org_id = $1
+           LEFT JOIN identifier_link il_zip
+             ON il_zip.fan_id = f.id
+             AND il_zip.identifier_type = 'zip'
+             AND il_zip.org_id = $1
+           LEFT JOIN identifier_link il_device
+             ON il_device.fan_id = f.id
+             AND il_device.identifier_type = 'device_id'
+             AND il_device.org_id = $1
+           LEFT JOIN identifier_link il_gemail
+             ON il_gemail.fan_id = f.id
+             AND il_gemail.identifier_type = 'guardian_email'
+             AND il_gemail.org_id = $1
+           WHERE f.org_id = $1
+             AND f.deleted_at IS NULL
+             AND f.id = ANY($2::uuid[])`,
+          [org_id, block.fanIds]
+        );
+      }
+
       // STEP 2 — score each candidate, track best
       let bestMatch   = null;
       let bestScore   = 0.0;
       let bestSignals = [];
 
+      // Deduped, post-block set that reached the join — not a raw table scan.
       trace.candidates_considered = candidateRows.rows.length;
       for (const candidate of candidateRows.rows) {
         trace.candidate_ids.push(candidate.id);
@@ -251,7 +382,7 @@ async function resolverEngine(input, db) {
           continue;
         }
         trace.candidates_scored++;
-        const result = scoreMatch(candidate, inbound);
+        const result = scoreMatch(candidate, inbound, scoring_clock);
         if (result.score > bestScore) {
           bestScore   = result.score;
           bestMatch   = candidate;
@@ -261,7 +392,13 @@ async function resolverEngine(input, db) {
 
       if (trace.candidates_considered === 0) {
         trace.scoring_status = 'skipped';
-        trace.skip_reason    = 'no_candidates';
+        if (block.keysAvailable.length === 0) {
+          trace.skip_reason = 'no_block_key';
+        } else if (trace.blocks_dropped > 0) {
+          trace.skip_reason = 'block_dropped_oversize';
+        } else {
+          trace.skip_reason = 'empty_block';
+        }
       } else if (trace.candidates_scored === 0) {
         trace.scoring_status = 'skipped';
         trace.skip_reason    = 'all_candidates_gated';
@@ -438,9 +575,10 @@ async function resolverEngine(input, db) {
             signal_results, best_candidate_id, best_score,
             threshold_path_c, threshold_path_d, scorer_version,
             normalization_version, scoring_clock, resulting_fan_id,
-            is_new_record, conflict_id, created_at)
+            is_new_record, conflict_id, block_keys_available, block_results,
+            blocks_dropped, block_size_cap, created_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
-                 $18, NOW(), $19, $20, $21, NOW())`,
+                 $18,$19,$20,$21,$22,$23,$24,$25,$26, NOW())`,
         [
           crypto.randomUUID(),
           org_id,
@@ -460,9 +598,14 @@ async function resolverEngine(input, db) {
           THRESHOLD_PATH_D,
           SCORER_VERSION,
           NORMALIZATION_VERSION,
+          new Date(scoring_clock).toISOString(),
           fan_id,
           is_new_record,
-          conflict_id
+          conflict_id,
+          trace.block_keys_available,
+          trace.block_results ? JSON.stringify(trace.block_results) : null,
+          trace.blocks_dropped,
+          trace.block_size_cap
         ]
       );
     } catch (traceErr) {
@@ -554,6 +697,8 @@ module.exports = {
   ConflictError,
   ResolverError,
   passesSignalEligibilityGate,
+  findBlockCandidates,
   THRESHOLD_PATH_C,
   THRESHOLD_PATH_D,
+  BLOCK_SIZE_CAP,
 };

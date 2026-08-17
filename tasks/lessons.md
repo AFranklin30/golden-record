@@ -4,57 +4,6 @@
 
 ---
 
-## 4 — SQL substring assertions: use regex when column names contain table names (2026-05-31)
-
-When asserting "no UPDATE on fan table" by filtering all SQL strings for
-`.includes('UPDATE') && .includes('FAN')`, the filter false-positives on
-`UPDATE household_member ... RETURNING ... MINOR_FAN_ID` because `MINOR_FAN_ID`
-contains the substring `FAN`.
-
-**Fix:** use a regex that matches `UPDATE` followed by the table name as a word
-boundary, not a substring:
-```javascript
-const fanUpdates = allSqls.filter(s => /UPDATE\s+FAN[\s\n]/.test(s));
-```
-This matches `UPDATE fan WHERE` but not `UPDATE household_member ... MINOR_FAN_ID`.
-
-**Scope:** applies to any assertion that checks whether a specific table was
-targeted by a write. Always use a word-boundary regex, not `.includes()`.
-
----
-
-## 5 — Separate router for endpoints with different middleware stacks (2026-06-01)
-
-When a route in a file requires DIFFERENT middleware than the other routes in that file
-(e.g. Component 35 — no jwtMiddleware — living alongside Components 27-34 which all need
-jwtMiddleware), export a second router as a property on the default export:
-
-```javascript
-const claimRouter = express.Router();
-// ... add routes to claimRouter ...
-router.householdClaimRouter = claimRouter;
-module.exports = router;
-```
-
-Then in index.js, extract and mount on the appropriate middleware chain:
-```javascript
-const householdRouter = require('./src/routes/household');
-const { householdClaimRouter } = householdRouter;
-// mount claimRouter on a public router (no jwtMiddleware) BEFORE the protected router
-```
-
-**Why:** Attaching as a property on the default export preserves backward compatibility
-for every existing test and import that does `require('./household')` directly. No
-destructuring needed in old code. New router is accessible via named property.
-
-**Mount order matters:** The public router (no JWT) must be mounted BEFORE the protected
-router in index.js or Express will match the public route's path segment (e.g. 'claim')
-as a URL parameter (e.g. :adult_fan_id) in the protected router.
-
-**Scope:** any future household or other route that needs different middleware from its siblings.
-
----
-
 ## 6 — CHECK constraints block new event_type and identifier_type values (2026-06-02)
 
 When CLAUDE.md says "No schema change needed — event_type is TEXT not enum,
@@ -510,3 +459,73 @@ drift risk into an unnecessary dependency instead of removing it.
 **Scope:** any future "point the test at the real config" fix. Don't default
 to importing the heaviest available source of truth; import only as much as
 the file's own assertions need.
+
+---
+
+## 24 — Column-count assertions are the same brittleness class as CHECK-constraint enumeration (2026-08-11)
+
+`tests/migration_014.test.js` asserted `resolution_trace` has exactly 23
+columns. migration_016 legitimately added 4 block-metadata columns
+(`block_keys_available`, `block_results`, `blocks_dropped`, `block_size_cap`)
+— an intentional, prompt-authorized schema change — and the hard-coded count
+broke immediately, for a reason that had nothing to do with correctness.
+
+This is Stage 7's own test-hardening principle (assert the shape you care
+about, not an incidental total) applied to a test the hardening pass didn't
+reach. It's the same failure shape as Lesson 6/12's CHECK-constraint
+enumeration and Lesson 13's ALLOWED_STATUSES drift: a gatekeeper pinned to
+today's exact value breaks on the next legitimate addition, not on a bug.
+
+**Fix applied here:** updated the count (23 → 27) with an inline comment
+showing the old value and the reason, per the documented test-fixing
+exception (the test was pinning a fact this migration deliberately changed).
+
+**Not fixed here, flagged instead:** the assertion should check that specific
+expected columns exist (`SELECT column_name FROM information_schema.columns
+WHERE ... AND column_name = ANY($1)`) rather than counting all of them. A
+count will break again on migration_017 and every migration after that
+touches this table, for the same non-bug reason. Rewriting it is its own
+prompt, not a side effect of a schema-only migration.
+
+**Scope:** any test asserting `COUNT(*)` of columns/indexes/constraints on a
+table expected to keep evolving. Prefer asserting the specific members that
+matter over the total.
+
+---
+
+## 25 — Oversized blocking blocks are only reachable via guardian_email/fan_pass, not a general case (2026-08-13)
+
+`uq_identifier_per_org` (migration_013) is `(identifier_type, identifier_value,
+org_id) WHERE source_system != 'fan_pass'` — that WHERE clause applies to
+every identifier_type the index covers, not just guardian_email. For `email`,
+this means at most one live fan per org can ever hold a given email value
+outside a `fan_pass` row. Consequence for `findBlockCandidates`'s email key:
+an oversized email block isn't just rare in real traffic, it's structurally
+impossible unless a row is written with `source_system = 'fan_pass'` — which
+nothing in the email ingest paths does.
+
+`guardian_email` is different only because production code (household.js,
+sibling creation) deliberately writes those rows with `source_system =
+'fan_pass'` — that carve-out is the entire reason the WHERE clause exists
+(see CLAUDE.md's identifier_link uniqueness-index section). A large household
+sharing one guardian_email is how a real oversized guardian_email block
+happens; there is no equivalent real-world path for email.
+
+This surfaced as a side effect of a test fixture (findBlockCandidates.test.js
+cases 9-10, drop-at-cap / inclusive-boundary), not from reading the schema in
+isolation — seeding duplicate emails with the default `source_system: 'test'`
+hit the unique index immediately, which is what forced the guardian_email +
+`fan_pass` choice.
+
+**Rule:** when a test needs to prove "oversized block" behavior for a
+blocking key backed by `identifier_link`, check whether that key's
+identifier_type is ever written with `source_system = 'fan_pass'` in
+production code before deciding which key to seed duplicates for. Seeding
+duplicates for a key that's never written that way (email) doesn't represent
+a reachable state — it represents a fixture bypassing a constraint that real
+traffic can't bypass.
+
+**Scope:** any future blocking key, fixture, or test seeding duplicate
+`identifier_link` values for the same identifier_type/org. Same instinct as
+Lesson 9 (verify the index before shipping) — applies to seeding data, not
+just to `ON CONFLICT` clauses.

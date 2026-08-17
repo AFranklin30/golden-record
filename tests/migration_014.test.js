@@ -105,6 +105,9 @@ describe('migration_014 — resolution_trace, trace_label, evaluation_corpus', (
   // 1. Column counts — assert the actual DDL was applied as specified.
   //    Prompt stated 22/9/12 but DDL creates 23/9/13. Asserting DDL-derived
   //    counts so the test is honest about what was actually created.
+  //    resolution_trace was 23 as of migration_014; migration_016 added 4
+  //    block-metadata columns (block_keys_available, block_results,
+  //    blocks_dropped, block_size_cap), bringing it to 27.
   // ---------------------------------------------------------------------------
   it('1. all three tables exist with correct column counts', async () => {
     const { rows } = await client.query(`
@@ -121,7 +124,7 @@ describe('migration_014 — resolution_trace, trace_label, evaluation_corpus', (
     );
 
     expect(counts['evaluation_corpus']).toBe(13);
-    expect(counts['resolution_trace']).toBe(23);
+    expect(counts['resolution_trace']).toBe(27); // was 23 — migration_016 added 4 block-metadata columns
     expect(counts['trace_label']).toBe(9);
   });
 

@@ -106,6 +106,58 @@ function normalizeZip(value) {
 
 const NORMALIZATION_VERSION = 'v1';
 
+const IDENTIFIER_FIELDS   = ['email', 'name', 'dob', 'zip', 'device_id', 'guardian_email'];
+const NORMALIZABLE_FIELDS = ['email', 'name', 'dob', 'zip', 'guardian_email'];
+
+/**
+ * Type-checks and normalizes the advisory identifiers object shared by
+ * /v1/resolve and /v1/ingest/nfc. Returns { ok: true, value } or
+ * { ok: false, status, body }. Returns { ok: true, value: null } when
+ * identifiers is absent. device_id passes through unnormalized — not in
+ * ALLOWED_TYPES (soft signal only, never a hard identifier).
+ */
+function normalizeIdentifiersObject(identifiers) {
+  if (identifiers === null || identifiers === undefined) {
+    return { ok: true, value: null };
+  }
+  if (typeof identifiers !== 'object' || Array.isArray(identifiers)) {
+    return { ok: false, status: 400, body: {
+      error:   'identifiers must be an object',
+      message: 'identifiers, when provided, must be a JSON object of signal fields',
+    }};
+  }
+  for (const field of IDENTIFIER_FIELDS) {
+    const v = identifiers[field];
+    if (v !== undefined && v !== null && typeof v !== 'string') {
+      return { ok: false, status: 400, body: {
+        error:   'identifiers field must be a string',
+        message: `identifiers.${field} must be a string when provided`,
+      }};
+    }
+  }
+  const out = {};
+  for (const field of NORMALIZABLE_FIELDS) {
+    const v = identifiers[field];
+    if (v != null) {
+      try {
+        out[field] = normalizeIdentifier(field, v);
+      } catch (err) {
+        if (err instanceof NormalizationError) {
+          return { ok: false, status: 400, body: {
+            error:  'identifiers field failed normalization',
+            detail: err.message,
+          }};
+        }
+        throw err;
+      }
+    }
+  }
+  if (identifiers.device_id != null) {
+    out.device_id = identifiers.device_id;
+  }
+  return { ok: true, value: out };
+}
+
 // RECEIVE
 function normalizeIdentifier(type, value) {
   const identifierType = type;
@@ -146,4 +198,4 @@ function normalizeIdentifier(type, value) {
   throw new NormalizationError(`unhandled identifier_type: ${identifierType}`);
 }
 
-module.exports = { normalizeIdentifier, NormalizationError, NORMALIZATION_VERSION };
+module.exports = { normalizeIdentifier, NormalizationError, NORMALIZATION_VERSION, normalizeIdentifiersObject };

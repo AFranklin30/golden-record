@@ -278,7 +278,8 @@ CREATE POLICY tenant_isolation ON evaluation_corpus
 --
 -- Expected results:
 --   table_count = 3
---   resolution_trace_col_count = 23
+--   resolution_trace_col_count = 23 (as of this migration; migration_016 added
+--     4 block-metadata columns, bringing it to 27 — see migration_016.sql)
 --   trace_label_col_count = 9
 --   evaluation_corpus_col_count = 13
 --   trigger_count = 1  (enforce_resolution_trace_append_only)

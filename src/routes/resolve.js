@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const express = require('express');
 
-const { normalizeIdentifier, NormalizationError } = require('../modules/normalizer');
+const { normalizeIdentifier, NormalizationError, normalizeIdentifiersObject } = require('../modules/normalizer');
 const { resolverEngine, ConflictError, ResolverError } = require('../modules/resolverEngine');
 
 const router = express.Router();
@@ -36,47 +36,12 @@ router.post('/v1/resolve', async (req, res) => {
   if (!schema_version || !String(schema_version).trim()) {
     return res.status(400).json({ error: 'schema_version is required' });
   }
-  if (identifiers !== null && identifiers !== undefined) {
-    if (typeof identifiers !== 'object' || Array.isArray(identifiers)) {
-      return res.status(400).json({
-        error: 'identifiers must be an object',
-        message: 'identifiers, when provided, must be a JSON object of signal fields',
-      });
-    }
-    const IDENTIFIER_FIELDS = ['email', 'name', 'dob', 'zip', 'device_id', 'guardian_email'];
-    for (const field of IDENTIFIER_FIELDS) {
-      const v = identifiers[field];
-      if (v !== undefined && v !== null && typeof v !== 'string') {
-        return res.status(400).json({
-          error: 'identifiers field must be a string',
-          message: `identifiers.${field} must be a string when provided`,
-        });
-      }
-    }
+  // GUARD — identifiers object: type check + normalization (shared with nfc.js)
+  const identifiersResult = normalizeIdentifiersObject(identifiers);
+  if (!identifiersResult.ok) {
+    return res.status(identifiersResult.status).json(identifiersResult.body);
   }
-
-  // GUARD — normalize identifiers fields (device_id excluded — not in normalizer ALLOWED_TYPES)
-  let normalizedIdentifiers = null;
-  if (identifiers !== null && identifiers !== undefined) {
-    normalizedIdentifiers = {};
-    const NORMALIZABLE_FIELDS = ['email', 'name', 'dob', 'zip', 'guardian_email'];
-    try {
-      for (const field of NORMALIZABLE_FIELDS) {
-        const v = identifiers[field];
-        if (v != null) {
-          normalizedIdentifiers[field] = normalizeIdentifier(field, v);
-        }
-      }
-    } catch (err) {
-      if (err instanceof NormalizationError) {
-        return res.status(400).json({ error: 'identifiers field failed normalization', detail: err.message });
-      }
-      throw err;
-    }
-    if (identifiers.device_id != null) {
-      normalizedIdentifiers.device_id = identifiers.device_id;
-    }
-  }
+  const normalizedIdentifiers = identifiersResult.value;
 
   // GUARD — normalization (own try/catch, produces 400)
   let normalized_value;
