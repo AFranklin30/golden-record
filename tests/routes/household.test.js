@@ -31,7 +31,7 @@ beforeEach(() => {
   mockDb = { query: jest.fn() };
 });
 
-function buildApp(orgId = CONTEXT_ORG_ID, fanId = ADULT_FAN_ID) {
+function buildApp(orgId = CONTEXT_ORG_ID, fanId = ADULT_FAN_ID, extraContext = {}) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -40,6 +40,7 @@ function buildApp(orgId = CONTEXT_ORG_ID, fanId = ADULT_FAN_ID) {
       org_name:       'Test Org',
       correlation_id: 'test-corr-id',
       fan_id:         fanId,
+      ...extraContext,
     };
     req.db = mockDb;
     next();
@@ -47,6 +48,22 @@ function buildApp(orgId = CONTEXT_ORG_ID, fanId = ADULT_FAN_ID) {
   app.use(require('../../src/routes/household'));
   return app;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Child-token router guard — router.use at top of household.js
+// ─────────────────────────────────────────────────────────────────────────────
+describe('child-token router guard', () => {
+  // The guard fires before ANY handler, so any household route triggers it.
+  // Using POST /v1/household as a representative probe.
+  test('returns 403 with child guard message when acting_as is child', async () => {
+    const childApp = buildApp(CONTEXT_ORG_ID, ADULT_FAN_ID, { acting_as: 'child' });
+    const res = await request(childApp).post('/v1/household').send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('forbidden');
+    expect(res.body.message).toBe('child tokens cannot manage household accounts');
+    expect(mockDb.query).not.toHaveBeenCalled();
+  });
+})
 
 const householdRow = {
   id:           HOUSEHOLD_ID,
@@ -451,6 +468,7 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('forbidden');
+    expect(res.body.message).toBe('token does not match requested household');
     expect(mockDb.query).not.toHaveBeenCalled();
   });
 
@@ -608,6 +626,7 @@ describe('GET /v1/household/:adult_fan_id/members/:child_fan_id', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('forbidden');
+    expect(res.body.message).toBe('token does not match requested household');
     expect(mockDb.query).not.toHaveBeenCalled();
   });
 
@@ -938,6 +957,7 @@ describe('PUT /v1/household/:adult_fan_id/members/:child_fan_id', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('forbidden');
+    expect(res.body.message).toBe('token does not match requested household');
     expect(mockDb.query).not.toHaveBeenCalled();
   });
 
@@ -1156,6 +1176,7 @@ describe('DELETE /v1/household/:adult_fan_id/members/:child_fan_id', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('forbidden');
+    expect(res.body.message).toBe('token does not match requested household');
     expect(mockDb.query).not.toHaveBeenCalled();
   });
 
@@ -1397,6 +1418,7 @@ describe('POST /v1/household/:adult_fan_id/members/:child_fan_id/session', () =>
       .post(`/v1/household/${ADULT_FAN_ID}/members/${MINOR_FAN_ID}/session`);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('forbidden');
+    expect(res.body.message).toBe('token does not match requested household');
     expect(mockDb.query).not.toHaveBeenCalled();
   });
 
@@ -1826,6 +1848,7 @@ describe('POST /v1/household/:adult_fan_id/members/:child_fan_id/age-up', () => 
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('forbidden');
+    expect(res.body.message).toBe('token does not match requested household');
     expect(mockDb.query).not.toHaveBeenCalled();
   });
 
@@ -2377,6 +2400,17 @@ describe('GET /v1/household/claim/:token', () => {
 describe('GET /v1/admin/household/:fan_id', () => {
   const RELATED_ID    = '22222222-0000-0000-0000-000000000008';
   const HOUSEHOLD_ID2 = '33333333-0000-0000-0000-000000000009';
+  const STAGING_ID    = '77777777-0000-0000-0000-000000000013';
+
+  const stagingRow = {
+    id:           STAGING_ID,
+    adult_fan_id: ADULT_FAN_ID,
+    child_name:   'sam smith',
+    child_dob:    '2015-06-10',
+    source:       'youth_camp',
+    confidence:   0.65,
+    created_at:   new Date('2026-05-10T08:00:00Z'),
+  };
 
   function buildAdminApp(orgId = CONTEXT_ORG_ID) {
     const app = express();
@@ -2417,12 +2451,13 @@ describe('GET /v1/admin/household/:fan_id', () => {
     created_at:             new Date('2026-05-01T11:00:00Z'),
   };
 
-  function setupFetch({ fan = fanRow, households = [], memberships = [], relatedFans = [] } = {}) {
+  function setupFetch({ fan = fanRow, households = [], memberships = [], relatedFans = [], staging = [] } = {}) {
     mockDb.query
       .mockResolvedValueOnce({ rows: fan ? [fan] : [] })  // READ 1 — fan
       .mockResolvedValueOnce({ rows: households })         // READ 2 — households
       .mockResolvedValueOnce({ rows: memberships })        // READ 3 — all memberships
-      .mockResolvedValueOnce({ rows: relatedFans });       // READ 4 — related_fans
+      .mockResolvedValueOnce({ rows: relatedFans })        // READ 4 — related_fans
+      .mockResolvedValueOnce({ rows: staging });           // READ 5 — staging_household_data
   }
 
   let adminApp;
@@ -2514,21 +2549,24 @@ describe('GET /v1/admin/household/:fan_id', () => {
     expect(res.body.memberships[0].claim_token_expires_at).toBeDefined();
   });
 
-  // 6 — Soft links returned separately in soft_links, not mixed with hard links
-  test('returns soft links in soft_links array separate from hard links in memberships', async () => {
-    const softRow = { ...hardMemberRow, id: '66666666-0000-0000-0000-000000000012', link_type: 'soft' };
-    const memberships = [hardMemberRow, softRow];
-    setupFetch({ memberships });
+  // 6 — soft_links comes from staging_household_data (READ 5), not from memberships
+  test('returns staging_household_data rows in soft_links array with new shape', async () => {
+    setupFetch({ memberships: [hardMemberRow], staging: [stagingRow] });
 
     const res = await request(adminApp).get(`/v1/admin/household/${ADULT_FAN_ID}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.memberships).toHaveLength(2);   // all members always in memberships
-    expect(res.body.soft_links).toHaveLength(1);    // only the soft one
-    expect(res.body.soft_links[0].link_type).toBe('soft');
-    expect(res.body.soft_links[0].member_id).toBe(softRow.id);
-    // hard member must NOT appear in soft_links
-    expect(res.body.soft_links.some(m => m.member_id === MEMBER_ID)).toBe(false);
+    expect(res.body.memberships).toHaveLength(1);                            // hard member in memberships
+    expect(res.body.soft_links).toHaveLength(1);                             // staging row in soft_links
+    expect(res.body.soft_links[0].staging_id).toBe(STAGING_ID);
+    expect(res.body.soft_links[0].adult_fan_id).toBe(ADULT_FAN_ID);
+    expect(res.body.soft_links[0].child_name).toBe('sam smith');
+    expect(res.body.soft_links[0].child_dob).toBe('2015-06-10');
+    expect(res.body.soft_links[0].source).toBe('youth_camp');
+    expect(res.body.soft_links[0].confidence).toBe(0.65);
+    // old shape fields must not appear
+    expect(res.body.soft_links[0].link_type).toBeUndefined();
+    expect(res.body.soft_links[0].member_id).toBeUndefined();
   });
 
   // 7 — Returns related_fans records
@@ -2622,7 +2660,8 @@ describe('GET /v1/admin/household/:fan_id', () => {
       .mockResolvedValueOnce({ rows: [minorFanRow] }) // READ 1 — fan (the minor)
       .mockResolvedValueOnce({ rows: [] })             // READ 2 — no households as adult
       .mockResolvedValueOnce({ rows: [asMinorRow] })  // READ 3 — appears as minor
-      .mockResolvedValueOnce({ rows: [] });            // READ 4 — no related_fans
+      .mockResolvedValueOnce({ rows: [] })             // READ 4 — no related_fans
+      .mockResolvedValueOnce({ rows: [] });            // READ 5 — staging_household_data
 
     const res = await request(adminApp).get(`/v1/admin/household/${MINOR_FAN_ID}`);
 

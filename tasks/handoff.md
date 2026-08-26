@@ -1,5 +1,5 @@
-Completed: 4 quick-win refactors — shared UUID validation (src/lib/validate.js), shared arrow-function logger (src/lib/logger.js, 13 files updated), dotenv removed from resolverEngine.js, DD/MM/YYYY dead branch removed from normalizer.js with matching test updated
-Next: npm test already passing (361/361) — commit, rebuild Cloud Run image, redeploy
-Blocked: nothing
-Decisions: DD/MM/YYYY support confirmed not needed — Thunder is US-only; logger uses arrow functions per Lesson 7 to keep jest.spyOn working
-Warnings: migration_010.sql still must run on Cloud SQL before redeploy — child_session_issued audit INSERT will fail CHECK constraint in production without it
+Completed: Prompt 5/5 (blocking build) — resolverEngine.js writes block_keys_available/block_results/blocks_dropped/block_size_cap on resolution_trace; 'no_candidates' split into no_block_key/block_dropped_oversize/empty_block (precedence verified). New tests/modules/resolverEngine.trace.test.js: 13 passed, 1 skipped (all_candidates_gated unreachable via real block retrieval — every block key's probe guarantees that key's STRONG signal fires; documented in-file). Full suite: 11 failed/546 passed/1 skipped/558 total — same 2+9 pre-existing failures, zero regressions.
+Next: Blocking build (all 5 prompts) is complete. Open follow-up (not done here, flagged by this prompt): scoring_clock still binds NOW() instead of the injected clock (assertion pinned in test 1) — separate prompt if it ever needs to change.
+Blocked: Nothing.
+Decisions: New skip_reason values appended at the END of the resolution_trace INSERT's column/placeholder list (not interspersed) to avoid renumbering existing placeholders — verified resolverEngine.test.js's tracePathOf() reads params[3] (resolution_path), unaffected.
+Warnings: CLAUDE.md's Stage 7 status section (last updated 2026-08-02) predates the entire blocking build (migrations 015/016, findBlockCandidates, blocking wiring, this trace instrumentation) — it never mentions blocking at all. Not a stale-fact contradiction (CLAUDE.md never named 'no_candidates' specifically), just a documentation gap. Flagging per agent rule 9, not editing.

@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const express = require('express');
 
-const { normalizeIdentifier, NormalizationError } = require('../modules/normalizer');
+const { normalizeIdentifier, NormalizationError, normalizeIdentifiersObject } = require('../modules/normalizer');
 const { resolverEngine, ConflictError, ResolverError } = require('../modules/resolverEngine');
 
 const router = express.Router();
@@ -17,6 +17,7 @@ router.post('/v1/resolve', async (req, res) => {
   const identifier_value = body.identifier_value;
   const schema_version   = body.schema_version;
   const source_system    = body.source_system || 'unknown';
+  const identifiers      = body.identifiers || null;
   const org_id           = req.context.org_id;  // ground truth from orgAuthMiddleware
 
   // GUARD — in-memory only
@@ -35,6 +36,12 @@ router.post('/v1/resolve', async (req, res) => {
   if (!schema_version || !String(schema_version).trim()) {
     return res.status(400).json({ error: 'schema_version is required' });
   }
+  // GUARD — identifiers object: type check + normalization (shared with nfc.js)
+  const identifiersResult = normalizeIdentifiersObject(identifiers);
+  if (!identifiersResult.ok) {
+    return res.status(identifiersResult.status).json(identifiersResult.body);
+  }
+  const normalizedIdentifiers = identifiersResult.value;
 
   // GUARD — normalization (own try/catch, produces 400)
   let normalized_value;
@@ -58,6 +65,7 @@ router.post('/v1/resolve', async (req, res) => {
     result = await resolverEngine({
       identifier_type,
       identifier_value: normalized_value,
+      identifiers: normalizedIdentifiers,
       org_id,
       schema_version,
       idempotency_key,

@@ -8,7 +8,13 @@ const OTHER_ORG_ID   = 'bbbbbbbb-0000-0000-0000-000000000002';
 
 jest.mock('../../src/modules/normalizer', () => ({
   normalizeIdentifier: (_type, value) => value.trim().toLowerCase(),
-  NormalizationError: class NormalizationError extends Error {}
+  NormalizationError: class NormalizationError extends Error {},
+  // Route tests here never send an identifiers object needing rejection —
+  // absent/present passthrough is all these fixtures exercise.
+  normalizeIdentifiersObject: (identifiers) =>
+    (identifiers === null || identifiers === undefined)
+      ? { ok: true, value: null }
+      : { ok: true, value: identifiers }
 }));
 
 jest.mock('../../src/modules/resolverEngine', () => ({

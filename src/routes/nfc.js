@@ -3,7 +3,7 @@
 const crypto  = require('crypto');
 const express = require('express');
 
-const { normalizeIdentifier, NormalizationError } = require('../modules/normalizer');
+const { normalizeIdentifier, NormalizationError, normalizeIdentifiersObject } = require('../modules/normalizer');
 const { resolverEngine, ConflictError, ResolverError } = require('../modules/resolverEngine');
 
 const router = express.Router();
@@ -17,6 +17,7 @@ router.post('/v1/ingest/nfc', async (req, res) => {
   const station_id     = body.station_id;
   const schema_version = body.schema_version;
   const tapped_at      = body.tapped_at || new Date().toISOString();
+  const identifiers    = body.identifiers || null;
   const org_id         = req.context.org_id;  // ground truth from orgAuthMiddleware
 
   // GUARD — in-memory only
@@ -51,6 +52,18 @@ router.post('/v1/ingest/nfc', async (req, res) => {
   if (tappedAtMs < nowMs - 24 * 60 * 60 * 1000) {
     return res.status(400).json({ error: 'tapped_at is too far in the past' });
   }
+
+  // GUARD — identifiers object: type check + normalization (shared with resolve.js)
+  // DELIBERATE: no ingest_failures write here — a bad identifiers field on an
+  // otherwise-valid tap is caller error, not lost input. DLQ-ing it would
+    // recreate the resolve/nfc asymmetry this change removes, in reverse.
+  // Do not "fix" this.
+  
+  const identifiersResult = normalizeIdentifiersObject(identifiers);
+  if (!identifiersResult.ok) {
+    return res.status(identifiersResult.status).json(identifiersResult.body);
+  }
+  const normalizedIdentifiers = identifiersResult.value;
 
   // nfc_uid hashed in DLQ payload — raw PII must not persist in ingest_failures
   const dlqPayload = { ...body, nfc_uid: crypto.createHash('sha256').update(String(nfc_uid)).digest('hex') };
@@ -87,6 +100,7 @@ router.post('/v1/ingest/nfc', async (req, res) => {
     result = await resolverEngine({
       identifier_type:  'nfc_uid',
       identifier_value: normalized_uid,
+      identifiers: normalizedIdentifiers,
       org_id,
       schema_version,
       idempotency_key,

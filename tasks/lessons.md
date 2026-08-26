@@ -4,101 +4,6 @@
 
 ---
 
-## 1 — Mock ROLLBACK in 500 error tests (2026-05-29)
-
-When testing a db error path that triggers the catch block, the catch block
-calls `req.db.query('ROLLBACK').catch(() => {})`. If no mock is set up for
-that call, `jest.fn()` returns `undefined` and `undefined.catch()` throws a
-TypeError before the 500 response is sent — the response body is empty.
-
-**Fix:** In any 500 error test, add a ROLLBACK mock after the rejection:
-```javascript
-mockDb.query
-  .mockRejectedValueOnce(new Error('some db error'))  // the failing query
-  .mockResolvedValueOnce({ rows: [] });               // ROLLBACK
-```
-
-**Scope:** applies to every handler that has `ROLLBACK` in its catch block.
-Components 19, 20, 26, 29 — and all future handlers with transactions.
-
----
-
-## 3 — Never auto-create parent records — return 404 (2026-05-29)
-
-When a handler needs a parent record (e.g. household before adding a member),
-do NOT auto-create it if it does not exist. Return 404 and tell the caller
-which endpoint to call first.
-
-Auto-creation bypasses deliberate fan actions and breaks the audit trail.
-The household in Component 29 must exist because POST /v1/household is a
-separate fan-initiated action with its own audit event. Silently creating it
-would mean no audit record for the household creation.
-
-**Pattern:**
-```javascript
-if (!parentRecord) {
-  return res.status(404).json({
-    error:   'parent not found',
-    message: 'create it first via POST /v1/parent-endpoint',
-  });
-}
-```
-
-**Scope:** any endpoint that requires a prior fan action (household, wallet, etc.)
-
----
-
-## 4 — SQL substring assertions: use regex when column names contain table names (2026-05-31)
-
-When asserting "no UPDATE on fan table" by filtering all SQL strings for
-`.includes('UPDATE') && .includes('FAN')`, the filter false-positives on
-`UPDATE household_member ... RETURNING ... MINOR_FAN_ID` because `MINOR_FAN_ID`
-contains the substring `FAN`.
-
-**Fix:** use a regex that matches `UPDATE` followed by the table name as a word
-boundary, not a substring:
-```javascript
-const fanUpdates = allSqls.filter(s => /UPDATE\s+FAN[\s\n]/.test(s));
-```
-This matches `UPDATE fan WHERE` but not `UPDATE household_member ... MINOR_FAN_ID`.
-
-**Scope:** applies to any assertion that checks whether a specific table was
-targeted by a write. Always use a word-boundary regex, not `.includes()`.
-
----
-
-## 5 — Separate router for endpoints with different middleware stacks (2026-06-01)
-
-When a route in a file requires DIFFERENT middleware than the other routes in that file
-(e.g. Component 35 — no jwtMiddleware — living alongside Components 27-34 which all need
-jwtMiddleware), export a second router as a property on the default export:
-
-```javascript
-const claimRouter = express.Router();
-// ... add routes to claimRouter ...
-router.householdClaimRouter = claimRouter;
-module.exports = router;
-```
-
-Then in index.js, extract and mount on the appropriate middleware chain:
-```javascript
-const householdRouter = require('./src/routes/household');
-const { householdClaimRouter } = householdRouter;
-// mount claimRouter on a public router (no jwtMiddleware) BEFORE the protected router
-```
-
-**Why:** Attaching as a property on the default export preserves backward compatibility
-for every existing test and import that does `require('./household')` directly. No
-destructuring needed in old code. New router is accessible via named property.
-
-**Mount order matters:** The public router (no JWT) must be mounted BEFORE the protected
-router in index.js or Express will match the public route's path segment (e.g. 'claim')
-as a URL parameter (e.g. :adult_fan_id) in the protected router.
-
-**Scope:** any future household or other route that needs different middleware from its siblings.
-
----
-
 ## 6 — CHECK constraints block new event_type and identifier_type values (2026-06-02)
 
 When CLAUDE.md says "No schema change needed — event_type is TEXT not enum,
@@ -446,16 +351,181 @@ test, not just delete the branch.
 
 ---
 
-## 2 — Session prompt vs CLAUDE.md pseudocode conflicts — always clarify (2026-05-29)
+## 21 — Chained-merge fan building fails against two independent guards — verify empirically before designing around it (2026-08-02)
 
-When the session prompt and CLAUDE.md pseudocode contradict each other on a
-guard rule (e.g. "at least one of X or Y" vs "both required"), do not guess
-and do not pick the more permissive rule. Write the plan, flag the conflict
-explicitly, and check in before touching code.
+When a seed/fixture script needs a fan holding multiple identifier types
+(e.g. `name` + `dob`), the intuitive approach — resolve one field, resolve
+the second field with the first passed via `identifiers` for scoring,
+confirm the resulting conflict — silently assumes the eligibility gate and
+the merge system have no hidden caps. Both failed this session, on two
+separate runs, for two separate reasons:
 
-Aaron confirmed 2026-05-29: pseudocode is authoritative. Session prompt was
-wrong about guardian_email/guardian_phone. Both are required because:
-- guardian_email is required for aging-up claim link (Component 34)
-- guardian_phone is required for probabilistic matching signal
+1. `passesSignalEligibilityGate` requires composite signals
+   (`name_plus_dob`, `name_plus_zip`) to have BOTH fields already present on
+   the CANDIDATE, not just the inbound tap. A fan holding only `name` can
+   never be scored against an inbound `dob` — there is no sequence of two
+   resolves that builds a two-field fan from nothing. Only
+   `email_similarity` and `guardian_email` are single-field STRONG signals,
+   so only those can ever bootstrap a fresh fan.
+2. `conflicts.js`'s multi-hop merge block allows a fan to absorb at most one
+   confirmed merge, ever (`identifier_link.merged_from_fan_id` is a single
+   column, not a chain). A merge's loser is always a freshly-minted
+   single-identifier fan. So even a fan that successfully bootstraps via
+   email caps at exactly 2 identifier types — a second merge onto the same
+   target 409s.
 
-**Rule:** flag contradictions in the plan, check in, build after confirmation.
+Neither failure was visible from reading the code in isolation — both only
+surfaced by actually running the sequence against a real database and
+reading the real error. The fix that worked: stop building fans through
+chained live merges entirely. Insert fixture fans directly via SQL (they
+represent "what a touchpoint already knows"), and reserve live API calls for
+the RESOLUTION DECISIONS being demonstrated (the scoring, the veto, the
+pending conflict, the confirm) — those are the genuine artifact, not the
+fixture's pre-existing state.
+
+**Rule:** before designing a fixture/seed script around resolverEngine's
+merge mechanics, run the proposed sequence once against a real local
+database and read the actual response, rather than deriving it purely from
+reading `resolverEngine.js` and `conflicts.js`. Multi-step stateful flows
+(gate → score → conflict → confirm) can have caps that are only visible in
+their composition, not in either guard read alone. Documented as a new Open
+item in CLAUDE.md ("Merge-built fans cap at two identifier types") rather
+than fixed — both guards are individually correct.
+
+**Scope:** any future seed script, fixture builder, or test helper that
+tries to assemble a multi-identifier fan via resolve+confirm rather than
+direct SQL.
+
+---
+
+## 22 — Server-to-server tests cannot catch browser-enforced CORS behavior (2026-08-02)
+
+`corsOptions.allowedHeaders` in index.js listed `X-Api-Key` (dead — nothing
+reads it) but not `Authorization` (the header orgAuthMiddleware actually
+reads). 75+ existing tests never caught this because every one of them uses
+supertest with no `Origin` header — the `cors` package only engages its
+preflight/allowedHeaders logic when it sees an `Origin` header on the
+request. No Origin means no preflight means `allowedHeaders` is never
+exercised, no matter how many requests the suite sends. This is a
+browser-only failure mode: it costs nothing in supertest and blocks every
+real cross-origin fetch/XHR call from a frontend.
+
+**Fix pattern:** a dedicated test that sends a real `OPTIONS` request with an
+`Origin` header (`tests/cors.preflight.test.js`), asserting on
+`access-control-allow-headers` in the response. Confirmed via source read of
+`node_modules/cors/lib/index.js` (`configureAllowedHeaders`) that when
+`allowedHeaders` is a static array, the response reflects that exact array
+regardless of what `Access-Control-Request-Headers` asked for — so the test
+doesn't need to vary the requested header per assertion, just confirm the
+static list is right.
+
+**General form:** when a config allowlist exists (CORS headers, CHECK
+constraints — see Lesson 6/12, ALLOWED_STATUSES — see Lesson 13),
+identify every actual reader/writer and assert they agree with the list.
+Allowlists drift in both directions — an entry with no reader (X-Api-Key
+here) is the same class of bug as a reader whose entry is missing
+(Authorization here), just silent instead of loud.
+
+**Scope:** any CORS config change; any future allowlist-shaped config where
+the thing enforcing it (browser, DB constraint, application whitelist) is
+different from the thing that owns the test suite's request path.
+
+---
+
+## 23 — "Single source of truth" doesn't require every consumer to import the real thing (2026-08-02)
+
+Proposed plan: fix `cors.test.js`'s stale `allowedHeaders` mirror by importing
+`ALLOWED_HEADERS` from `index.js`, matching the "import it if usable" pattern
+`cors.preflight.test.js` already uses. Aaron corrected it: `index.js` calls
+`app.listen()` unconditionally at require-time (no `require.main` guard) and
+requires `DATABASE_URL`/`FIRESTORE_PROJECT_ID`/JWT keys at load — importing
+it turns a fast, isolated, dependency-free unit test into one that boots the
+whole app, for a fixture whose `allowedHeaders` value nothing in that file
+even asserts against.
+
+Correct fix: export the constant from `index.js` (one declaration, one source
+of truth) but let each consumer decide whether the coupling to the full app
+boot is worth it. `cors.preflight.test.js` already pays that cost because it
+needs the real app's actual preflight behavior. `cors.test.js` never tested
+header contents at all — so the right fix there was deleting the dead mirror
+plus a comment pointing at where real coverage lives, not building a
+substitute source of the same value.
+
+**Rule:** when killing a hardcoded mirror, first check whether anything in
+the file actually asserts against it. If nothing does, delete it — importing
+the real source to replace an assertion that doesn't exist just relocates the
+drift risk into an unnecessary dependency instead of removing it.
+
+**Scope:** any future "point the test at the real config" fix. Don't default
+to importing the heaviest available source of truth; import only as much as
+the file's own assertions need.
+
+---
+
+## 24 — Column-count assertions are the same brittleness class as CHECK-constraint enumeration (2026-08-11)
+
+`tests/migration_014.test.js` asserted `resolution_trace` has exactly 23
+columns. migration_016 legitimately added 4 block-metadata columns
+(`block_keys_available`, `block_results`, `blocks_dropped`, `block_size_cap`)
+— an intentional, prompt-authorized schema change — and the hard-coded count
+broke immediately, for a reason that had nothing to do with correctness.
+
+This is Stage 7's own test-hardening principle (assert the shape you care
+about, not an incidental total) applied to a test the hardening pass didn't
+reach. It's the same failure shape as Lesson 6/12's CHECK-constraint
+enumeration and Lesson 13's ALLOWED_STATUSES drift: a gatekeeper pinned to
+today's exact value breaks on the next legitimate addition, not on a bug.
+
+**Fix applied here:** updated the count (23 → 27) with an inline comment
+showing the old value and the reason, per the documented test-fixing
+exception (the test was pinning a fact this migration deliberately changed).
+
+**Not fixed here, flagged instead:** the assertion should check that specific
+expected columns exist (`SELECT column_name FROM information_schema.columns
+WHERE ... AND column_name = ANY($1)`) rather than counting all of them. A
+count will break again on migration_017 and every migration after that
+touches this table, for the same non-bug reason. Rewriting it is its own
+prompt, not a side effect of a schema-only migration.
+
+**Scope:** any test asserting `COUNT(*)` of columns/indexes/constraints on a
+table expected to keep evolving. Prefer asserting the specific members that
+matter over the total.
+
+---
+
+## 25 — Oversized blocking blocks are only reachable via guardian_email/fan_pass, not a general case (2026-08-13)
+
+`uq_identifier_per_org` (migration_013) is `(identifier_type, identifier_value,
+org_id) WHERE source_system != 'fan_pass'` — that WHERE clause applies to
+every identifier_type the index covers, not just guardian_email. For `email`,
+this means at most one live fan per org can ever hold a given email value
+outside a `fan_pass` row. Consequence for `findBlockCandidates`'s email key:
+an oversized email block isn't just rare in real traffic, it's structurally
+impossible unless a row is written with `source_system = 'fan_pass'` — which
+nothing in the email ingest paths does.
+
+`guardian_email` is different only because production code (household.js,
+sibling creation) deliberately writes those rows with `source_system =
+'fan_pass'` — that carve-out is the entire reason the WHERE clause exists
+(see CLAUDE.md's identifier_link uniqueness-index section). A large household
+sharing one guardian_email is how a real oversized guardian_email block
+happens; there is no equivalent real-world path for email.
+
+This surfaced as a side effect of a test fixture (findBlockCandidates.test.js
+cases 9-10, drop-at-cap / inclusive-boundary), not from reading the schema in
+isolation — seeding duplicate emails with the default `source_system: 'test'`
+hit the unique index immediately, which is what forced the guardian_email +
+`fan_pass` choice.
+
+**Rule:** when a test needs to prove "oversized block" behavior for a
+blocking key backed by `identifier_link`, check whether that key's
+identifier_type is ever written with `source_system = 'fan_pass'` in
+production code before deciding which key to seed duplicates for. Seeding
+duplicates for a key that's never written that way (email) doesn't represent
+a reachable state — it represents a fixture bypassing a constraint that real
+traffic can't bypass.
+
+**Scope:** any future blocking key, fixture, or test seeding duplicate
+`identifier_link` values for the same identifier_type/org. Same instinct as
+Lesson 9 (verify the index before shipping) — applies to seeding data, not
+just to `ON CONFLICT` clauses.

@@ -14,7 +14,8 @@ jest.mock('@google-cloud/firestore', () => ({
 }));
 
 jest.mock('../../src/modules/probabilisticMatcher', () => ({
-  scoreMatch: jest.fn(),
+  scoreMatch:     jest.fn(),
+  SCORER_VERSION: 'v1+testmock',
 }));
 
 const { scoreMatch } = require('../../src/modules/probabilisticMatcher');
@@ -61,72 +62,213 @@ const guardianCandidateRow = {
   guardian_email_last_seen_at: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
 };
 
+// =============================================================================
+// Mock db harness — dispatches on QUERY SHAPE, not call order.
+//
+// Positional mockResolvedValueOnce chains broke every time resolverEngine's
+// query COUNT or ORDER changed shape (blocking added a probe query before the
+// candidate join and made the join conditional — every canned answer after it
+// shifted by one slot, turning one root cause into 18 confusing failures).
+// Matching on a distinctive SQL fragment instead means a future query added
+// to resolverEngine.js surfaces as one clear "unmocked query" error instead
+// of silently misreading an unrelated canned answer. Same class of fix as
+// Lesson 24 (assert what you mean, not an incidental detail).
+//
+// Each response defaults to `{ rows: [] }` (or a documented sane default —
+// active org, no idempotency hit, no hard match) so a test only overrides
+// what it actually needs. A response of `{ reject: <Error> }` simulates a
+// failing query.
+// =============================================================================
+
+function buildMockDb(overrides = {}) {
+  const responses = {
+    org:                  { rows: [{ id: ORG_ID, is_active: true }] },
+    idempotency:          { rows: [] },
+    hardMatchLink:        { rows: [] },
+    updateLastSeen:       { rows: [] },
+    blockEmail:           { rows: [] },
+    blockGuardianEmail:   { rows: [] },
+    blockNameDob:         { rows: [] },
+    candidateJoin:        { rows: [] },
+    staging:              { rows: [] },
+    insertFan:            { rows: [] },
+    insertIdentifierLink: { rows: [] },
+    insertConflictQueue:  { rows: [] },
+    resolutionTrace:      { rows: [] },
+    auditLogSuccess:      { rows: [] },
+    auditLogError:        { rows: [] },
+    linkedSystems:        { rows: [] },
+    ...overrides,
+  };
+
+  function respond(key) {
+    const r = responses[key];
+    if (r && Object.prototype.hasOwnProperty.call(r, 'reject')) {
+      return Promise.reject(r.reject);
+    }
+    return Promise.resolve(r);
+  }
+
+  const query = jest.fn((sql) => {
+    const text    = typeof sql === 'string' ? sql : String(sql);
+    const trimmed = text.trim();
+
+    if (trimmed === 'BEGIN' || trimmed === 'COMMIT' || trimmed === 'ROLLBACK') {
+      return Promise.resolve({ rows: [] });
+    }
+    if (/FROM org WHERE id/i.test(text)) {
+      return respond('org');
+    }
+    if (/FROM audit_log/i.test(text) && /idempotency_key/i.test(text)) {
+      return respond('idempotency');
+    }
+    if (/UPDATE identifier_link SET last_seen_at/i.test(text)) {
+      return respond('updateLastSeen');
+    }
+    // PATH A hard-match link check AND the 23505 winner requery share this
+    // exact SQL text — parameterized identifier_type ($1), not a literal.
+    if (/il\.identifier_type = \$1/i.test(text) && /JOIN fan f/i.test(text)) {
+      return respond('hardMatchLink');
+    }
+    // findBlockCandidates probes — distinguished from the candidate JOIN's
+    // own `il_email.identifier_type = 'email'` alias by the bare `SELECT
+    // il.fan_id` projection (the join selects many more columns).
+    if (/SELECT il\.fan_id/i.test(text) && /identifier_type = 'email'/i.test(text)) {
+      return respond('blockEmail');
+    }
+    if (/SELECT il\.fan_id/i.test(text) && /identifier_type = 'guardian_email'/i.test(text)) {
+      return respond('blockGuardianEmail');
+    }
+    if (/il_n\.name_last_word/i.test(text)) {
+      return respond('blockNameDob');
+    }
+    if (/LEFT JOIN identifier_link il_email/i.test(text)) {
+      return respond('candidateJoin');
+    }
+    if (/INSERT INTO staging_household_data/i.test(text)) {
+      return respond('staging');
+    }
+    if (text.includes('INSERT INTO fan (')) {
+      return respond('insertFan');
+    }
+    if (text.includes('INSERT INTO identifier_link')) {
+      return respond('insertIdentifierLink');
+    }
+    if (text.includes('INSERT INTO conflict_queue')) {
+      return respond('insertConflictQueue');
+    }
+    if (text.includes('INSERT INTO resolution_trace')) {
+      return respond('resolutionTrace');
+    }
+    if (text.includes('INSERT INTO audit_log') && text.includes("'error'")) {
+      return respond('auditLogError');
+    }
+    if (text.includes('INSERT INTO audit_log') && text.includes("'success'")) {
+      return respond('auditLogSuccess');
+    }
+    if (text.includes('SELECT DISTINCT source_system')) {
+      return respond('linkedSystems');
+    }
+
+    return Promise.reject(new Error(`unmocked query: ${text.slice(0, 120)}`));
+  });
+
+  return { query };
+}
+
+// Finds the resolution_trace INSERT call and returns its resolution_path
+// param (index 3 — see the VALUES list in resolverEngine.js's STEP 4C).
+function tracePathOf(db) {
+  const call = db.query.mock.calls.find(
+    c => typeof c[0] === 'string' && c[0].includes('INSERT INTO resolution_trace')
+  );
+  return call ? call[1][3] : undefined;
+}
+
+// Any call shaped like one of findBlockCandidates' three probes. Must check
+// for the literal identifier_type — a bare `SELECT il.fan_id` prefix also
+// matches the (differently-shaped) hard-match link check.
+function blockProbeCalls(db) {
+  return db.query.mock.calls.filter(c => {
+    const sql = typeof c[0] === 'string' ? c[0] : '';
+    return (
+      (/SELECT il\.fan_id/i.test(sql) && /identifier_type = 'email'/i.test(sql)) ||
+      (/SELECT il\.fan_id/i.test(sql) && /identifier_type = 'guardian_email'/i.test(sql)) ||
+      /il_n\.name_last_word/i.test(sql)
+    );
+  });
+}
+
 let mockDb;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockDb = { query: jest.fn().mockResolvedValue({ rows: [] }) }; // default for linked systems
+  mockDb = buildMockDb();
   scoreMatch.mockReturnValue({ score: 0.0, signals_matched: [] });
 });
 
-// Sets up client.query responses for a full Path C run (score >= 0.85)
-function setupPathC() {
-  mockDb.query
-    .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })  // 1. org check
-    .mockResolvedValueOnce({ rows: [] })                                   // 2. idempotency
-    .mockResolvedValueOnce({ rows: [] })                                   // 3. BEGIN
-    .mockResolvedValueOnce({ rows: [] })                                   // 4. link check (no hard match)
-    .mockResolvedValueOnce({ rows: [candidateRow] })                       // 5. candidates
-    .mockResolvedValueOnce({ rows: [] })                                   // 6. INSERT fan
-    .mockResolvedValueOnce({ rows: [] })                                   // 7. INSERT identifier_link
-    .mockResolvedValueOnce({ rows: [] })                                   // 8. INSERT conflict_queue
-    .mockResolvedValueOnce({ rows: [] })                                   // 9. INSERT audit_log
-    .mockResolvedValueOnce({ rows: [] });                                  // 10. COMMIT
+// PATH A — hard match. Never enters the block phase at all.
+function setupPathA() {
+  mockDb = buildMockDb({
+    hardMatchLink: { rows: [{ fan_id: CANDIDATE_ID, confidence_score: 1.0 }] },
+  });
+  return mockDb;
 }
 
-// Sets up client.query responses for a full Path D run (0.60 <= score < 0.85)
-function setupPathD() {
-  mockDb.query
-    .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [candidateRow] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] });
-}
-
-// Sets up client.query responses for Path B (no candidates, score stays 0.0)
+// PATH B — no usable candidate. The block probe finds a fan_id (the 'email'
+// key is always available — baseInput's identifier_type is always 'email',
+// so inbound.email is always populated), but the candidate JOIN comes back
+// empty — the same "deleted between the block probe and the join" shape the
+// original R2 test already documented. Chosen over "no key available" so the
+// JOIN actually runs: the SQL-shape assertions below need a real query to
+// inspect.
 function setupPathB() {
-  mockDb.query
-    .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] })
-    .mockResolvedValueOnce({ rows: [] })  // link check
-    .mockResolvedValueOnce({ rows: [] })  // candidates — empty, so no scoreMatch call
-    .mockResolvedValueOnce({ rows: [] })  // INSERT fan
-    .mockResolvedValueOnce({ rows: [] })  // INSERT identifier_link
-    .mockResolvedValueOnce({ rows: [] })  // INSERT audit_log
-    .mockResolvedValueOnce({ rows: [] }); // COMMIT
+  mockDb = buildMockDb({
+    blockEmail:    { rows: [{ fan_id: CANDIDATE_ID }] },
+    candidateJoin: { rows: [] },
+  });
+  return mockDb;
 }
 
-// Path D with guardian_email signal — staging INSERT fires between candidates and fan INSERT
+// PATH C — score >= 0.85. No fixture field needed to make this reachable —
+// baseInput's identifier_type: 'email' already supplies the block key.
+function setupPathC() {
+  mockDb = buildMockDb({
+    blockEmail:    { rows: [{ fan_id: CANDIDATE_ID }] },
+    candidateJoin: { rows: [candidateRow] },
+  });
+  return mockDb;
+}
+
+// PATH D — 0.60 <= score < 0.85. Same retrieval shape as PATH C.
+function setupPathD() {
+  mockDb = buildMockDb({
+    blockEmail:    { rows: [{ fan_id: CANDIDATE_ID }] },
+    candidateJoin: { rows: [candidateRow] },
+  });
+  return mockDb;
+}
+
+// PATH D with guardian_email signal — staging INSERT fires between the
+// candidate JOIN and the fan INSERT.
 function setupPathDWithGuardianEmail() {
-  mockDb.query
-    .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })  // 1. org
-    .mockResolvedValueOnce({ rows: [] })                                   // 2. idempotency
-    .mockResolvedValueOnce({ rows: [] })                                   // 3. BEGIN
-    .mockResolvedValueOnce({ rows: [] })                                   // 4. link check
-    .mockResolvedValueOnce({ rows: [guardianCandidateRow] })               // 5. candidates
-    .mockResolvedValueOnce({ rows: [] })                                   // 6. INSERT staging_household_data
-    .mockResolvedValueOnce({ rows: [] })                                   // 7. INSERT fan
-    .mockResolvedValueOnce({ rows: [] })                                   // 8. INSERT identifier_link
-    .mockResolvedValueOnce({ rows: [] })                                   // 9. INSERT conflict_queue
-    .mockResolvedValueOnce({ rows: [] })                                   // 10. INSERT audit_log
-    .mockResolvedValueOnce({ rows: [] });                                  // 11. COMMIT
+  mockDb = buildMockDb({
+    blockEmail:    { rows: [{ fan_id: CANDIDATE_ID }] },
+    candidateJoin: { rows: [guardianCandidateRow] },
+  });
+  return mockDb;
+}
+
+// Same as above, but the staging INSERT itself fails — used to prove the
+// failure is swallowed (staging is wrapped in its own try/catch) and Path D
+// still completes normally.
+function setupPathDWithGuardianEmailStagingFailure() {
+  mockDb = buildMockDb({
+    blockEmail:    { rows: [{ fan_id: CANDIDATE_ID }] },
+    candidateJoin: { rows: [guardianCandidateRow] },
+    staging:       { reject: new Error('staging db unreachable') },
+  });
+  return mockDb;
 }
 
 describe('resolverEngine — Path C (score >= 0.85)', () => {
@@ -322,15 +464,15 @@ describe('resolverEngine — idempotency', () => {
 
   test('idempotency replay returns conflict_id: null not undefined (GAP-03 fix)', async () => {
     // idempotency check returns a prior Path C resolution from audit_log
-    mockDb.query
-      .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })
-      .mockResolvedValueOnce({ rows: [{
+    mockDb = buildMockDb({
+      idempotency: { rows: [{
         fan_id:           FAN_ID,
         match_type:       'soft',
         confidence_score: '0.9',
         is_new_record:    true,
         id:               AUDIT_ID,
-      }] });  // idempotency hit — early return
+      }] },
+    });
 
     const result = await resolverEngine(baseInput, mockDb);
 
@@ -386,22 +528,31 @@ describe('resolverEngine — candidate query SQL shape', () => {
 
 describe('resolverEngine — inbound object construction', () => {
 
-  function setupOneCandidatePath() {
-    // One candidate returned; scoreMatch scores 0.0 → Path B
-    mockDb.query
-      .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [candidateRow] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
+  // 'email': block key available, candidate retrievable, gate passes on
+  // email_similarity — this is the one variant expected to reach scoreMatch.
+  //
+  // 'guardian_email' / 'nfc_uid': deliberately NO override (all defaults —
+  // empty block probes). These reproduce the suite's 2 pre-existing
+  // failures (confirmed via a git-stash round-trip against pre-blocking
+  // resolverEngine.js: both already failed with "0 calls" before blocking
+  // landed — candidateRow carries no guardian_email, and nfc_uid's inbound
+  // has no signal fields at all, so passesSignalEligibilityGate always
+  // rejected the one candidate the old unnarrowed scan handed it). Left
+  // exactly as failing, per the DO NOT list.
+  function setupOneCandidatePath(kind = 'email') {
+    if (kind === 'email') {
+      mockDb = buildMockDb({
+        blockEmail:    { rows: [{ fan_id: CANDIDATE_ID }] },
+        candidateJoin: { rows: [candidateRow] },
+      });
+    } else {
+      mockDb = buildMockDb();
+    }
+    return mockDb;
   }
 
   test('identifier_type email: inbound.email set, all other signal fields null', async () => {
-    setupOneCandidatePath();
+    setupOneCandidatePath('email');
     scoreMatch.mockReturnValue({ score: 0.0, signals_matched: [] });
 
     await resolverEngine({ ...baseInput, identifier_type: 'email', identifier_value: 'fan@example.com' }, mockDb);
@@ -415,12 +566,13 @@ describe('resolverEngine — inbound object construction', () => {
         zip:            null,
         device_id:      null,
         guardian_email: null,
-      })
+      }),
+      expect.any(Number)
     );
   });
 
   test('identifier_type guardian_email: inbound.guardian_email set, email null', async () => {
-    setupOneCandidatePath();
+    setupOneCandidatePath('guardian_email');
     scoreMatch.mockReturnValue({ score: 0.0, signals_matched: [] });
 
     await resolverEngine({ ...baseInput, identifier_type: 'guardian_email', identifier_value: 'parent@example.com' }, mockDb);
@@ -436,7 +588,7 @@ describe('resolverEngine — inbound object construction', () => {
   });
 
   test('identifier_type nfc_uid: all probabilistic signal fields null', async () => {
-    setupOneCandidatePath();
+    setupOneCandidatePath('nfc_uid');
     scoreMatch.mockReturnValue({ score: 0.0, signals_matched: [] });
 
     await resolverEngine({ ...baseInput, identifier_type: 'nfc_uid', identifier_value: 'AB:CD:EF:01' }, mockDb);
@@ -455,15 +607,47 @@ describe('resolverEngine — inbound object construction', () => {
   });
 
   test('inbound.org_id is always set', async () => {
-    setupOneCandidatePath();
+    setupOneCandidatePath('email');
     scoreMatch.mockReturnValue({ score: 0.0, signals_matched: [] });
 
     await resolverEngine(baseInput, mockDb);
 
     expect(scoreMatch).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ org_id: ORG_ID })
+      expect.objectContaining({ org_id: ORG_ID }),
+      expect.any(Number)
     );
+  });
+
+});
+
+describe('resolverEngine — trace failure is non-fatal', () => {
+
+  test('trace INSERT failure does not throw or alter the resolution result', async () => {
+    const logger   = require('../../src/lib/logger');
+    const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => {});
+
+    // PATH B (no candidates) — block probe empty, nothing to retrieve.
+    // Force only the trace INSERT to fail.
+    mockDb = buildMockDb({
+      resolutionTrace: { reject: new Error('forced trace failure') },
+    });
+
+    const result = await resolverEngine(baseInput, mockDb);
+
+    // Resolution succeeded despite trace failure
+    expect(result.fan_id).toMatch(UUID_RE);
+    expect(result.match_type).toBe('hard');
+    expect(result.is_new_record).toBe(true);
+    expect(result.audit_event_id).toMatch(UUID_RE);
+
+    // logger.error called with the trace-specific message
+    expect(errorSpy).toHaveBeenCalledWith(
+      'resolution_trace write failed',
+      expect.objectContaining({ error: 'forced trace failure' })
+    );
+
+    errorSpy.mockRestore();
   });
 
 });
@@ -530,18 +714,7 @@ describe('resolverEngine — soft link detection', () => {
   });
 
   test('staging INSERT failure is non-fatal — Path D result returned normally', async () => {
-    mockDb.query
-      .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })  // org
-      .mockResolvedValueOnce({ rows: [] })                                   // idempotency
-      .mockResolvedValueOnce({ rows: [] })                                   // BEGIN
-      .mockResolvedValueOnce({ rows: [] })                                   // link check
-      .mockResolvedValueOnce({ rows: [guardianCandidateRow] })               // candidates
-      .mockRejectedValueOnce(new Error('staging db unreachable'))            // staging INSERT throws
-      .mockResolvedValueOnce({ rows: [] })                                   // INSERT fan (Path D continues)
-      .mockResolvedValueOnce({ rows: [] })                                   // INSERT identifier_link
-      .mockResolvedValueOnce({ rows: [] })                                   // INSERT conflict_queue
-      .mockResolvedValueOnce({ rows: [] })                                   // INSERT audit_log
-      .mockResolvedValueOnce({ rows: [] });                                  // COMMIT
+    setupPathDWithGuardianEmailStagingFailure();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
     const result = await resolverEngine(baseInput, mockDb);
@@ -552,18 +725,7 @@ describe('resolverEngine — soft link detection', () => {
   });
 
   test('staging INSERT failure does not cause a 500 — no ResolverError thrown', async () => {
-    mockDb.query
-      .mockResolvedValueOnce({ rows: [{ id: ORG_ID, is_active: true }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [guardianCandidateRow] })
-      .mockRejectedValueOnce(new Error('staging db unreachable'))
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
+    setupPathDWithGuardianEmailStagingFailure();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
     await expect(resolverEngine(baseInput, mockDb)).resolves.not.toThrow();
@@ -584,6 +746,62 @@ describe('resolverEngine — soft link detection', () => {
     );
     expect(stagingIdx).toBeGreaterThan(-1);
     expect(fanInsertIdx).toBeGreaterThan(stagingIdx);
+  });
+
+});
+
+describe('resolverEngine — resolution_path per setup helper (guards the fixtures themselves)', () => {
+
+  test('setupPathA: resolution_path A, hard match, never enters the block phase', async () => {
+    const db = setupPathA();
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('hard');
+    expect(result.is_new_record).toBe(false);
+    expect(tracePathOf(db)).toBe('A');
+    expect(blockProbeCalls(db)).toEqual([]);
+  });
+
+  test('setupPathB: resolution_path B, new hard record, no conflict', async () => {
+    const db = setupPathB();
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('hard');
+    expect(result.is_new_record).toBe(true);
+    expect(tracePathOf(db)).toBe('B');
+  });
+
+  test('setupPathC: resolution_path C, soft match', async () => {
+    const db = setupPathC();
+    scoreMatch.mockReturnValue({ score: 0.90, signals_matched: [] });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('soft');
+    expect(tracePathOf(db)).toBe('C');
+  });
+
+  test('setupPathD: resolution_path D, conflict match', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({ score: 0.75, signals_matched: [] });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(tracePathOf(db)).toBe('D');
+  });
+
+});
+
+describe('mockDb harness — unmocked query guard', () => {
+
+  test('an unmatched query throws with the offending SQL in the message', async () => {
+    const db = buildMockDb();
+
+    await expect(db.query('SELECT * FROM some_unmapped_table WHERE x = $1', [1]))
+      .rejects.toThrow(/unmocked query: SELECT \* FROM some_unmapped_table/);
   });
 
 });

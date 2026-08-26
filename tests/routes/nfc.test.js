@@ -16,7 +16,13 @@ jest.mock('../../src/modules/normalizer', () => ({
     const stripped = value.replace(/[:\-\s]/g, '').toUpperCase();
     return stripped.match(/.{2}/g).join(':');
   },
-  NormalizationError: class NormalizationError extends Error {}
+  NormalizationError: class NormalizationError extends Error {},
+  // Route tests here never send an identifiers object needing rejection —
+  // absent/present passthrough is all these fixtures exercise.
+  normalizeIdentifiersObject: (identifiers) =>
+    (identifiers === null || identifiers === undefined)
+      ? { ok: true, value: null }
+      : { ok: true, value: identifiers }
 }));
 
 jest.mock('../../src/modules/resolverEngine', () => ({
