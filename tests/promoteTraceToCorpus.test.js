@@ -42,8 +42,7 @@ const { buildRun } = require('../eval/runCorpus');
 const { SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
 const { NORMALIZATION_VERSION } = require('../src/modules/normalizer');
 
-const DEMO_ORG_ID         = 'aaaaaaaa-0000-0000-0000-000000000001';
-const SCENARIO_3_TRACE_ID = 'f71a4a01-f65a-434f-9abd-f8773fb6ed73';
+const DEMO_ORG_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 const CANDIDATE_SNAPSHOT_KEYS = [
   'id', 'org_id', 'email', 'email_last_seen_at', 'name', 'name_last_seen_at',
@@ -262,11 +261,36 @@ describe('scripts/promoteTraceToCorpus — real demo trace (decisions 2 & 3 obse
   let client;
   let corpusRow;
   let runResult;
+  let SCENARIO_3_TRACE_ID;
 
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [DEMO_ORG_ID]);
+
+    // resolution_trace ids are generated per seed run (crypto.randomUUID() in
+    // resolverEngine.js) — never hardcode one. Scenario 3's trace is the only
+    // resolution_path='D' trace in the demo org with 2 candidate_ids: fan A is
+    // retrieved via the `email` block key and fan B via `name_dob` (see
+    // scripts/seedDemoOrg.js's seedScenario3). Every other PATH D trace in the
+    // demo org (Scenario 2, Scenario 5) retrieves exactly 1 candidate, so this
+    // predicate is unique without depending on this run's generated ids.
+    const traceLookup = await client.query(
+      `SELECT id FROM resolution_trace
+         WHERE org_id = $1 AND resolution_path = 'D'
+           AND array_length(candidate_ids, 1) = 2`,
+      [DEMO_ORG_ID]
+    );
+    if (traceLookup.rows.length !== 1) {
+      throw new Error(
+        `Expected exactly one Scenario 3 resolution_trace row for demo org ` +
+        `${DEMO_ORG_ID} (org_id + resolution_path='D' + 2 candidate_ids), found ` +
+        `${traceLookup.rows.length}. The demo org needs seeding — run ` +
+        `\`node scripts/seedDemoOrg.js\` (after \`bash scripts/resetLocalDb.sh\` ` +
+        `if the schema is stale) before running this test file.`
+      );
+    }
+    SCENARIO_3_TRACE_ID = traceLookup.rows[0].id;
 
     // Idempotent: this test file may run more than once against the
     // permanent demo org (tests/seedDemoOrg.test.js sets the precedent —
