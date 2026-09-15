@@ -26,6 +26,7 @@ const conflictsRouter      = require('./src/routes/conflicts');
 const householdRouter          = require('./src/routes/household');
 const { householdClaimRouter } = householdRouter;
 const adminHouseholdRouter     = require('./src/routes/admin/household');
+const exportRouter             = require('./src/routes/export');
 const jwtMiddleware        = require('./src/middleware/jwtMiddleware');
 const pool                 = require('./src/db/pool');
 
@@ -93,6 +94,7 @@ protectedRouter.use(sessionRouter);
 protectedRouter.use(profileRouter);
 protectedRouter.use(conflictsRouter);
 protectedRouter.use(adminHouseholdRouter);
+protectedRouter.use(exportRouter);
 
 const householdProtectedRouter = express.Router();
 householdProtectedRouter.use(rateLimiter);

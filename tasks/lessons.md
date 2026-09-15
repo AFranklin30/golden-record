@@ -4,63 +4,6 @@
 
 ---
 
-## 6 — CHECK constraints block new event_type and identifier_type values (2026-06-02)
-
-When CLAUDE.md says "No schema change needed — event_type is TEXT not enum,
-new values work automatically," this is WRONG if a CHECK constraint exists on
-that column. migration_001.sql defines CHECK constraints on both
-audit_log.event_type and audit_log.identifier_type. Postgres CHECK constraints
-block any value not in the allowed list regardless of column type. Sprint 2+
-and Sprint 3 introduce new values for both columns that violate these constraints.
-
-When migration_005 fixed identifier_link.identifier_type, it missed the identical
-constraint on audit_log.identifier_type. The same identifier_type values are
-written to audit_log by resolverEngine on every resolution — same column name,
-same allowed-values pattern, but a different table. Fixing one table is not
-enough when the same constraint pattern exists on multiple tables.
-
-**Rule:** Before writing a new event_type or identifier_type to audit_log,
-always verify the CHECK constraint in migration_001.sql and any subsequent
-migration that may update it. When adding new values in a new sprint, always
-check if a migration update is needed for ALL columns with CHECK constraints
-that reference the new type — and for ALL tables that have that column.
-
-**Corollary:** When fixing a CHECK constraint for a column name (e.g.
-identifier_type), grep for that column name across ALL tables, not just the
-one in front of you. `grep -n "CHECK.*identifier_type" migrations/` catches
-the same constraint appearing in multiple tables.
-
-**Scope:** applies any time a new sprint adds new values to a CHECK-constrained
-column. Always grep for `CHECK (column_name IN` before claiming no schema change
-is needed.
-
----
-
-## 7 — Logger must use arrow functions for jest.spyOn to work (2026-06-02)
-
-If the logger is defined as `{ info: console.log }` (direct reference), then
-`jest.spyOn(console, 'log')` cannot intercept calls to `logger.info`. The spy
-replaces the `console.log` property on the console object, but `logger.info`
-holds the original function reference captured at module load time.
-
-**Fix:** define the logger with arrow functions so every call goes through the
-current console property at call time:
-```javascript
-const logger = {
-  error: (...args) => console.error(...args),
-  warn:  (...args) => console.warn(...args),
-  info:  (...args) => console.log(...args),
-};
-```
-Now `jest.spyOn(console, 'log').mockImplementation(() => {})` intercepts all
-`logger.info(...)` calls and `logSpy.mockRestore()` properly restores them.
-
-**Scope:** applies to any logger module defined with direct console references
-that tests need to spy on. This pattern is needed for MEDIUM-1 style "verify
-the log does not contain a secret" tests.
-
----
-
 ## 8 — cors string-origin config sets header statically — use function for server-level enforcement (2026-06-02)
 
 When cors is configured as `origin: 'https://allowed.com'` (a string), the
@@ -529,3 +472,92 @@ traffic can't bypass.
 `identifier_link` values for the same identifier_type/org. Same instinct as
 Lesson 9 (verify the index before shipping) — applies to seeding data, not
 just to `ON CONFLICT` clauses.
+
+---
+
+## 26 — `tests/routes/` legitimately holds two different test patterns, not drift (2026-09-05)
+
+Every existing `tests/routes/*.test.js` (conflicts, household, resolve, nfc,
+profile) mocks `req.db`/`req.context` directly and mounts only the router
+under test — real `orgAuthMiddleware`/`rlsContextMiddleware` never run. That
+pattern cannot prove a real 401/403 from `orgAuthMiddleware` (missing key,
+invalid key, inactive org) or exercise real cross-request SQL behavior (an
+actual merge via the real confirm endpoint, real RLS-scoped cross-org rows) —
+by construction, since the middleware that produces those outcomes is never
+in the request path.
+
+`tests/routes/export.test.js` needed exactly those things, so it uses the
+other pattern already established elsewhere in the repo (`tests/migration_015
+.test.js`, the `tests/concurrency.*.smoke.js` files): a real local Postgres
+connection, a real Express app built from the actual middleware files in
+their documented order, seeded orgs with real sha256 API-key hashes, FK-ordered
+cleanup in a `finally` block.
+
+**Rule:** the choice between the two patterns is not stylistic — it follows
+directly from CLAUDE.md's own locked convention ("Middleware-level guards
+must be tested through the real Express app via supertest — NOT by calling
+handlers directly. Handler-level logic can call the handler/module directly").
+A route whose test list needs to prove an auth/RLS guard fires must use the
+real-app-plus-real-DB pattern; a route whose test list is pure handler logic
+against already-authenticated context can use the lighter mocked pattern.
+Don't "fix" one pattern to match the other just because they live in the same
+directory — check which guards the specific test list needs to exercise
+before picking.
+
+**Scope:** any new file under `tests/routes/`. Read the prompt's numbered
+test list first: if any item names a 401/403/RLS outcome that only a real
+middleware chain can produce, default to the real-app pattern for the whole
+file rather than mixing mocked-context tests with a real-app auth test in the
+same suite.
+
+---
+
+## 27 — Mocking a pooled pg client's `.query` for one request can hang a LATER `pool.query()` forever (2026-09-05)
+
+Forcing a real-DB test to exercise a query-failure path (export.test.js #10)
+by patching one client's `.query` method — `jest.spyOn(client, 'query')`,
+rejecting on a matched SQL substring, delegating everything else to the
+original bound method — worked correctly for the request under test, then
+made an UNRELATED verification query later in the SAME test hang forever,
+past every timeout (jest's test timeout, Postgres's own `statement_timeout`),
+with zero error surfaced.
+
+Root cause: on release, that client goes back into the pool's idle list.
+`pool.query()` (used by `orgAuthMiddleware`, and by this test's own follow-up
+reads) calls `this.connect()` internally in CALLBACK style —
+`client.query(text, values, callback)`, three arguments — whenever it happens
+to be handed that same idle client back. The patched `.query` mock was
+written for the PROMISE calling convention used by `rlsContextMiddleware`
+(`req.db.query(text, params)`, two arguments, no callback) and silently
+dropped the third argument. `originalQuery(text, params)` inside the mock
+then ran the real driver in promise mode, returning a promise nobody awaited
+— the callback `pool.query()`'s internals are waiting on to know the query
+finished never fires. No exception, no rejected promise, no timeout: a
+genuine permanent hang, because the stalled code is pure JS control flow, not
+I/O `statement_timeout` could ever see.
+
+**Fix:** don't make the mock handle both calling conventions — narrower and
+more reliable to restore the patch (`mockRestore()` on both the `pool.connect`
+spy and the per-client `query` spy) immediately after the one response you
+needed it for, before touching `pool.query()` or the pool again in the same
+test.
+
+**Rule:** any test that patches `client.query` on a client obtained from
+`pool.connect()` must restore it before that client can be handed back out by
+a LATER `pool.query()` call in the same test (or test file) — that release
+happens automatically and invisibly via `rlsContextMiddleware`'s
+`res.on('finish', ...)`. Prefer scoping the patch's lifetime to "until I have
+the one response I forced" over trying to write a mock that correctly
+emulates every calling convention pg's own internals use.
+
+**Corollary:** when branching a `pool.connect` mock on "is this the call I
+want to intercept," `args.length` reliably distinguishes pg's own
+internal callback-style connect (used by `pool.query()`) from the
+application's promise-style `await pool.connect()` (used by
+`rlsContextMiddleware`) — confirmed by reading `pg`'s own
+`Pool.prototype.connect`/`Pool.prototype.query` source
+(`node_modules/pg/lib/pool.js`), not assumed.
+
+**Scope:** any future test that mocks `pool.connect` or a pooled client's
+`.query` to force a specific query to fail against a real local Postgres
+connection.

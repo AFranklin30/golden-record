@@ -1,209 +1,202 @@
-# scoring_clock fix — one resolution, one moment
-# Session: 2026-08-17
+# Plan — CSV fan export endpoint (GET /v1/export/fans)
 
-Read (not inferred), full files:
-- src/modules/resolverEngine.js — confirmed exactly ONE scoreMatch call site
-  (line 377). Confirmed trace object init (RECEIVE section, before try),
-  the trace INSERT (STEP 4C, after COMMIT, own try/catch, swallowed on
-  failure), and its VALUES placeholder mapping to the params array.
-- src/modules/probabilisticMatcher.js — confirmed scoreMatch signature
-  `scoreMatch(candidateRecord, inboundIdentifiers, now = Date.now())`
-  (line 179) and the non-finite guard (lines 201-203): throws
-  NormalizationError unless `now` is `typeof 'number'` and `Number.isFinite`.
-  NOT modifying this file.
-- migrations/migration_014.sql — confirmed `scoring_clock timestamptz NOT
-  NULL` (line 80) and the column comment (lines 51-52): "scoring_clock is
-  the injected `now`... NOT the row insert time. created_at is the insert
-  time. When they differ, the difference matters." No migration needed —
-  column already exists with the right type.
-- tests/modules/resolverEngine.trace.test.js — found assertion 15 (lines
-  136-138, inside test 1 "keys recorded on successful retrieval"): currently
-  asserts only `trace.scoring_clock` is not null, with an explicit comment
-  that it's "pinned here as a before-state" for the NOW()-binding behavior.
-  Must update to assert the new behavior per the documented test-fixing
-  exception (.claude/CLAUDE.md §6) — show old vs new at check-in.
-- tests/modules/resolverEngine.test.js — confirmed its db.query mock
-  branches on SQL text via `text.includes('INSERT INTO resolution_trace')`
-  etc. (lines 151-169), not positional placeholder count — renumbering the
-  trace INSERT's placeholders will not desync this mock.
+Read before planning: resolverEngine.js (14-key candidate projection + blocking
+join), profile.js (RECEIVE/GUARD/EXECUTE/RETURN + error sanitization), conflicts.js
+(merge_history columns: fan_id_source, fan_id_target, org_id, conflict_id,
+merged_by, status, merged_at, reversed_at, reversed_by), index.js (mount order),
+migration_014.sql + migration_016.sql (house style: safety guard, semantic CHECK,
+RLS, indexes, verification queries), migration_001.sql / migration_005.sql
+(org/fan/identifier_link schema, identifier_type CHECK list — confirms `device_id`
+is NOT and never has been an allowed identifier_type, so that export column will
+always be empty by construction, matching CLAUDE.md), migration_013.sql
+(uq_identifier_per_org exact WHERE clause), tests/routes/conflicts.test.js +
+tests/routes/household.test.js (existing route tests — mocked req.db/req.context,
+bypass real middleware), tests/concurrency.identifierUniqueness.smoke.js +
+tests/migration_015.test.js (existing tests that DO hit real local Postgres).
 
-## Placeholder renumbering (STEP 4C trace INSERT)
+## Key finding that shapes the test file
 
-Current: columns id..created_at (27 total), scoring_clock bound inline as
-NOW() (not a placeholder), created_at also NOW(). Params array currently
-has 25 entries mapped to $1-$18 then $19-$25 (skipping the NOW() for
-scoring_clock in between).
+Every existing `tests/routes/*.test.js` mocks `req.db`/`req.context` directly and
+never runs the real `orgAuthMiddleware`/`rlsContextMiddleware` chain. That pattern
+cannot satisfy this prompt's test list — #12 requires a real 401/403 from
+`orgAuthMiddleware` (missing key, invalid key, inactive org), and #5/#8 require
+real SQL behavior (an actual merge via the real confirm endpoint, real cross-org
+RLS-scoped rows). So `tests/routes/export.test.js` will NOT follow
+conflicts.test.js's mocked pattern — it follows `tests/migration_015.test.js`'s
+pattern instead: real `pg` connection, real Express app assembled from the actual
+middleware files, seeded org rows with real `sha256` API key hashes, real cleanup
+in a `finally` block. This is a new style for `tests/routes/`, not a deviation
+from an existing one — no existing route test could pass #12 as written.
 
-New: scoring_clock becomes a placeholder ($19), created_at stays NOW().
-Everything from $19 onward in the current query shifts up by one
-($19→$20, $20→$21, ... $25→$26). Full new params array (26 entries):
+## Files
 
-  1 id, 2 org_id, 3 audit_event_id, 4 resolution_path, 5 scoring_status,
-  6 skip_reason, 7 inbound_identifiers(JSON), 8 candidate_ids,
-  9 candidates_considered, 10 candidates_gated, 11 candidates_scored,
-  12 signal_results(JSON), 13 best_candidate_id, 14 best_score,
-  15 threshold_path_c, 16 threshold_path_d, 17 scorer_version,
-  18 normalization_version, 19 scoring_clock (NEW — was NOW()),
-  20 resulting_fan_id, 21 is_new_record, 22 conflict_id,
-  23 block_keys_available, 24 block_results(JSON), 25 blocks_dropped,
-  26 block_size_cap
-  — then NOW() for created_at (unchanged, last column).
+- New: `src/routes/export.js`
+- New: `migrations/migration_017.sql`
+- New: `tests/routes/export.test.js`
+- Edit: `index.js` — one line, mounting `exportRouter` on `protectedRouter`
+  (same chain as resolve/nfc/session/profile/conflicts/adminHousehold: rate
+  limiter → orgAuthMiddleware → rlsContextMiddleware → correlationIdMiddleware →
+  handler; NO jwtMiddleware — org-authenticated, not fan-authenticated).
+- Edit: `package.json` — add `csv-stringify` (prod dep, RFC 4180 serialization)
+  and `csv-parse` (dev dep, so test #6's escaping assertion uses a real parser,
+  not a string check).
 
-## THE FIX (src/modules/resolverEngine.js only)
+## migration_017.sql — export_run table
 
-1. Capture the clock once, in RECEIVE, before the trace object literal
-   (around line 202, right before `const trace = {`):
+Follows migration_014/016 house style exactly:
+- Safety guard `DO $$ ... information_schema.tables ... RAISE EXCEPTION$$` if
+  `export_run` already exists.
+- Columns exactly as specified in the prompt (id, org_id, export_type, status,
+  row_count, started_at, completed_at, error_detail, requested_by).
+- ONE semantic CHECK constraint (the three-way OR given in the prompt) — no
+  enumerated `export_type`/`status` values. This is the audit_log.event_type
+  lesson from migration_016's block_results comment.
+- `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` + `tenant_isolation`
+  policy on `org_id = current_setting('app.current_org_id')::uuid` — applied in
+  this migration, not deferred (per the Firestore-gap lesson in CLAUDE.md).
+- Index on `(org_id, started_at DESC)`.
+- No append-only trigger (running → success/failed is a legitimate UPDATE).
+- Verification queries at the end (table exists, column count, index exists,
+  constraint exists, RLS forced) mirroring migration_016's format.
 
-   ```js
-   // One resolution, one moment. Every scoreMatch call in the candidate loop
-   // and the scoring_clock stamped on the trace all read this same value, so
-   // a resolution is internally consistent and the trace records the instant
-   // scoring actually happened — not the instant the trace row was inserted
-   // after COMMIT. created_at is the insert time; these are deliberately
-   // different columns (see migration_014).
-   const scoring_clock = Date.now();
-   ```
+## src/routes/export.js — GET /v1/export/fans
 
-2. Line 377 — pass it to the only scoreMatch call:
-   `scoreMatch(candidate, inbound, scoring_clock)`.
+RECEIVE: `org_id`, `org_name` from `req.context`.
 
-3. STEP 4C INSERT — replace the inline `NOW()` for scoring_clock with a new
-   placeholder, insert `new Date(scoring_clock).toISOString()` into the
-   params array at the corresponding position, renumber everything after it
-   per the mapping above. `created_at`'s NOW() is untouched.
+GUARD (in-memory only): `Object.keys(req.query).length > 0` → 400. This rejects
+`?since=...` (and everything else) without silently ignoring it.
 
-4. PATH A — no change needed beyond #1: `scoring_clock` is captured
-   unconditionally in RECEIVE, before the PATH A/B branch, so PATH A's
-   trace write (scoring_status 'skipped' / skip_reason
-   'deterministic_match') already stamps it. Will confirm this after edit
-   by re-reading the diff, not assume.
+EXECUTE (no transaction — export_run tracks the run's own lifecycle, it isn't
+part of a multi-table write that needs atomicity, same pattern as
+resolution_trace being written outside resolverEngine's transaction):
+1. `INSERT INTO export_run (id, org_id, export_type, status, started_at,
+   requested_by) VALUES ($1, $2, 'fan_snapshot', 'running', NOW(), $3)` — id
+   generated with `crypto.randomUUID()` in JS (not relying on the column
+   default) so the handler has it to UPDATE later.
+2. Two SELECTs against `req.db` (RLS-scoped):
+   a. Main projection — the same 6-way LEFT JOIN shape as resolverEngine's
+      candidate query (identifier_link aliased per type: email, name, dob, zip,
+      device_id, guardian_email), but: scoped to `f.org_id = $1` with no
+      `fan_id` filter and no `LIMIT`; `WHERE f.deleted_at IS NULL`; selecting
+      `f.id, f.created_at, f.updated_at` instead of `f.org_id`.
+   b. `merged_from` aggregation as its OWN query — NOT a 7th LEFT JOIN on the
+      main query. Corrected reasoning (Aaron): a 7th LEFT JOIN on
+      `merge_history` multiplies the fan row itself once per matching
+      `merge_history` row. Today that's capped at 1 by the multi-hop block,
+      so it happens not to bite yet — but treating "capped at 1 today" as
+      the safety margin is backwards: a join-based approach is a live
+      correctness bug the day multi-hop history ships (Joseph's file gets
+      one row per merge instead of one row per fan — silent duplication in
+      exactly the report CLAUDE.md says must never look like data loss or,
+      symmetrically, phantom rows). A separate aggregation query has no such
+      failure mode regardless of how many merges land on one target. Query:
+      `SELECT fan_id_target, string_agg(fan_id_source::text, ';') AS merged_from
+       FROM merge_history WHERE org_id = $1 AND status = 'active'
+       GROUP BY fan_id_target`. Merged into the main rows in JS via a
+      `Map(fan_id_target -> merged_from string)`. Same "separate query after the
+      main one" shape as resolverEngine's own STEP 5 (linked_systems).
+3. Serialize with `csv-stringify`'s sync API: header row
+   (`fan_id, created_at, updated_at, email, name, dob, zip, device_id,
+   guardian_email, email_last_seen_at, name_last_seen_at, dob_last_seen_at,
+   zip_last_seen_at, device_last_seen_at, guardian_email_last_seen_at,
+   merged_from`) always written, even for 0 data rows. Null/missing fields →
+   `''` (empty string), not `'null'`/`'undefined'` — map explicitly before
+   handing rows to `stringify`, don't rely on its default null handling.
+4. `UPDATE export_run SET status = 'success', row_count = $1, completed_at =
+   NOW() WHERE id = $2`.
 
-## THE TEST — tests/modules/resolverEngine.clock.test.js (new)
+On any thrown error inside the try: `UPDATE export_run SET status = 'failed',
+error_detail = $1, completed_at = NOW() WHERE id = $2` (best-effort — wrapped in
+its own `.catch()` so a failed update never masks the original error), log full
+detail + org_id + correlation_id, return 500 with a generic body
+(`{ error: 'export could not be completed', correlation_id }`) — matches
+profile.js's sanitization pattern exactly.
 
-Local Postgres only, confirm DATABASE_URL points at localhost:5432 before
-any write. Fresh test org + UUIDs, cleanup in FK order in `finally`.
-Template off resolverEngine.trace.test.js's seedOrg/seedFan/seedIdentifier/
-cleanupOrg helpers (same file conventions, same append-only-row handling
-for audit_log/resolution_trace).
+RETURN (success path): `res.set('Content-Type', 'text/csv')`,
+`res.set('Content-Disposition', 'attachment; filename="golden-record-fans-<ISO
+date>.csv"')` (date = `new Date().toISOString().slice(0, 10)`), `res.status(200).send(csv)`.
 
-1. scoring_clock stamped and plausible — bracket a resolve with
-   before/after timestamps, assert scoring_clock falls between them
-   inclusive.
-2. scoring_clock <= created_at on the same row (assert strictly < if the
-   gap is reliably non-zero; else <= and report the observed gap).
-3. Same clock across all candidates in one resolution — seed 3 fans
-   sharing the inbound's email, spy/wrap scoreMatch, assert its 3rd arg is
-   IDENTICAL (not just close) across all 3 calls.
-4. Clock passed to scoreMatch equals the persisted scoring_clock, from the
-   same resolution as #3.
-5. PATH A stamps it — resolve an inbound whose identifier already exists,
-   assert resolution_path 'A', skip_reason 'deterministic_match',
-   scoring_clock non-null and in-window.
-6. PATH B / no block key stamps it — assert skip_reason 'no_block_key',
-   scoring_clock non-null even though scoreMatch never ran.
-7. REGRESSION — PATH C score unchanged from pre-change behavior (fixture
-   landing >= 0.85 threshold), match_type 'soft', pending conflict_queue
-   row, best_score matches expected value.
-8. REGRESSION — PATH D unchanged, fixture tuned into [0.60, 0.85).
-9. REGRESSION — block metadata (block_keys_available, block_results,
-   blocks_dropped, block_size_cap) still correct post-renumbering.
-10. Trace write failure still doesn't break resolution (force INSERT
-    failure, assert resolution still returns valid fan_id + audit_event_id,
-    audit_log row committed) — Stage 7 decision B.
-11. Update resolverEngine.trace.test.js assertion 15 (lines 136-138) to
-    assert the new binding instead of "still NOW()". Old vs new shown at
-    check-in, per .claude/CLAUDE.md §6. Not deleted, not skipped.
-12. Full suite run, report delta vs baseline (11 failed / 546 passed /
-    1 skipped / 558 total; known pre-existing failures: resolverEngine.test.js
-    (2), household.test.js (9)).
+## index.js
 
-## DO NOT
+One line: `protectedRouter.use(exportRouter);` added after the existing
+`protectedRouter.use(adminHouseholdRouter);` line, plus the corresponding
+`require('./src/routes/export')` alongside the other route requires. No
+reordering of anything else.
 
-- Modify probabilisticMatcher.js (signature, default param, non-finite
-  guard all stay as-is).
-- Thread a clock in from resolve.js or nfc.js — rejected option B.
-- Change created_at (stays NOW()).
-- Capture the clock inside the candidate loop, the else branch, or
-  anywhere PATH A doesn't reach.
-- Touch getRecencyMultiplier, monthsBetween, or recency behavior.
-- Touch retrieval, findBlockCandidates, BLOCK_SIZE_CAP, skip reasons, or
-  block metadata logic (only re-proving via regression test #9, not
-  changing).
-- Move the trace INSERT out of its try/catch, before COMMIT, or make its
-  failure throw.
-- Write a migration.
-- Delete or skip trace.test.js assertion 15 — update it, show old vs new.
-- Touch nfc.js, resolve.js, CLAUDE.md, or .claude/CLAUDE.md.
+## Deferred — noted as comments in export.js, not built
 
-Write plan to tasks/todo.md before touching any file — done. Checking in
-before implementation.
+Scheduling (Cloud Scheduler), GCS delivery, reasoning columns, incremental
+export/`since`, an export_run operator UI, streaming/pagination (with the
+53-fans-prod / 27k-Thunder-sample / 300s-Cloud-Run-timeout scale note from the
+prompt).
 
-## Review
+## tests/routes/export.test.js
 
-**src/modules/resolverEngine.js (3 edits, as planned):**
-1. `const scoring_clock = Date.now();` added in RECEIVE, before the `trace`
-   object literal — captured unconditionally, so PATH A reaches it too.
-2. The sole `scoreMatch` call site (was line 377) now passes `scoring_clock`
-   as the third arg.
-3. STEP 4C trace INSERT: `scoring_clock`'s inline `NOW()` replaced with
-   placeholder `$19` bound to `new Date(scoring_clock).toISOString()`;
-   everything from the old `$19` onward renumbered to `$20`-`$26`.
-   `created_at` stays `NOW()`, unchanged, still the final column.
+Real local Postgres only (`DATABASE_URL=postgresql://postgres:postgres@localhost
+:5432/golden_record` — asserted at the top the way the existing smoke tests
+guard this). Fresh org(s) with random UUIDs + real `sha256` API key hashes per
+run, cleaned up in a `finally` block in FK order (merge_history →
+conflict_queue → identifier_link → fan → export_run → org; leave audit_log —
+none written by this endpoint anyway). Test app assembled from the real
+middleware files in the documented order (rate limiter → orgAuthMiddleware →
+rlsContextMiddleware → correlationIdMiddleware → exportRouter, PLUS
+conflictsRouter mounted alongside it so test #5 can call the real
+`/v1/conflicts/:id/confirm` endpoint) — not `require('../../index')` directly,
+to avoid that file's `app.listen()`/`SIGTERM` side effects in Jest, but built
+from the identical middleware list index.js uses, in the identical order.
 
-No changes to probabilisticMatcher.js, no migration, no route changes —
-confirmed via `git status` before finishing.
+Test #10 (export_run failure → 500 generic + logged detail) — revised per
+Aaron's correction. Rejected approach: spying on `pool.connect` to swap in a
+fake connection. That couples the test to plumbing (which object the handler
+happened to obtain a client from) rather than to behavior (this query failed),
+the same brittleness class as the positional-mock failures from prompt 4.
+Also rejected: mutating schema inside a transaction and rolling back after —
+doesn't actually work here, because Postgres DDL inside an uncommitted
+transaction is invisible to every other session, and the export request runs
+on its own connection from the pool. A rollback-after approach would need to
+COMMIT the schema change to have any effect on the request under test, which
+is a real (if temporary) mutation of shared local schema — worse, not better.
 
-**tests/modules/resolverEngine.clock.test.js (new, 10 tests, all passing):**
-Assertions 1-2 (plausibility, scoring_clock <= created_at), 3-4 (identical
-clock across candidates / matches persisted value — via a jest.mock that
-wraps probabilisticMatcher's REAL scoreMatch in a jest.fn so scores stay
-real while calls become inspectable), 5-6 (PATH A and no-block-key PATH B
-both stamp it without scoreMatch ever running), 7-8 (PATH C/D scores
-unchanged — 1.0 and 0.7, same fixtures as resolverEngine.blocking.test.js's
-tests 12/13), 9 (block metadata columns re-proven post-renumbering), 10
-(forced trace-INSERT failure still returns a valid resolution with a
-committed audit_log row — Stage 7 decision B). Collapsed the spec's
-assertions 11-12 into this file's own scope (11 → the trace.test.js edit
-below; 12 → the full-suite run below).
+Approach used instead: get the real client the same way `rlsContextMiddleware`
+does, then patch only that one client's `.query` method for the single test —
+`jest.spyOn(client, 'query')`, `mockImplementation` rejecting when called with
+the main fan-projection SELECT (matched on a distinctive substring, e.g. `FROM
+fan f`) and delegating every other call (the `export_run` INSERT, the failure
+UPDATE, `release()`) to the original bound method. This fails the query the
+handler actually issues, not the connection underneath it — everything else
+about the request is real. Restored via the original method reference in a
+`finally`/`afterEach`, no global pool state left patched.
 
-**tests/modules/resolverEngine.trace.test.js — assertion 15 updated (test-
-fixing exception, .claude/CLAUDE.md §6):**
-- OLD: asserted only `scoring_clock` is non-null, with a comment explicitly
-  pinning it as a "before-state" for the NOW()-binding behavior about to be
-  fixed.
-- NEW: additionally asserts `scoring_clock <= created_at` (`<=` rather than
-  `<` because a sufficiently fast resolution could in principle land both
-  in the same millisecond). Previously the two columns were bound by two
-  separate `NOW()` calls in the same INSERT statement and were therefore
-  IDENTICAL (Postgres `NOW()` is stable per statement) — the old assertion
-  couldn't have told the two binding strategies apart even if it tried.
-  13 passed / 1 skipped, matching this file's documented baseline exactly.
+**Added assertion (Aaron's catch):** confirm the run does not end up stuck at
+`'running'`. After the forced failure, query `export_run` for that run's id
+directly and assert exactly one row, `status = 'failed'`, `error_detail` not
+null, `completed_at` not null — not two rows, and not a lingering `'running'`
+row. This is the case where the failure UPDATE is itself on the failing path
+(e.g. a bug that reuses the same broken query object) and every export error
+would silently orphan its own tracking row.
 
-**tests/modules/resolverEngine.test.js — 2 lines changed, mechanical:**
-Two tests in "inbound object construction" (`identifier_type email...` and
-`inbound.org_id is always set`) call `expect(scoreMatch).toHaveBeenCalledWith(...)`
-with exactly 2 expected args; Jest's `toHaveBeenCalledWith` requires exact
-arity, so adding the third `scoring_clock` argument to every real call broke
-both. Added `expect.any(Number)` as a third matcher to each — this is the
-calling-convention change the fix exists to make, not new coverage. The
-suite's 2 pre-existing failures (`guardian_email`/`nfc_uid` variants, "0
-calls" — documented in-file at lines 534-541 as pre-dating the blocking
-build, confirmed via a `git stash` round-trip against unmodified
-resolverEngine.js before touching anything) are untouched and still fail
-identically.
+Tests 1–13 implement the prompt's numbered list directly against this real app
++ real DB (seed via direct `INSERT`s into `fan`/`identifier_link`, merge via the
+real confirm endpoint for #5, parse the response body with `csv-parse` for #6).
 
-**Full suite:** 11 failed / 556 passed / 1 skipped / 568 total. Baseline was
-11 failed / 546 passed / 1 skipped / 558 total — failed count identical,
-passed/total both up by exactly 10 (the new clock test file). Confirmed via
-a separate isolated run that the 2 failing suites are still exactly
-resolverEngine.test.js (2 failures) and household.test.js (9 failures), same
-counts as baseline.
+Tests 14–15 (regression): run full `npm test`, diff suite-by-suite against the
+stated baseline (11 failed / 556 passed / 1 skipped / 568 total, known failing
+suites resolverEngine.test.js @2 and household.test.js @9); `git status`/`git
+diff --stat` to confirm only the new files + the one index.js line changed.
 
-**DO NOT list:** all held. probabilisticMatcher.js untouched; no clock
-threaded from resolve.js/nfc.js; created_at untouched; scoring_clock
-captured only once, before both the try block and the PATH A/B branch; no
-recency-function changes; no migration; no changes to retrieval/blocking
-logic (block metadata re-proven, not altered); trace INSERT still after
-COMMIT, own try/catch, failure still swallowed; trace.test.js assertion 15
-updated in place, not deleted or skipped; nfc.js, resolve.js, CLAUDE.md,
-.claude/CLAUDE.md all untouched.
+## Do not (carried from the prompt, not re-deciding any of these)
+
+No scheduling/GCS/reasoning-columns/incremental/`since`/operator-UI/streaming.
+No pool usage (req.db only). No touching resolverEngine.js, the 14-key
+projection, or scoring code. No enumerated CHECK values. No jwtMiddleware on
+this route. No internal error detail in the response body. No CLAUDE.md edits.
+
+## Open implementation choices being made without re-asking Aaron (not product
+## decisions — flagging so they're visible, not silently buried)
+
+- `export_type` literal value used in code: `'fan_snapshot'` (free text, no
+  enumeration — a future export type is just a different string, no migration).
+- CSV library: `csv-stringify` (prod) / `csv-parse` (dev, test-only) — smallest,
+  most standard RFC 4180 pair; no existing CSV dependency in the repo to reuse.
+- `merged_from` computed as a second query + in-JS map, not a 7th LEFT JOIN —
+  reasoning above.
