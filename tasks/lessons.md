@@ -4,94 +4,6 @@
 
 ---
 
-## 8 — cors string-origin config sets header statically — use function for server-level enforcement (2026-06-02)
-
-When cors is configured as `origin: 'https://allowed.com'` (a string), the
-`Access-Control-Allow-Origin` header is set to that string on EVERY response
-regardless of the request's `Origin` header. A request from `https://evil.com`
-still gets the header back — the browser enforces the restriction, not the server.
-
-To block at the server level (so the header is absent for non-matching origins),
-use a function-based origin handler:
-```javascript
-origin: (requestOrigin, callback) => {
-  const allowed = process.env.CORS_ORIGIN;
-  if (!requestOrigin) return callback(null, true);   // server-to-server calls
-  if (!allowed)       return callback(null, false);  // no config → fail secure
-  callback(null, requestOrigin === allowed);          // exact match only
-}
-```
-With `callback(null, false)`, cors does NOT set the ACAO header. Tests that
-assert `toBeUndefined()` on the header require this approach.
-
-**Scope:** any future CORS configuration where tests need to verify "unlisted
-origin gets no access-control-allow-origin header."
-
----
-
-## 9 — ON CONFLICT requires an exact matching unique index — verify before shipping (2026-06-02)
-
-`ON CONFLICT (col_a, col_b, col_c) DO UPDATE SET ...` requires a unique index
-or exclusion constraint on exactly those columns (or a partial index with a
-matching WHERE clause). Without it, Postgres rejects the statement at runtime:
-  ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification
-
-Tests that mock req.db.query never hit this error. The bug only surfaces against
-a real database. Component 31 (PUT household member) shipped with this defect —
-no unique index on (fan_id, identifier_type, org_id).
-
-**Rule:** Before writing any ON CONFLICT clause, verify the exact unique index
-exists by querying pg_indexes. A non-unique index on the same columns is not
-enough. A partial index requires a matching WHERE clause in ON CONFLICT.
-
-**Scope:** any upsert with ON CONFLICT. Always run the verification query:
-  SELECT indexname, indexdef FROM pg_indexes WHERE tablename = '<table>';
-
----
-
-## 10 — RLS must be explicitly extended to every new table added in subsequent migrations (2026-06-02)
-
-migration_003 enabled RLS on Sprint 1 tables. Sprint 2 and Sprint 3 added 6
-new tenant tables (conflict_queue, household, household_member, merge_history,
-related_fans, staging_household_data) but none had RLS enabled. Cross-tenant
-isolation on those tables relies entirely on application WHERE org_id = $N clauses.
-
-**Rule:** Every migration that creates a new table holding org-scoped data must
-include ENABLE ROW LEVEL SECURITY and a CREATE POLICY for that table in the same
-migration — not deferred to a later migration. RLS is not inherited.
-
-**Corollary:** When writing a new sprint migration, grep for all new CREATE TABLE
-statements and confirm each one has a corresponding ENABLE ROW LEVEL SECURITY
-and USING (org_id = ...) policy in the same file.
-
-**Scope:** all future migrations adding tables that join to org or fan.
-
----
-
-## 11 — Firestore databaseId omission causes silent writes to wrong database (2026-06-09)
-
-`new Firestore({ projectId })` connects to Firestore's `(default)` database.
-Firestore now supports multiple named databases per project. If the target collection
-lives in a named database (e.g. `golden-record`), omitting `databaseId` causes every
-`set()` and `get()` to silently hit `(default)` instead — no exception, no log entry.
-
-Symptoms: documents never appear in the expected collection; Cloud Run logs show no
-Firestore errors; Cloud SQL records are created correctly.
-
-**Fix:**
-```javascript
-const firestore = new Firestore({
-  projectId:  process.env.FIRESTORE_PROJECT_ID,
-  databaseId: 'golden-record',   // must match the named database in the console
-});
-```
-
-**Rule:** Every Firestore client initialization in this codebase must include
-`databaseId: 'golden-record'`. Both resolverEngine.js and profile.js were affected.
-If a new file initializes a Firestore client, add `databaseId` immediately.
-
----
-
 ## 12 — CHECK constraints on match_type drift when new paths are added (2026-06-09)
 
 audit_log.match_type was defined in migration_001 with three values:
@@ -561,3 +473,164 @@ application's promise-style `await pool.connect()` (used by
 **Scope:** any future test that mocks `pool.connect` or a pooled client's
 `.query` to force a specific query to fail against a real local Postgres
 connection.
+
+---
+
+## 28 — resetLocalDb.sh's final table count is printed, not asserted — an incomplete schema still reports success (2026-08-26)
+
+The script's final verification step queries and prints the public-schema
+table count and list, but never compares the count against the expected
+number of tables. Because `resetLocalDb.sh` deliberately runs without
+`ON_ERROR_STOP` (several migrations contain self-verification statements that
+error by design — see the migration_001 dead-CONSTRAINT fix this session), a
+real ordering or syntax error partway through the replay looks visually
+identical to one of those expected errors. This session, a real error (a bare
+`CONSTRAINT` clause outside its `CREATE TABLE` body in migration_001.sql,
+never valid SQL) had been silently failing every replay since April, and a
+reset produced an 11-table schema instead of 12 while still printing "Reset
+complete."
+
+**Rule:** a script that runs without `ON_ERROR_STOP` because some failures are
+expected must still assert its own success condition explicitly at the end —
+printing a count is not the same as checking it.
+
+**Suggested fix (not implemented — out of scope for the migration_001 fix):**
+assert the expected table count and expected index count in
+`resetLocalDb.sh`'s final verification step; fail loudly (non-zero exit,
+clear message) on mismatch instead of just printing the list.
+
+**Scope:** any verification step, in any script, that is meant to catch drift
+but only displays a count instead of comparing it against a known-good value.
+Same failure shape as [[24]] — a check too shallow to catch the thing it
+exists to catch.
+
+---
+
+## 29 — seedDemoOrg.js's "already seeded" guard checks org existence, not scenario completion (2026-08-26)
+
+Running `node scripts/seedDemoOrg.js` against a freshly-reset local database
+(as part of verifying the migration_001 fix) failed partway through —
+Scenario 3's headline assertion ("fan A entered candidate scoring and lost to
+the DOB veto") failed, because blocking's `name_dob` key requires an EXACT
+match on both `name_last_word` and `dob`, and the fixture (fan A: "john
+smith"/1985-03-12, fan B: "john smyth"/1978-11-04, tap: "John
+Smith"/1978-11-04) was built to test FUZZY name matching against an unblocked
+scan — neither fixture fan shares both fields with the inbound tap, so
+blocking retrieves neither and the block comes back empty. This predates and
+is unrelated to the migration_001 fix; it is the first time the demo seed has
+run end-to-end since blocking shipped.
+
+The seed script aborted with the org row, 2 fixture fans, and partial
+scenario data already committed — no scenarios 4/5, no `evaluation_corpus`
+rows, no promoted trace. Its own "already seeded" guard checks only whether
+the demo org row exists. On a re-run against this same half-seeded database,
+that guard would report "Demo org already seeded" and refuse to run again,
+permanently masking the incomplete state rather than surfacing it.
+
+**Rule:** an idempotency guard meant to prevent double-seeding must check for
+completion of the thing it guards, not merely the existence of its first
+side effect.
+
+**Suggested fix (not implemented — out of scope for the migration_001 fix):**
+check for scenario completion (e.g. presence of all 5 scenarios' expected rows,
+or a completion marker written last) instead of bare org existence.
+
+**Scope:** any seed/setup script with an idempotency guard, and any downstream
+test (`tests/seedDemoOrg.test.js`, `tests/promoteTraceToCorpus.test.js`) that
+assumes "the permanent demo org exists" implies "the permanent demo org fully
+seeded." Same failure shape as [[24]] and [[28]] — a check too shallow to
+catch the thing it exists to catch.
+
+---
+
+## 30 — A test that hardcodes a seed script's generated UUID goes stale on the next reset (2026-09-14)
+
+Fixing Scenario 3's fixture (this session's actual task) required
+`bash scripts/resetLocalDb.sh` + a fresh `node scripts/seedDemoOrg.js` — both
+required by the task's own verification steps. That produces a brand-new
+`crypto.randomUUID()` for every fixture fan, conflict, and `resolution_trace`
+row, since none of these IDs are deterministic.
+
+`tests/promoteTraceToCorpus.test.js` (line 46) hardcodes
+`SCENARIO_3_TRACE_ID = 'f71a4a01-...'` as a literal constant, rather than
+looking Scenario 3's trace up by a stable property (e.g. querying
+`resolution_trace` for the row whose `candidate_ids` includes the known-stable
+fan pairing, the way `tests/seedDemoOrg.test.js` does via
+`findFanByNameDob`). Confirmed via `git log` that the constant was committed
+one commit before blocking shipped — it was captured from a single specific
+seed run and never revisited. Queried the (already half-seeded, pre-reset)
+local DB directly and confirmed the row didn't exist even before this
+session's reset: `SELECT id FROM resolution_trace WHERE id =
+'f71a4a01-...'` → 0 rows. Every `resetLocalDb.sh` + reseed permanently
+invalidates it, and nothing regenerates it — the 5 tests in that describe
+block fail with `PromotionError: trace not found` regardless of whether the
+seed fixture itself is correct. One of those 5 failures cascades into a 6th,
+unrelated-looking failure in `tests/seedDemoOrg.test.js` (the "backfill does
+not alter the promoted row's scorer_version" test expects a `promoted_trace`
+evaluation_corpus row to already exist — it never gets created, because the
+promotion that would create it never succeeds).
+
+**Rule:** never hardcode an ID that a seed script generates via
+`crypto.randomUUID()` (or any other non-deterministic generator) into a test
+file as a literal constant. Look it up by a stable property instead — the
+fixture's own well-known identifying fields (name+dob, email, a label), not
+an ID that only exists because one specific run happened to produce it.
+
+**Scope:** any test file that references `scripts/seedDemoOrg.js`'s permanent
+demo org by ID rather than by lookup — flagged, not fixed, in
+`tests/promoteTraceToCorpus.test.js`; out of scope for a fixture-only change.
+Same failure shape as [[24]]/[[28]]/[[29]] — the check trusted a stand-in for
+freshness instead of verifying it.
+
+---
+
+## 31 — Generated ids (UUIDs, timestamps, row counts) must never be hardcoded in a test — this is a category, not a one-off (2026-09-14)
+
+Fixed what [[30]] flagged: `tests/promoteTraceToCorpus.test.js`'s
+`SCENARIO_3_TRACE_ID` was a literal UUID copied out of a real database after one
+specific seed run. Every `resetLocalDb.sh` + reseed generates a brand-new
+`crypto.randomUUID()` for that row, so the constant was dead the moment the
+database was reset next, and would die again on every future reset regardless
+of what else changed. Fix: resolve it once in `beforeAll` via a DB query keyed
+on stable properties instead of the run-specific id — `org_id = DEMO_ORG_ID AND
+resolution_path = 'D' AND array_length(candidate_ids, 1) = 2` uniquely
+identifies Scenario 3's trace (verified by checking every other PATH D trace in
+the demo org retrieves exactly 1 candidate, not 2) — and fail loudly, naming
+the demo org and saying it needs seeding, if the lookup finds zero or more than
+one row. A silent `undefined` surfacing later as a bare "not found" is what
+made the original failure hard to diagnose.
+
+This is the fourth instance of the exact same failure shape:
+- [[24]] — a test hardcoded `resolution_trace`'s column count (23), broke the
+  moment a legitimate migration added columns.
+- [[28]] — `resetLocalDb.sh` printed a table count but never compared it
+  against the expected number, so an incomplete schema still reported success.
+- [[29]] — `seedDemoOrg.js`'s "already seeded" guard checked for the org row's
+  existence, not for scenario completion, so a half-seeded database looked
+  finished.
+- [[30]]/this entry — a hardcoded trace UUID from one seed run, asserted as if
+  it were permanent.
+
+All four are the same mistake at different layers: a check pinned to something
+*incidental* — a count, an id, an existence flag — that happened to be true
+once, instead of a check that looks up or verifies the thing it actually needs.
+The first three are documented-not-fixed (each was out of scope for the change
+that found it); this one is the first of the four actually fixed, and it
+worked precisely because the fix looked up a stable property instead of
+re-hardcoding a different incidental value.
+
+**Rule:** never hardcode a UUID, timestamp, row count, or any other value a
+script/seed/migration generates non-deterministically into a test as a literal
+constant. Look it up in `beforeAll` by a stable, well-known property (a name,
+an email, a label, a structural predicate like "the only trace with N
+candidates") — resolved once per suite, not per test — and fail loudly with a
+specific, actionable message (naming what was expected and what to do) if the
+lookup returns zero or more than one match. Treat "how many rows/columns exist
+right now" and "what id did this specific run produce" as the same category of
+thing that must never be baked into an assertion.
+
+**Scope:** every test file in this repo that reads from `scripts/seedDemoOrg.js`'s
+permanent demo org, any test asserting a `COUNT(*)` on a table expected to
+evolve, and any future seed/setup script's idempotency guard. Check new test
+files against this category before merging, the same way [[6]]/[[12]]/[[13]]
+get checked for CHECK-constraint and allowlist drift.

@@ -167,9 +167,21 @@ CREATE TABLE identifier_link (
   last_seen_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
--- Uniqueness: same identifier cannot map to two fans in the same org
-CONSTRAINT uq_identifier_per_org
-  UNIQUE (identifier_type, identifier_value, org_id);
+-- Uniqueness: same identifier cannot map to two fans in the same org.
+--
+-- REMOVED 2026-08-26: never valid SQL. A bare CONSTRAINT clause outside a
+-- CREATE TABLE body is not a statement, so this errored on every migration
+-- replay since April and never created anything.
+--
+-- uq_identifier_per_org is created by migration_013 as a PARTIAL unique
+-- index (WHERE source_system != 'fan_pass'). That is the version the system
+-- needs — the unfiltered version attempted here would block adding a second
+-- child to a household, since siblings legitimately share guardian_email.
+--
+-- Commented rather than deleted so the history stays legible.
+--
+-- CONSTRAINT uq_identifier_per_org
+--   UNIQUE (identifier_type, identifier_value, org_id);
 
 -- Hot path: resolverEngine Path A + B lookup — runs on every resolution
 -- Query: WHERE identifier_type = $1 AND identifier_value = $2 AND org_id = $3
