@@ -31,8 +31,10 @@
 // assembled live — the RESOLUTION DECISIONS made against them (the scoring,
 // the veto, the pending conflict, the confirm) are still 100% real API calls.
 //
-// One-shot: if DEMO_ORG_ID already exists this prints a message and exits.
-// There is no reset flag. resolution_trace is append-only (trigger-enforced)
+// One-shot for fans and conflicts: if DEMO_ORG_ID already exists, missing
+// synthetic corpus pairs are inserted and the script exits. Fans and
+// conflicts are not rewritten. There is no reset flag. resolution_trace is
+// append-only (trigger-enforced)
 // and FK-pins fan / audit_log / conflict_queue, so surgical cleanup is not
 // possible. The only reset path is scripts/resetLocalDb.sh.
 //
@@ -443,7 +445,7 @@ async function seedScenario5(app, client) {
   };
 }
 
-// ── evaluation_corpus — 8 hand-written synthetic pairs ──────────────────
+// ── evaluation_corpus — hand-written synthetic pairs ─────────────────────
 //
 // candidate_snapshot's 14 keys match resolverEngine's candidate SELECT
 // exactly: id, org_id, email, email_last_seen_at, name, name_last_seen_at,
@@ -529,15 +531,42 @@ const CORPUS_PAIRS = [
     expected_verdict: 'match',
     rationale: 'Email alone is a strong, exact signal; the candidate is otherwise sparse but has nothing to contradict it.',
   },
-  // TODO — pairs 9-16 are pending Monique's labeling (ground-truth verdicts
-  // are customer-owned; see CLAUDE.md "Status as of 2026-07-14" / Stage 7).
-  // Do NOT invent verdicts for them. Add as their own evaluation_corpus rows
-  // once labeled — this file inserts exactly the 8 pairs above.
+  {
+    n: 9,
+    inbound:   makeInbound({ name: 'bob smith', dob: '1990-01-15' }),
+    candidate: makeCandidate(crypto.randomUUID(), { name: 'robert smith', dob: '1990-01-15' }),
+    expected_verdict: 'match',
+    rationale: 'Nickname given name with the same last name and the same birthday — Bob and Robert are the same person and belong in review.',
+  },
+  {
+    n: 10,
+    inbound:   makeInbound({ name: 'bob smith', dob: '1990-01-15', email: 'bob@example.com' }),
+    candidate: makeCandidate(crypto.randomUUID(), { name: 'robert smith', dob: '1990-01-15', email: 'robert@example.com' }),
+    expected_verdict: 'match',
+    rationale: 'Nickname given name, same birthday, and different emails — the email penalty lowers the score, and the name-and-birthday agreement still belongs in review.',
+  },
+  {
+    n: 11,
+    inbound:   makeInbound({ name: 'bob smith', dob: '1990-01-15' }),
+    candidate: makeCandidate(crypto.randomUUID(), { name: 'robert jones', dob: '1990-01-15' }),
+    expected_verdict: 'not_match',
+    rationale: 'Nickname given name with a different last name and the same birthday — Bob Smith and Robert Jones are two people.',
+  },
+  // Further customer-labeled pairs are not invented here. Pairs 9-11 are
+  // synthetic proof pairs, same kind as pairs 1-8, not customer ground truth.
 ];
 
 async function seedEvaluationCorpus(client) {
-  log('\n=== evaluation_corpus — 8 synthetic pairs ===');
+  log(`\n=== evaluation_corpus — ${CORPUS_PAIRS.length} synthetic pairs ===`);
+  const existing = await client.query(
+    `SELECT rationale FROM evaluation_corpus
+     WHERE org_id = $1 AND source = 'synthetic'`,
+    [DEMO_ORG_ID]
+  );
+  const have = new Set(existing.rows.map((row) => row.rationale));
+  let inserted = 0;
   for (const pair of CORPUS_PAIRS) {
+    if (have.has(pair.rationale)) continue;
     await client.query(
       `INSERT INTO evaluation_corpus
          (id, org_id, source, trace_id, inbound_identifiers, candidate_snapshot,
@@ -553,10 +582,10 @@ async function seedEvaluationCorpus(client) {
         SCORER_VERSION,
       ]
     );
+    inserted += 1;
     log(`  pair ${pair.n}: ${pair.expected_verdict} — ${pair.rationale}`);
   }
-  log('  (pairs 9-16 pending Monique — not inserted; see TODO in this file)');
-  return CORPUS_PAIRS.length;
+  return inserted;
 }
 
 // ── main ─────────────────────────────────────────────────────────────────
@@ -582,6 +611,10 @@ async function main() {
       );
       if (backfillResult.rowCount > 0) {
         console.log(`Backfilled scorer_version on ${backfillResult.rowCount} synthetic evaluation_corpus row(s).`);
+      }
+      const insertedPairs = await seedEvaluationCorpus(client);
+      if (insertedPairs > 0) {
+        console.log(`Inserted ${insertedPairs} missing synthetic evaluation_corpus pair(s).`);
       }
       console.log(
         'Demo org already seeded. To reseed: bash scripts/resetLocalDb.sh,\n' +

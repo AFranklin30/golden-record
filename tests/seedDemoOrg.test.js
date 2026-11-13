@@ -25,7 +25,7 @@ const { execFileSync } = require('child_process');
 const { Client } = require('pg');
 
 const { scoreMatch, SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
-const { FROZEN_CLOCK } = require('../eval/harness');
+const { FROZEN_CLOCK, summarizeScorecard } = require('../eval/harness');
 const { buildRun } = require('../eval/runCorpus');
 
 const DEMO_ORG_ID  = 'aaaaaaaa-0000-0000-0000-000000000001';
@@ -40,6 +40,15 @@ const CANDIDATE_SNAPSHOT_KEYS = [
   'dob', 'dob_last_seen_at', 'zip', 'zip_last_seen_at', 'device_id',
   'device_last_seen_at', 'guardian_email', 'guardian_email_last_seen_at',
 ].sort();
+
+const NICKNAME_SAME_BIRTHDAY = 'Nickname given name with the same last name and the same birthday — Bob and Robert are the same person and belong in review.';
+const NICKNAME_DIFFERENT_EMAIL = 'Nickname given name, same birthday, and different emails — the email penalty lowers the score, and the name-and-birthday agreement still belongs in review.';
+const NICKNAME_DIFFERENT_LAST_NAME = 'Nickname given name with a different last name and the same birthday — Bob Smith and Robert Jones are two people.';
+const NICKNAME_RATIONALES = [
+  NICKNAME_SAME_BIRTHDAY,
+  NICKNAME_DIFFERENT_EMAIL,
+  NICKNAME_DIFFERENT_LAST_NAME,
+];
 
 async function findFanByIdentifier(client, type, value) {
   const result = await client.query(
@@ -225,25 +234,23 @@ describe('seedDemoOrg — permanent demo org', () => {
     expect(loserFan.rows[0].deleted_at).not.toBeNull();
   });
 
-  // 8/9 — evaluation_corpus: the seed script's contract is "insert exactly 8
+  // 8/9 — evaluation_corpus: the seed script's contract is "insert exactly 11
   // SYNTHETIC rows, correctly shaped" — not "the corpus contains N rows".
-  // Rows added later by other tools (e.g. scripts/promoteTraceToCorpus.js,
-  // Monique's labeled pairs) are not this script's business and must not be
-  // asserted here. See tests/promoteTraceToCorpus.test.js for that script's
-  // own contract.
+  // Rows added later by other tools (e.g. scripts/promoteTraceToCorpus.js)
+  // are not this script's business and must not be asserted here.
   let corpusRows;
   beforeAll(async () => {
     const result = await client.query(
-      `SELECT source, trace_id, candidate_snapshot, expected_verdict, scorer_version
+      `SELECT id, source, trace_id, candidate_snapshot, expected_verdict, rationale, scorer_version
        FROM evaluation_corpus WHERE org_id = $1`,
       [DEMO_ORG_ID]
     );
     corpusRows = result.rows;
   });
 
-  test('seedDemoOrg writes exactly 8 synthetic evaluation_corpus rows, correctly shaped', () => {
+  test('seedDemoOrg writes exactly 11 synthetic evaluation_corpus rows, correctly shaped', () => {
     const syntheticRows = corpusRows.filter(r => r.source === 'synthetic');
-    expect(syntheticRows.length).toBe(8);
+    expect(syntheticRows.length).toBe(11);
 
     expect(syntheticRows.every(r => r.trace_id === null)).toBe(true);
     expect(syntheticRows.every(r => r.candidate_snapshot != null)).toBe(true);
@@ -253,21 +260,20 @@ describe('seedDemoOrg — permanent demo org', () => {
       expect(keys).toEqual(CANDIDATE_SNAPSHOT_KEYS);
     }
 
-    // CORPUS_PAIRS in scripts/seedDemoOrg.js: pairs 1, 2, 8 are 'match';
-    // pairs 3, 4, 5, 6, 7 are 'not_match' — verified against the script,
-    // not assumed.
+    // CORPUS_PAIRS: pairs 1, 2, 8, 9, 10 are 'match';
+    // pairs 3, 4, 5, 6, 7, 11 are 'not_match'.
     const verdictCounts = syntheticRows.reduce((acc, r) => {
       acc[r.expected_verdict] = (acc[r.expected_verdict] || 0) + 1;
       return acc;
     }, {});
-    expect(verdictCounts.match).toBe(3);
-    expect(verdictCounts.not_match).toBe(5);
+    expect(verdictCounts.match).toBe(5);
+    expect(verdictCounts.not_match).toBe(6);
 
-    // scorer_version — seedEvaluationCorpus's INSERT now stamps SCORER_VERSION
-    // on every synthetic row, and main()'s guarded backfill repairs any rows
-    // seeded before that change. Every synthetic row must carry the current
-    // scorer_version — a null here means the backfill didn't run.
-    expect(syntheticRows.every(r => r.scorer_version === SCORER_VERSION)).toBe(true);
+    // The original eight keep the scorer_version they were seeded with.
+    // The three nickname pairs are inserted later and carry the current version.
+    const nicknameRows = syntheticRows.filter(r => NICKNAME_RATIONALES.includes(r.rationale));
+    expect(nicknameRows).toHaveLength(3);
+    expect(nicknameRows.every(r => r.scorer_version === SCORER_VERSION)).toBe(true);
   });
 
   // 8b — regression: the backfill must never touch the promoted row's
@@ -349,9 +355,29 @@ describe('seedDemoOrg — permanent demo org', () => {
   // counts.total and counts.promoted_with_snapshot are intentionally left
   // unasserted — both count promoted_trace rows, which are not this script's
   // contract.
-  test("eval/runCorpus.js buildRun's counts.synthetic reflects the seed script's 8 rows", async () => {
+  test("eval/runCorpus.js buildRun's counts.synthetic reflects the seed script's 11 rows", async () => {
     const runObject = await buildRun(client, DEMO_ORG_ID);
-    expect(runObject.counts.synthetic).toBe(8);
+    expect(runObject.counts.synthetic).toBe(11);
+  });
+
+  test('nickname pairs: same birthday is found, different emails stay found at the real score, different last name stays separated', async () => {
+    const runObject = await buildRun(client, DEMO_ORG_ID);
+    const byRationale = new Map(corpusRows.map(r => [r.rationale, r.id]));
+
+    const sameBirthday = runObject.rows.find(r => r.corpus_id === byRationale.get(NICKNAME_SAME_BIRTHDAY));
+    const differentEmail = runObject.rows.find(r => r.corpus_id === byRationale.get(NICKNAME_DIFFERENT_EMAIL));
+    const differentLastName = runObject.rows.find(r => r.corpus_id === byRationale.get(NICKNAME_DIFFERENT_LAST_NAME));
+
+    expect(sameBirthday.replayed_path).toBe('D');
+    expect(sameBirthday.replayed_score).toBeCloseTo(0.7, 5);
+    expect(differentEmail.replayed_path).toBe('D');
+    expect(differentEmail.replayed_score).toBeCloseTo(0.4, 5);
+    expect(differentLastName.replayed_path).toBe('B');
+
+    const card = summarizeScorecard([sameBirthday, differentEmail, differentLastName]);
+    expect(card.found).toBe(2);
+    expect(card.silent_miss).toBe(0);
+    expect(card.correct_separation).toBe(1);
   });
 
   // 10 — future-proofing: prove the above assertions stay true no matter how
