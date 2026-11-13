@@ -13,6 +13,7 @@
   "dependencies": {
     "@google-cloud/firestore": "^8.5.0",
     "cors": "^2.8.6",
+    "csv-stringify": "^6.8.3",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.0",
@@ -22,6 +23,7 @@
     "pg": "^8.20.0"
   },
   "devDependencies": {
+    "csv-parse": "^7.0.2",
     "jest": "^30.4.2",
     "supertest": "^7.2.2"
   }

@@ -388,6 +388,88 @@ describe('eval/harness + eval/runCorpus — Stage 7 evaluation replay', () => {
   it('17. counts.scorer_version_unknown reflects fixture (h)', () => {
     expect(runResult.counts.scorer_version_unknown).toBeGreaterThanOrEqual(1);
   });
+
+  it('5. buildRun still returns counts.total and a scorecard with the same keys', () => {
+    expect(typeof runResult.counts.total).toBe('number');
+    expect(Object.keys(runResult.scorecard).sort()).toEqual(SCORECARD_KEYS);
+  });
+});
+
+const SCORECARD_KEYS = [
+  'correct_separation',
+  'excluded',
+  'false_alarm',
+  'found',
+  'precision',
+  'recall',
+  'silent_miss',
+].sort();
+
+function scorecardRow(overrides) {
+  return {
+    expected_verdict: 'match',
+    skipped: false,
+    gate_status: 'passed',
+    replayed_path: 'C',
+    ...overrides,
+  };
+}
+
+describe('summarizeScorecard — totals over evaluateRow results', () => {
+  it('1. one of each outcome yields counts of 1 and rates of 0.5', () => {
+    const card = harness.summarizeScorecard([
+      scorecardRow({ expected_verdict: 'match', replayed_path: 'C' }),
+      scorecardRow({ expected_verdict: 'match', replayed_path: 'B' }),
+      scorecardRow({ expected_verdict: 'not_match', replayed_path: 'B' }),
+      scorecardRow({ expected_verdict: 'not_match', replayed_path: 'C' }),
+    ]);
+
+    expect(card.found).toBe(1);
+    expect(card.silent_miss).toBe(1);
+    expect(card.correct_separation).toBe(1);
+    expect(card.false_alarm).toBe(1);
+    expect(card.excluded).toBe(0);
+    expect(card.recall).toBe(0.5);
+    expect(card.precision).toBe(0.5);
+  });
+
+  it('2. unsure and a skipped row increment excluded only', () => {
+    const card = harness.summarizeScorecard([
+      scorecardRow({ expected_verdict: 'unsure', replayed_path: 'C' }),
+      scorecardRow({ expected_verdict: 'match', skipped: true, replayed_path: 'C' }),
+    ]);
+
+    expect(card.excluded).toBe(2);
+    expect(card.found).toBe(0);
+    expect(card.silent_miss).toBe(0);
+    expect(card.correct_separation).toBe(0);
+    expect(card.false_alarm).toBe(0);
+    expect(card.recall).toBeNull();
+    expect(card.precision).toBeNull();
+  });
+
+  it('3. a gated match is a silent miss', () => {
+    const card = harness.summarizeScorecard([
+      scorecardRow({ expected_verdict: 'match', gate_status: 'gated', replayed_path: null }),
+    ]);
+
+    expect(card.silent_miss).toBe(1);
+    expect(card.found).toBe(0);
+    expect(card.recall).toBe(0);
+  });
+
+  it('4. an empty list returns zeros and null rates', () => {
+    const card = harness.summarizeScorecard([]);
+
+    expect(card.found).toBe(0);
+    expect(card.silent_miss).toBe(0);
+    expect(card.correct_separation).toBe(0);
+    expect(card.false_alarm).toBe(0);
+    expect(card.excluded).toBe(0);
+    expect(card.recall).toBeNull();
+    expect(card.precision).toBeNull();
+    expect(Object.keys(card).sort()).toEqual(SCORECARD_KEYS);
+  });
 });
 
 describe('regression — resolverEngine export-line change is inert', () => {
@@ -413,14 +495,14 @@ describe('regression — resolverEngine export-line change is inert', () => {
         `INSERT INTO identifier_link
            (fan_id, identifier_type, identifier_value, org_id, source_system,
             schema_version, confidence_score, first_seen_at, last_seen_at)
-         VALUES ($1, 'name', 'Regression Test', $2, 'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+         VALUES ($1, 'name', 'Regression Test', $2, 'demo_app', 'v1', 1.0, NOW(), NOW())`,
         [existingFanId, testOrgId]
       );
       await client.query(
         `INSERT INTO identifier_link
            (fan_id, identifier_type, identifier_value, org_id, source_system,
             schema_version, confidence_score, first_seen_at, last_seen_at)
-         VALUES ($1, 'dob', '1990-03-15', $2, 'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+         VALUES ($1, 'dob', '1990-03-15', $2, 'demo_app', 'v1', 1.0, NOW(), NOW())`,
         [existingFanId, testOrgId]
       );
 

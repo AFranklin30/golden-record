@@ -1,6 +1,6 @@
 // eval/harness.js
 // Stage 7 evaluation harness — pure scoring/replay logic.
-// Golden Record Fan Identity Platform — OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 //
 // Pure function module — no database calls, no side effects. DB I/O lives in
 // eval/runCorpus.js. Mirrors probabilisticMatcher.js's purity discipline.
@@ -192,6 +192,46 @@ function evaluateRow(corpusRow, traceRow, labelRows) {
   };
 }
 
+// summarizeScorecard — pure. Totals evaluateRow results. Does not rescore.
+// A row counts only when the label is match or not_match, the row was not
+// skipped, and the harness either gated it or assigned a path.
+function summarizeScorecard(rows) {
+  const counts = {
+    found: 0,
+    silent_miss: 0,
+    correct_separation: 0,
+    false_alarm: 0,
+    excluded: 0,
+  };
+
+  for (const row of rows) {
+    counts[classifyScorecardRow(row)] += 1;
+  }
+
+  const recallDenom = counts.found + counts.silent_miss;
+  const precisionDenom = counts.found + counts.false_alarm;
+
+  return {
+    ...counts,
+    recall: recallDenom > 0 ? counts.found / recallDenom : null,
+    precision: precisionDenom > 0 ? counts.found / precisionDenom : null,
+  };
+}
+
+function classifyScorecardRow(row) {
+  if (row.skipped === true) return 'excluded';
+  if (row.expected_verdict !== 'match' && row.expected_verdict !== 'not_match') return 'excluded';
+
+  const queued = row.replayed_path === 'C' || row.replayed_path === 'D';
+  const separated = row.replayed_path === 'B' || row.gate_status === 'gated';
+  if (!queued && !separated) return 'excluded';
+
+  if (row.expected_verdict === 'match' && queued) return 'found';
+  if (row.expected_verdict === 'match' && separated) return 'silent_miss';
+  if (row.expected_verdict === 'not_match' && separated) return 'correct_separation';
+  return 'false_alarm';
+}
+
 module.exports = {
   VERDICTS,
   LABEL_SOURCE,
@@ -199,4 +239,5 @@ module.exports = {
   SCORE_TOLERANCE,
   parseInboundIdentifiers,
   evaluateRow,
+  summarizeScorecard,
 };

@@ -127,9 +127,9 @@ async function run() {
           source_system, schema_version, confidence_score,
           first_seen_at, last_seen_at)
        VALUES
-         ($1, 'email', 'multi@test-synth.com', $2, 'thunder_app', 'v1', 1.0, NOW(), NOW()),
-         ($1, 'name',  'Multi Signal',          $2, 'thunder_app', 'v1', 1.0, NOW(), NOW()),
-         ($1, 'dob',   '1990-06-01',            $2, 'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+         ($1, 'email', 'multi@test-synth.com', $2, 'demo_app', 'v1', 1.0, NOW(), NOW()),
+         ($1, 'name',  'Multi Signal',          $2, 'demo_app', 'v1', 1.0, NOW(), NOW()),
+         ($1, 'dob',   '1990-06-01',            $2, 'demo_app', 'v1', 1.0, NOW(), NOW())`,
       [existingFanId, testOrgId]
     );
 

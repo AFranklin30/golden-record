@@ -1,7 +1,7 @@
 -- =============================================================================
 -- migration_003.sql
 -- Golden Record Fan Identity Platform
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Date: May 2026
 --

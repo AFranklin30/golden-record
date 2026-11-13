@@ -15,7 +15,7 @@ const sessionRouter           = require('../routes/session');
 const profileRouter           = require('../routes/profile');
 const { signToken }           = require('../modules/jwt');
 
-const VALID_RAW_KEY = 'dev-api-key-thunder-2026';
+const VALID_RAW_KEY = 'dev-api-key-local-2026';
 const VALID_AUTH    = `Bearer ${VALID_RAW_KEY}`;
 
 let server;

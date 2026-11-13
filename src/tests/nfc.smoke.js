@@ -12,7 +12,7 @@ const orgAuthMiddleware       = require('../middleware/orgAuthMiddleware');
 const correlationIdMiddleware = require('../middleware/correlationIdMiddleware');
 const nfcRouter               = require('../routes/nfc');
 
-const VALID_RAW_KEY = 'dev-api-key-thunder-2026';
+const VALID_RAW_KEY = 'dev-api-key-local-2026';
 const VALID_AUTH    = `Bearer ${VALID_RAW_KEY}`;
 
 // Valid 4-byte NFC UID (8 hex chars) — normalizes to AA:BB:CC:DD

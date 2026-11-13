@@ -1,7 +1,7 @@
 'use strict';
 
 // scripts/seedDemoOrg.js
-// Golden Record Fan Identity Platform — OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 //
 // Seeds ONE permanent demo org: fixture fans inserted directly via SQL
 // (what a touchpoint already knows), then real resolutions fired through the
@@ -272,10 +272,23 @@ async function seedScenario2(app, client) {
 async function seedScenario3(app, client) {
   log('\n=== Scenario 3 — DOB veto blocking a bad merge (headline) ===');
 
+  // fan A's email is the retrieval fix: under blocking, the name_dob key
+  // alone can never retrieve fan A (its dob deliberately conflicts with the
+  // tap's), so without a second key fan A is structurally unreachable and
+  // the veto below never gets a candidate to fire against. Fan B does NOT
+  // get this email — uq_identifier_per_org (WHERE source_system <>
+  // 'fan_pass') forbids two fans in the same org sharing an identifier
+  // value of any type, so a shared email (or renaming fan B to match fan
+  // A's name) would fail the INSERT. Fan B is retrieved via name_dob
+  // instead — see the tap below.
   const fanAId = await insertFixtureFan(
     client,
-    [{ type: 'name', value: 'john smith' }, { type: 'dob', value: '1985-03-12' }],
-    'John Smith — fixture fan A (DOB veto candidate)'
+    [
+      { type: 'email', value: 'john.smith.scenario3@example.com' },
+      { type: 'name', value: 'john smith' },
+      { type: 'dob', value: '1985-03-12' },
+    ],
+    'John Smith — fixture fan A (DOB veto candidate: exact email match, conflicting dob)'
   );
   const fanBId = await insertFixtureFan(
     client,
@@ -283,9 +296,19 @@ async function seedScenario3(app, client) {
     'John Smyth — fixture fan B (winning candidate)'
   );
 
+  // Tap identifiers carry BOTH retrieval paths at once: email matches fan A
+  // exactly (email block key), and name+dob match fan B exactly (name_dob
+  // block key — last word 'smyth' + dob). The name here is 'John Smyth',
+  // not 'John Smith': fan B's spelling can't change (tests/seedDemoOrg.test.js
+  // looks it up literally), so the tap has to carry the last word fan B
+  // actually has, or fan B stays unreachable the same way fan A was.
   const tap = await nfcResolve(app, {
     nfc_uid: freshNfcUid(), station_id: 'demo-station-3',
-    identifiers: { name: 'John Smith', dob: '1978-11-04' },
+    identifiers: {
+      email: 'john.smith.scenario3@example.com',
+      name: 'John Smyth',
+      dob: '1978-11-04',
+    },
   });
   log(`  NFC tap: fan_id=${tap.fan_id} match_type=${tap.match_type} confidence=${tap.confidence_score} audit_event_id=${tap.audit_event_id}`);
 
@@ -317,9 +340,9 @@ async function seedScenario3(app, client) {
     tap_fan_id: tap.fan_id,
     tap_conflict_id: tap.conflict_id,
     trace_id: trace.id,
-    label_a: 'John Smith (fan A) — DOB veto candidate, correctly did NOT win',
-    label_b: 'John Smyth (fan B) — winning candidate via name_plus_dob (~0.7)',
-    label_tap: 'John Smith — new fan minted by the NFC tap, pending conflict against fan B',
+    label_a: 'John Smith (fan A) — exact email match but conflicting dob; DOB veto fires before the email is ever scored (score 0.0), correctly did NOT win',
+    label_b: 'John Smyth (fan B) — winning candidate via name_plus_dob (exact name + exact dob, score 0.700)',
+    label_tap: 'John Smyth — new fan minted by the NFC tap (email matches fan A, name+dob match fan B), pending conflict against fan B',
   };
 }
 
@@ -507,7 +530,7 @@ const CORPUS_PAIRS = [
     rationale: 'Email alone is a strong, exact signal; the candidate is otherwise sparse but has nothing to contradict it.',
   },
   // TODO — pairs 9-16 are pending Monique's labeling (ground-truth verdicts
-  // are Thunder-owned; see CLAUDE.md "Status as of 2026-07-14" / Stage 7).
+  // are customer-owned; see CLAUDE.md "Status as of 2026-07-14" / Stage 7).
   // Do NOT invent verdicts for them. Add as their own evaluation_corpus rows
   // once labeled — this file inserts exactly the 8 pairs above.
 ];
@@ -595,7 +618,7 @@ async function main() {
     log('\n=== SUMMARY ===');
     log(`org_id: ${DEMO_ORG_ID}`);
     log(`org_name: ${DEMO_ORG_NAME}`);
-    log(`raw API key (send as "Authorization: Bearer <key>"): ${DEMO_API_KEY}`);
+    log('API key: stored as sha256 only. The local demo key is not written to this summary.');
     log('');
     log('Fans:');
     log(`  ${s1.fan_id}  ${s1.label}`);

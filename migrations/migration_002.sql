@@ -3,7 +3,7 @@
 -- Sprint 1 Security Migration
 -- migration_002.sql
 --
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Version: 1.0 · May 2026 · Confidential
 --

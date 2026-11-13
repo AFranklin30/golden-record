@@ -1,6 +1,6 @@
 # CLAUDE.md — Golden Record
 
-Fan identity resolution platform. OKC Thunder Innovations Cohort. Sole backend engineer: Aaron Franklin.
+Fan identity resolution platform. Golden Record. Sole backend engineer: Aaron Franklin.
 Stack: Node.js / Express · Postgres (Cloud SQL) with RLS · Firestore (named DB `golden-record`) · Cloud Run · GCP.
 Last updated: 2026-08-02.
 
@@ -182,7 +182,7 @@ table names, query structure, and key names have no business in a response body.
 
 **Replaced a `LIMIT 100` scan that was a correctness ceiling, not a perf issue.** The
 pre-blocking candidate query took 100 arbitrary fans per org with no `ORDER BY` and no
-narrowing. At Thunder scale (2.3M CRM + 1.7M Ticketmaster records) the true match was
+narrowing. At multi-million-record scale the true match was
 essentially never among those 100 — real duplicates silently became PATH B while the system
 returned a clean `200`. No error, no signal anything was wrong. `findBlockCandidates`
 (resolverEngine.js) replaces it: narrow to fans sharing an exact key with the inbound tap,
@@ -370,7 +370,7 @@ name and one birthday. Now 0.7. `name_plus_zip` does NOT suppress `name_alone`.
 **SIGNAL_CONFIG** is the single source of truth:
 - `agreement` — mirrors SIGNAL_WEIGHTS (email_similarity 0.7, name_plus_dob 0.7,
   name_plus_zip 0.6, guardian_email 0.65, device_id 0.5, name_alone 0.3)
-- `disagreement` — email 0.3 / name 0.2 / zip 0.1. **Placeholders. Thunder-owned.**
+- `disagreement` — email 0.3 / name 0.2 / zip 0.1. **Placeholders. Product defaults.**
   **No `dob` key** — dob is a veto, never a penalty.
 - `comparison.name_similarity_threshold` — 0.85
 
@@ -530,7 +530,7 @@ different timestamp and breaks idempotency.
 
 ## Standard ops
 
-- Redeploy: `gcloud run deploy golden-record`, image `gcr.io/identity-resolution-production/golden-record`, region us-central1.
+- Redeploy: `gcloud run deploy golden-record`, image `gcr.io/YOUR_GCP_PROJECT/golden-record`, region us-central1.
 - Cloud SQL proxy on port 5433 (production); local Postgres on 5432.
 - Migration: `psql $DATABASE_URL -f migrations/migration_0XX.sql`. `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block.
 - Manual local cleanup of a test org: `psql $DATABASE_URL -c "DELETE FROM ... WHERE org_id = '...'"` in FK order (children before org).
@@ -566,7 +566,7 @@ field was silently identical to a missing one) to a full disagreement model:
    being honest about how much evidence it has, not a regression.
 4. **Comparisons re-aimed** — email → exact, name → fuzzy. Changed match rates by design.
 
-**Deferred to Thunder (config defaults until stated):** penalty sizes (0.3/0.2/0.1),
+**Deferred (config defaults until a customer sets them):** penalty sizes (0.3/0.2/0.1),
 thresholds (PATH C 0.85 / PATH D 0.60 — **Monique confirmed these pre-Sprint-5; scores
 shifted, re-confirm**), and the core objective — tolerate duplicate fans vs. tolerate false
 merges. The dial is built; they set it. Ask framed for them: *every possible match already
@@ -592,7 +592,7 @@ resolution, conflict, and household endpoint groups.
 household (DB trigger) ✅, expired claim token ✅, conflict already resolved ✅.
 
 **Stage 7 — evaluation/calibration (2026-07-30): IN PROGRESS, write-half complete.**
-Not the same as "Stage 7 complete" — the harness is not built, no Thunder labels exist yet,
+Not the same as "Stage 7 complete" — the harness is not built, no adjudicated labels exist yet,
 BigQuery is not in use. What's shipped:
 
 - **migration_014** — three new tables. `resolution_trace` (append-only via trigger,
@@ -615,8 +615,7 @@ BigQuery is not in use. What's shipped:
   others lost — see Open, "Trace records the winner, not why others lost."
 - **Zero trustworthy production labels.** Every existing `conflict_queue` row is a seed
   fixture, not a human-adjudicated verdict. The corpus is synthetic-primary. Ground-truth
-  verdicts are Thunder-owned — Aaron and Monique construct labeled pairs, Thunder sets the
-  rules for what counts as a correct match.
+  verdicts belong to the customer. Labeled pairs are constructed outside the engine.
 - **Evaluation is pairwise.** Every merge cluster today is size 2 (one confirm = one
   source + one target), so B³ cluster scoring collapses to pairwise until multi-hop merge
   chains exist (see Open — multi-hop merge chain history).

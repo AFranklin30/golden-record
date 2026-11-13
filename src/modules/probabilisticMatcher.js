@@ -1,6 +1,6 @@
 // probabilisticMatcher.js
 // Golden Record Fan Identity Platform
-// OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 // Author: Aaron
 // Sprint 3
 //
@@ -37,7 +37,7 @@ const SIGNAL_WEIGHTS = {
 // SIGNAL_CONFIG — single source of truth for Sprint 5 scoring.
 // agreement: mirrors SIGNAL_WEIGHTS (wired into scoring in prompt 3).
 // disagreement: penalty applied when a field is present on BOTH records but
-//   differs. Conservative defaults — the Thunder sets final values later.
+//   differs. Conservative defaults — a customer sets final values later.
 //   NOT read by the scorer yet (detection only this prompt).
 // dob intentionally absent: conflicting DOB is a hard-block invariant
 //   (prompt 2), not a tunable penalty.
@@ -55,7 +55,7 @@ const SIGNAL_CONFIG = {
     name:  0.2,
     zip:   0.1,
   },
-  // comparison — how each field is compared. Calibration dials, Thunder-owned.
+  // comparison — how each field is compared. Calibration dials. Product defaults.
   // name_similarity_threshold: minimum levenshteinSimilarity for two names to
   //   count as the same person. 0.85 accepts 'jon smith' vs 'john smith'
   //   (0.9) and rejects genuinely different names. Does NOT catch nicknames

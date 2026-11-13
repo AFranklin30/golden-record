@@ -1,7 +1,7 @@
 # Golden Record — API Contract
 
 Fan Identity Resolution Platform · Backend API Reference
-OKC Thunder — Thunder Innovations Cohort
+Golden Record
 Prepared for frontend integration (King) · Backend: Aaron Franklin
 Regenerated 2026-08-02 · supersedes the 2026-06-25 version
 

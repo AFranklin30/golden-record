@@ -117,7 +117,7 @@ describe('normalizer — guardian_email', () => {
   });
 
   test('accepts a valid email', () => {
-    expect(normalizeIdentifier('guardian_email', 'parent@thunder.com')).toBe('parent@thunder.com');
+    expect(normalizeIdentifier('guardian_email', 'parent@example.com')).toBe('parent@example.com');
   });
 });
 

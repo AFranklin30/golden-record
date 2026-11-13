@@ -33,17 +33,17 @@ function buildCorsApp(corsOriginEnv) {
 
 describe('CORS configuration (MEDIUM-4/5)', () => {
   test('CORS header present when request origin matches CORS_ORIGIN', async () => {
-    const app = buildCorsApp('https://fanpass.thunder.com');
+    const app = buildCorsApp('https://example.com');
 
     const res = await request(app)
       .get('/test')
-      .set('Origin', 'https://fanpass.thunder.com');
+      .set('Origin', 'https://example.com');
 
-    expect(res.headers['access-control-allow-origin']).toBe('https://fanpass.thunder.com');
+    expect(res.headers['access-control-allow-origin']).toBe('https://example.com');
   });
 
   test('CORS blocks requests from unlisted origins — no access-control-allow-origin returned', async () => {
-    const app = buildCorsApp('https://fanpass.thunder.com');
+    const app = buildCorsApp('https://example.com');
 
     const res = await request(app)
       .get('/test')
@@ -72,14 +72,14 @@ describe('CORS configuration (MEDIUM-4/5)', () => {
   });
 
   test('preflight OPTIONS request succeeds when origin is allowed', async () => {
-    const app = buildCorsApp('https://fanpass.thunder.com');
+    const app = buildCorsApp('https://example.com');
 
     const res = await request(app)
       .options('/test')
-      .set('Origin', 'https://fanpass.thunder.com')
+      .set('Origin', 'https://example.com')
       .set('Access-Control-Request-Method', 'POST');
 
     expect(res.status).toBeLessThan(300);
-    expect(res.headers['access-control-allow-origin']).toBe('https://fanpass.thunder.com');
+    expect(res.headers['access-control-allow-origin']).toBe('https://example.com');
   });
 });

@@ -222,8 +222,8 @@ CHECK:    Component 34 age-up email is implemented, stubbed with
 STATUS:   LOW
 FINDING:  household.js lines 1005-1011 contains a logger.info stub:
             logger.info('AGE-UP EMAIL STUB', {
-              subject:    'Your child can now claim their Thunder account',
-              claim_url:  'https://fanpass.thunder.com/claim/[REDACTED]',
+              subject:    'Your child can now claim their account',
+              claim_url:  'https://example.com/claim/[REDACTED]',
               expires_at: claim_expires,
               email_stub: true,
             });

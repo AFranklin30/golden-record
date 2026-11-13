@@ -14,7 +14,7 @@ const resolveRouter           = require('../routes/resolve');
 const sessionRouter           = require('../routes/session');
 const { verifyToken }         = require('../modules/jwt');
 
-const VALID_RAW_KEY = 'dev-api-key-thunder-2026';
+const VALID_RAW_KEY = 'dev-api-key-local-2026';
 const VALID_AUTH    = `Bearer ${VALID_RAW_KEY}`;
 
 let server;

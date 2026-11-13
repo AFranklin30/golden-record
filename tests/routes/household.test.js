@@ -223,44 +223,47 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
     app = buildApp();
   });
 
-  // Happy path: fan exists, household exists, no staged match
-  // Call indices: 0=fan, 1=household, 2=staging, 3=BEGIN,
-  //              4=fan INSERT, 5=name link, 6=dob link,
-  //              7=guardian_email link, 8=guardian_phone link,
-  //              9=household_member, 10=audit, 11=COMMIT
+  // Happy path: fan exists, household exists, no staged match, no existing guardian.
+  // Call indices: 0=fan, 1=household, 2=staging, 3=duplicate-guardian,
+  //              4=BEGIN, 5=fan INSERT, 6=name link, 7=dob link,
+  //              8=guardian_email link, 9=guardian_phone link,
+  //              10=household_member, 11=audit, 12=COMMIT
   function setupSuccessfulAdd() {
     mockDb.query
       .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] }) // 0 — fan
       .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID }] })                   // 1 — household
       .mockResolvedValueOnce({ rows: [] })                                        // 2 — no staging
-      .mockResolvedValueOnce({ rows: [] })                                        // 3 — BEGIN
-      .mockResolvedValueOnce({ rows: [{ id: MINOR_FAN_ID }] })                   // 4 — fan INSERT
-      .mockResolvedValueOnce({ rows: [] })                                        // 5 — name link
-      .mockResolvedValueOnce({ rows: [] })                                        // 6 — dob link
-      .mockResolvedValueOnce({ rows: [] })                                        // 7 — email link
-      .mockResolvedValueOnce({ rows: [] })                                        // 8 — phone link
-      .mockResolvedValueOnce({ rows: [{ id: MEMBER_ID }] })                      // 9 — household_member
-      .mockResolvedValueOnce({ rows: [] })                                        // 10 — audit
-      .mockResolvedValueOnce({ rows: [] });                                       // 11 — COMMIT
+      .mockResolvedValueOnce({ rows: [] })                                        // 3 — no existing guardian
+      .mockResolvedValueOnce({ rows: [] })                                        // 4 — BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: MINOR_FAN_ID }] })                   // 5 — fan INSERT
+      .mockResolvedValueOnce({ rows: [] })                                        // 6 — name link
+      .mockResolvedValueOnce({ rows: [] })                                        // 7 — dob link
+      .mockResolvedValueOnce({ rows: [] })                                        // 8 — email link
+      .mockResolvedValueOnce({ rows: [] })                                        // 9 — phone link
+      .mockResolvedValueOnce({ rows: [{ id: MEMBER_ID }] })                      // 10 — household_member
+      .mockResolvedValueOnce({ rows: [] })                                        // 11 — audit
+      .mockResolvedValueOnce({ rows: [] });                                       // 12 — COMMIT
   }
 
-  // Happy path: fan exists, household exists, staged match found
-  // Call indices: 0-9 same, 10=staging UPDATE, 11=audit, 12=COMMIT
+  // Happy path: fan exists, household exists, staged match found, no existing guardian.
+  // Call indices: 0-10 same as setupSuccessfulAdd through household_member,
+  //              11=staging UPDATE, 12=audit, 13=COMMIT
   function setupSuccessfulAddWithStagedMatch() {
     mockDb.query
       .mockResolvedValueOnce({ rows: [{ id: ADULT_FAN_ID, deleted_at: null }] }) // 0 — fan
       .mockResolvedValueOnce({ rows: [{ id: HOUSEHOLD_ID }] })                   // 1 — household
       .mockResolvedValueOnce({ rows: [{ id: STAGED_ID }] })                      // 2 — staging match
-      .mockResolvedValueOnce({ rows: [] })                                        // 3 — BEGIN
-      .mockResolvedValueOnce({ rows: [{ id: MINOR_FAN_ID }] })                   // 4 — fan INSERT
-      .mockResolvedValueOnce({ rows: [] })                                        // 5 — name link
-      .mockResolvedValueOnce({ rows: [] })                                        // 6 — dob link
-      .mockResolvedValueOnce({ rows: [] })                                        // 7 — email link
-      .mockResolvedValueOnce({ rows: [] })                                        // 8 — phone link
-      .mockResolvedValueOnce({ rows: [{ id: MEMBER_ID }] })                      // 9 — household_member
-      .mockResolvedValueOnce({ rows: [] })                                        // 10 — staging UPDATE
-      .mockResolvedValueOnce({ rows: [] })                                        // 11 — audit
-      .mockResolvedValueOnce({ rows: [] });                                       // 12 — COMMIT
+      .mockResolvedValueOnce({ rows: [] })                                        // 3 — no existing guardian
+      .mockResolvedValueOnce({ rows: [] })                                        // 4 — BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: MINOR_FAN_ID }] })                   // 5 — fan INSERT
+      .mockResolvedValueOnce({ rows: [] })                                        // 6 — name link
+      .mockResolvedValueOnce({ rows: [] })                                        // 7 — dob link
+      .mockResolvedValueOnce({ rows: [] })                                        // 8 — email link
+      .mockResolvedValueOnce({ rows: [] })                                        // 9 — phone link
+      .mockResolvedValueOnce({ rows: [{ id: MEMBER_ID }] })                      // 10 — household_member
+      .mockResolvedValueOnce({ rows: [] })                                        // 11 — staging UPDATE
+      .mockResolvedValueOnce({ rows: [] })                                        // 12 — audit
+      .mockResolvedValueOnce({ rows: [] });                                       // 13 — COMMIT
   }
 
   // 1 — response shape
@@ -284,6 +287,20 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
     expect(res.body.created_at).toBeDefined();
   });
 
+  test('duplicate-guardian check runs before BEGIN and an empty result still creates the child', async () => {
+    setupSuccessfulAdd();
+
+    const res = await request(app)
+      .post(`/v1/household/${ADULT_FAN_ID}/members`)
+      .send(validBody);
+
+    expect(res.status).toBe(201);
+    const guardSql = mockDb.query.mock.calls[3][0].toUpperCase();
+    expect(guardSql).toContain('HOUSEHOLD_MEMBER');
+    expect(guardSql).toContain("STATUS");
+    expect(mockDb.query.mock.calls[4][0].toUpperCase()).toBe('BEGIN');
+  });
+
   // 2 — fan INSERT uses org_id from context, not body
   test('fan INSERT uses org_id from context — child fan record created in fan table', async () => {
     setupSuccessfulAdd();
@@ -292,8 +309,8 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
       .post(`/v1/household/${ADULT_FAN_ID}/members`)
       .send({ ...validBody, org_id: 'attacker-supplied-org' });
 
-    const fanInsertSql    = mockDb.query.mock.calls[4][0];
-    const fanInsertParams = mockDb.query.mock.calls[4][1];
+    const fanInsertSql    = mockDb.query.mock.calls[5][0];
+    const fanInsertParams = mockDb.query.mock.calls[5][1];
 
     expect(fanInsertSql.toUpperCase()).toContain('INSERT INTO FAN');
     expect(fanInsertParams[0]).toBe(CONTEXT_ORG_ID); // $1 — org_id from context
@@ -307,8 +324,8 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
       .post(`/v1/household/${ADULT_FAN_ID}/members`)
       .send(validBody);
 
-    const nameParams = mockDb.query.mock.calls[5][1];
-    const dobParams  = mockDb.query.mock.calls[6][1];
+    const nameParams = mockDb.query.mock.calls[6][1];
+    const dobParams  = mockDb.query.mock.calls[7][1];
 
     expect(nameParams[0]).toBe(MINOR_FAN_ID);   // $1 — fan_id
     expect(nameParams[1]).toBe('name');           // $2 — identifier_type
@@ -324,8 +341,8 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
       .post(`/v1/household/${ADULT_FAN_ID}/members`)
       .send(validBody);
 
-    const emailSql    = mockDb.query.mock.calls[7][0];
-    const emailParams = mockDb.query.mock.calls[7][1];
+    const emailSql    = mockDb.query.mock.calls[8][0];
+    const emailParams = mockDb.query.mock.calls[8][1];
 
     expect(emailSql).toContain('fan_pass');
     expect(emailParams[1]).toBe('guardian_email');
@@ -340,8 +357,8 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
       .post(`/v1/household/${ADULT_FAN_ID}/members`)
       .send(validBody);
 
-    const phoneSql    = mockDb.query.mock.calls[8][0];
-    const phoneParams = mockDb.query.mock.calls[8][1];
+    const phoneSql    = mockDb.query.mock.calls[9][0];
+    const phoneParams = mockDb.query.mock.calls[9][1];
 
     expect(phoneSql).toContain('fan_pass');
     expect(phoneParams[1]).toBe('guardian_phone');
@@ -356,8 +373,8 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
       .post(`/v1/household/${ADULT_FAN_ID}/members`)
       .send(validBody);
 
-    const memberSql    = mockDb.query.mock.calls[9][0];
-    const memberParams = mockDb.query.mock.calls[9][1];
+    const memberSql    = mockDb.query.mock.calls[10][0];
+    const memberParams = mockDb.query.mock.calls[10][1];
 
     expect(memberSql).toContain("'hard'");
     expect(memberSql).toContain("'active'");
@@ -396,9 +413,9 @@ describe('POST /v1/household/:adult_fan_id/members', () => {
       .post(`/v1/household/${ADULT_FAN_ID}/members`)
       .send(validBody);
 
-    // Call 10 is the staging UPDATE (after household_member at 9)
-    const stagingUpdateSql    = mockDb.query.mock.calls[10][0].toUpperCase();
-    const stagingUpdateParams = mockDb.query.mock.calls[10][1];
+    // Call 11 is the staging UPDATE (after household_member at 10)
+    const stagingUpdateSql    = mockDb.query.mock.calls[11][0].toUpperCase();
+    const stagingUpdateParams = mockDb.query.mock.calls[11][1];
 
     expect(stagingUpdateSql).toContain('STAGING_HOUSEHOLD_DATA');
     expect(stagingUpdateParams[0]).toBe(MINOR_FAN_ID); // $1 — promoted_to
@@ -1945,7 +1962,7 @@ describe('POST /v1/household/:adult_fan_id/members/:child_fan_id/age-up', () => 
     const logged = stubCall[1];
 
     // claim_url must be the literal redacted string — never a real token
-    expect(logged.claim_url).toBe('https://fanpass.thunder.com/claim/[REDACTED]');
+    expect(logged.claim_url).toBe('https://example.com/claim/[REDACTED]');
     // A raw token is two UUIDs concatenated — 64+ hex chars, no dashes
     expect(JSON.stringify(logged)).not.toMatch(/[0-9a-f]{64}/);
 

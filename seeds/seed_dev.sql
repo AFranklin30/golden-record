@@ -24,7 +24,7 @@ END $$;
 -- Generated with: echo -n "dev-api-key-replace-in-prod" | sha256sum
 INSERT INTO org (name, is_active, org_api_key_hash)
 VALUES (
-  'OKC Thunder (Dev)',
+  'Local Dev',
   true,
   'a3d6e2b1c9f4a7d8e5b2c0f3a6d9e1b4c7f0a3d6e2b1c9f4a7d8e5b2c0f3a6'
 )

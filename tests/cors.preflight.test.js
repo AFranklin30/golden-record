@@ -27,7 +27,7 @@ http.Server.prototype.listen = function (...args) {
 
 const app = require('../index');
 
-const ALLOWED_ORIGIN = 'https://fanpass.thunder.com';
+const ALLOWED_ORIGIN = 'https://example.com';
 
 describe('CORS preflight — allowedHeaders (browser-only failure mode)', () => {
   let savedCorsOrigin;
