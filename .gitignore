@@ -4,3 +4,5 @@ node_modules/
 private.key
 public.key
 eval/runs/
+thunder*.sql
+*.csv

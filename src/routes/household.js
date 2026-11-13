@@ -1077,9 +1077,10 @@ router.post('/v1/household/:adult_fan_id/members/:child_fan_id/age-up', async (r
     await req.db.query('COMMIT');
 
     // EMAIL STUB — after commit, fire and forget — token is a credential, never logged
+    const claimUrlBase = (process.env.CLAIM_URL_BASE || 'https://example.com/claim').replace(/\/$/, '');
     logger.info('AGE-UP EMAIL STUB', {
-      subject:    'Your child can now claim their Thunder account',
-      claim_url:  'https://fanpass.thunder.com/claim/[REDACTED]',
+      subject:    'Your child can now claim their account',
+      claim_url:  `${claimUrlBase}/[REDACTED]`,
       expires_at: claim_expires,
       email_stub: true,
     });

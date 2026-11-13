@@ -1,5 +1,5 @@
 # Agent Configuration — Golden Record Fan Identity Platform
-# OKC Thunder — Thunder Innovations Cohort
+# Golden Record
 # Author: Aaron
 # Version: 1.1 · July 2026 · Confidential
 #
@@ -126,7 +126,7 @@ Write to tasks/handoff.md before closing. 5 lines max:
 ```
 Completed: [what was finished this session]
 Next: [exact next file / next prompt in build order]
-Blocked: [anything waiting on Aaron, Monique, Tanner, the Thunder, or credentials]
+Blocked: [anything waiting on Aaron, a customer, or credentials]
 Decisions: [any architectural decisions made that affect downstream files]
 Warnings: [anything the next session needs to know before touching code]
 ```

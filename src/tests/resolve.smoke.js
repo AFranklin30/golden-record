@@ -12,7 +12,7 @@ const orgAuthMiddleware       = require('../middleware/orgAuthMiddleware');
 const correlationIdMiddleware = require('../middleware/correlationIdMiddleware');
 const resolveRouter           = require('../routes/resolve');
 
-const VALID_RAW_KEY = 'dev-api-key-thunder-2026';
+const VALID_RAW_KEY = 'dev-api-key-local-2026';
 const VALID_AUTH    = `Bearer ${VALID_RAW_KEY}`;
 
 let server;
@@ -142,7 +142,7 @@ async function run() {
   assert('bad email → detail present',    typeof r.body.detail === 'string' && r.body.detail.length > 0);
 
   // g) valid request, new fan → 200, is_new_record true
-  const testEmail = `smoke-resolve-${Date.now()}@okc-thunder.test`;
+  const testEmail = `smoke-resolve-${Date.now()}@example.test`;
   r = await post('/v1/resolve', {
     headers: { Authorization: VALID_AUTH },
     body: { identifier_type: 'email', identifier_value: testEmail, org_id: seedOrgId, schema_version: 'v1', source_system: 'smoke-test' }
@@ -172,7 +172,7 @@ async function run() {
                                                     && r.headers['x-correlation-id'].length === 36);
 
   // j) source_system omitted → defaults to "unknown", request still succeeds
-  const testEmail2 = `smoke-resolve-nosrc-${Date.now()}@okc-thunder.test`;
+  const testEmail2 = `smoke-resolve-nosrc-${Date.now()}@example.test`;
   r = await post('/v1/resolve', {
     headers: { Authorization: VALID_AUTH },
     body: { identifier_type: 'email', identifier_value: testEmail2, org_id: seedOrgId, schema_version: 'v1' }

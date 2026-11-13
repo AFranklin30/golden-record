@@ -3,7 +3,7 @@
 -- Blocking retrieval — schema (step 1 of 4)
 -- migration_016.sql
 --
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Version: 1.0 · August 2026 · Confidential
 --

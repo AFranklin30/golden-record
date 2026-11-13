@@ -413,14 +413,14 @@ describe('regression — resolverEngine export-line change is inert', () => {
         `INSERT INTO identifier_link
            (fan_id, identifier_type, identifier_value, org_id, source_system,
             schema_version, confidence_score, first_seen_at, last_seen_at)
-         VALUES ($1, 'name', 'Regression Test', $2, 'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+         VALUES ($1, 'name', 'Regression Test', $2, 'demo_app', 'v1', 1.0, NOW(), NOW())`,
         [existingFanId, testOrgId]
       );
       await client.query(
         `INSERT INTO identifier_link
            (fan_id, identifier_type, identifier_value, org_id, source_system,
             schema_version, confidence_score, first_seen_at, last_seen_at)
-         VALUES ($1, 'dob', '1990-03-15', $2, 'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+         VALUES ($1, 'dob', '1990-03-15', $2, 'demo_app', 'v1', 1.0, NOW(), NOW())`,
         [existingFanId, testOrgId]
       );
 

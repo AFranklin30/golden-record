@@ -1,5 +1,5 @@
 # Data Integrity Audit — 38B
-# OKC Thunder · Golden Record Fan Identity Platform
+# Golden Record
 # Author: Aaron (audited by Claude Code)
 # Date: 2026-06-02
 # Branch: sprint-3

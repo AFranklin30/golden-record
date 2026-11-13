@@ -1,6 +1,6 @@
 -- migration_009.sql
 -- Golden Record Fan Identity Platform
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Sprint 2 constraint fix (applied in Sprint 3 cycle)
 --

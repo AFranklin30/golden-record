@@ -1,7 +1,7 @@
 'use strict';
 
 // scripts/promoteTraceToCorpus.js
-// Golden Record Fan Identity Platform — OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 //
 // Promotes one 'performed' resolution_trace row into evaluation_corpus,
 // with a hand-built replayable candidate_snapshot and two deliberately

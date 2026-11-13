@@ -196,7 +196,7 @@ After: The DD/MM/YYYY block (7 lines) is deleted from `normalizeDob`. The test i
 updated: `'31/03/2000'` now throws `NormalizationError('dob format invalid')` as
 expected for a US-only platform.
 
-**Why:** The Thunder is US-only. Silently accepting `31/03/2000` and returning
+**Why:** Date parsing is US-only. Silently accepting `31/03/2000` and returning
 `2000-03-31` is incorrect behavior that could corrupt identity records. The fix is
 intentional — not just cleanup.
 

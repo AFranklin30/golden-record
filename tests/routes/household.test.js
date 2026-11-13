@@ -1945,7 +1945,7 @@ describe('POST /v1/household/:adult_fan_id/members/:child_fan_id/age-up', () => 
     const logged = stubCall[1];
 
     // claim_url must be the literal redacted string — never a real token
-    expect(logged.claim_url).toBe('https://fanpass.thunder.com/claim/[REDACTED]');
+    expect(logged.claim_url).toBe('https://example.com/claim/[REDACTED]');
     // A raw token is two UUIDs concatenated — 64+ hex chars, no dashes
     expect(JSON.stringify(logged)).not.toMatch(/[0-9a-f]{64}/);
 

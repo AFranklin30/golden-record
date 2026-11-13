@@ -1,5 +1,5 @@
 # Sprint 2 Security Regression Report
-**OKC Thunder · Golden Record Fan Identity Platform**
+**Golden Record**
 Date: 2026-05-28 | Reviewer: Claude Sonnet 4.6
 Scope: Net new Sprint 2 components only — probabilisticMatcher.js,
        resolverEngine.js Paths C/D, conflicts.js, migration_004.sql

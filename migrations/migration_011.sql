@@ -1,6 +1,6 @@
 -- migration_011.sql
 -- Golden Record Fan Identity Platform
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Sprint 3 (data integrity follow-up)
 --

@@ -3,7 +3,7 @@
 -- Stage 7 Evaluation Tables
 -- migration_014.sql
 --
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Version: 1.0 · July 2026 · Confidential
 --

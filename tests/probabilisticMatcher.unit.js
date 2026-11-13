@@ -1,6 +1,6 @@
 // probabilisticMatcher.unit.js
 // Golden Record Fan Identity Platform
-// OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 // Sprint 4 — soft matching correctness, step 2 of 3
 //
 // Pure function test — no database, no pool, no RLS.

@@ -3,7 +3,7 @@
 -- conflict_queue review-screen index
 -- migration_015.sql
 --
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Version: 1.0 · August 2026 · Confidential
 --

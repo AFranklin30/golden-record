@@ -1,5 +1,5 @@
 # STRIDE Threat Model Audit — Golden Record Fan Identity Platform
-**OKC Thunder · Thunder Innovations Cohort**
+**Golden Record**
 Audit date: 2026-05-11 | Auditor: Claude Sonnet 4.6
 Feeds: Step 7b (OWASP Top 10) · Step 7c (CIA Triad summary)
 
@@ -66,7 +66,7 @@ Dual-header auth on profile: Authorization: Bearer \<org-key\> + X-Fan-Token: \<
 | POST /v1/session audit INSERT not transactional with signToken | R | `signToken` executes at session.js:49 (in-memory, cannot roll back). The audit INSERT follows at session.js:51-56. If the INSERT fails, the token exists in the wild with no audit record. The outer catch only logs and returns 500 — the token is already signed. | L | M | Move signToken inside a DB transaction with a savepoint, or at minimum wrap signToken+INSERT atomically. If INSERT fails, emit a structured alert immediately (token-without-audit-record is a security event). | ❌ Unmitigated |
 | fan_id in URL verified against JWT claim | E | GET /v1/fan/:id/profile: `url_fan_id !== jwt_fan_id` guard at profile.js:27, before any DB call. Cross-fan profile access is blocked at the GUARD layer. | L | H | In-memory guard before DB. | ✅ Mitigated |
 | deleted_at checked before profile and session | S | POST /v1/session and GET /v1/fan/:id/profile both check `fan.deleted_at` before proceeding (session.js:45, profile.js:43). Erased fans cannot receive tokens or read profiles. | L | H | deleted_at guard in place. | ✅ Mitigated |
-| JWT payload visible to WebView client | I | JWT payload (sub=fan_id, org=org_id) is Base64-encoded, not encrypted. The Thunder app can decode the payload client-side — fan_id and org_id visible in the app's memory. UUIDs are not PII per se, but fan_id uniquely identifies the fan across the system. | L | L | Acceptable; document that JWT payload is not secret (only signed). | ✅ Mitigated |
+| JWT payload visible to WebView client | I | JWT payload (sub=fan_id, org=org_id) is Base64-encoded, not encrypted. A client app can decode the payload client-side — fan_id and org_id visible in the app's memory. UUIDs are not PII per se, but fan_id uniquely identifies the fan across the system. | L | L | Acceptable; document that JWT payload is not secret (only signed). | ✅ Mitigated |
 | Token replay within 15-minute window | D | Attacker capturing a valid X-Fan-Token can make repeated GET /v1/fan/:id/profile calls for the full token lifetime. No per-fan or per-jti rate limiting. | M | M | Rate limit on GET /v1/fan/:id/profile per fan_id or jti; Sprint 2 revocation closes this fully. | ❌ Unmitigated |
 
 ---

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/resetLocalDb.sh
-# Golden Record Fan Identity Platform — OKC Thunder — Thunder Innovations Cohort
+# Golden Record
 #
 # Drops and recreates the local Postgres database, then replays every
 # migration in order. LOCAL ONLY — refuses to run against anything else.

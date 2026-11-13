@@ -1,6 +1,6 @@
 // eval/harness.js
 // Stage 7 evaluation harness — pure scoring/replay logic.
-// Golden Record Fan Identity Platform — OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 //
 // Pure function module — no database calls, no side effects. DB I/O lives in
 // eval/runCorpus.js. Mirrors probabilisticMatcher.js's purity discipline.

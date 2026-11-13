@@ -1,6 +1,6 @@
 # Security Audit — Component 38
 # Golden Record Fan Identity Platform
-# OKC Thunder — Thunder Innovations Cohort
+# Golden Record
 # Author: Claude Code (read-only audit — no code modified)
 # Date: 2026-06-02
 # Auditor note: 23 files read. src/middleware/jwtMiddleware.js and
@@ -312,7 +312,7 @@ STATUS:   MEDIUM
 FINDING:  household.js:1006-1011 — the age-up email stub logs the raw
           claim token in the claim_url field:
             logger.info('AGE-UP EMAIL STUB', {
-              claim_url: `https://fanpass.thunder.com/claim/${raw_token}`
+              claim_url: `https://example.com/claim/${raw_token}`
             })
           If this log entry reaches Cloud Logging, any party with log
           read access can use the raw token to claim any aged-up child
@@ -1097,7 +1097,7 @@ FINDING:  GET /v1/fan/:id/profile — jwtMiddleware applied inline.
 
 ---
 
-## ZONE 2 — Thunder Staff Internal
+## ZONE 2 — Staff Internal
 
 ---
 

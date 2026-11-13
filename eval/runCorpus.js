@@ -1,6 +1,6 @@
 // eval/runCorpus.js
 // Stage 7 evaluation harness — CLI entry + DB I/O.
-// Golden Record Fan Identity Platform — OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 //
 // Usage: node eval/runCorpus.js <org_id>
 //

@@ -137,7 +137,7 @@ async function runPathD() {
           source_system, schema_version, confidence_score,
           first_seen_at, last_seen_at)
        VALUES ($1, 'name', 'Aaron Test', $2,
-               'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+               'demo_app', 'v1', 1.0, NOW(), NOW())`,
       [existingFanId, testOrgId]
     );
     await client.query(
@@ -146,7 +146,7 @@ async function runPathD() {
           source_system, schema_version, confidence_score,
           first_seen_at, last_seen_at)
        VALUES ($1, 'dob', '1990-03-15', $2,
-               'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+               'demo_app', 'v1', 1.0, NOW(), NOW())`,
       [existingFanId, testOrgId]
     );
 
@@ -376,7 +376,7 @@ async function runPathA() {
           source_system, schema_version, confidence_score,
           first_seen_at, last_seen_at)
        VALUES ($1, 'email', 'returning.fan@test-synth.com', $2,
-               'thunder_app', 'v1', 1.0,
+               'demo_app', 'v1', 1.0,
                NOW() - INTERVAL '30 days',
                NOW() - INTERVAL '30 days')`,
       [existingFanId, testOrgId]
@@ -578,7 +578,7 @@ async function runPathADeletedFan() {
           source_system, schema_version, confidence_score,
           first_seen_at, last_seen_at)
        VALUES ($1, 'email', 'deleted.fan@test-synth.com', $2,
-               'thunder_app', 'v1', 1.0,
+               'demo_app', 'v1', 1.0,
                NOW() - INTERVAL '30 days',
                NOW() - INTERVAL '30 days')`,
       [deletedFanId, testOrgId]
@@ -983,7 +983,7 @@ async function runPathC() {
           source_system, schema_version, confidence_score,
           first_seen_at, last_seen_at)
        VALUES ($1, 'email', $2, $3,
-               'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+               'demo_app', 'v1', 1.0, NOW(), NOW())`,
       [existingFanId, PATHC_EMAIL, testOrgId]
     );
 
@@ -993,7 +993,7 @@ async function runPathC() {
           source_system, schema_version, confidence_score,
           first_seen_at, last_seen_at)
        VALUES ($1, 'name', $2, $3,
-               'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+               'demo_app', 'v1', 1.0, NOW(), NOW())`,
       [existingFanId, PATHC_NAME, testOrgId]
     );
 

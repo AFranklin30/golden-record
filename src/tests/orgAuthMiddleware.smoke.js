@@ -115,7 +115,7 @@ async function run() {
   assert('inactive org → correct message',    r.body.message === 'org account is inactive');
 
   // g) Valid key, active org (seed row)
-  r = await hit({ Authorization: 'Bearer dev-api-key-thunder-2026' });
+  r = await hit({ Authorization: 'Bearer dev-api-key-local-2026' });
   assert('valid key → 200',                   r.status === 200);
   assert('valid key → ok body',               r.body.ok === true);
 

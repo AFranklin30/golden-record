@@ -39,7 +39,7 @@ Org created: aaaaaaaa-0000-0000-0000-000000000001 (Demo Org)
 === SUMMARY ===
 org_id: aaaaaaaa-0000-0000-0000-000000000001
 org_name: Demo Org
-raw API key (send as "Authorization: Bearer <key>"): demo-seed-key-do-not-use-in-production
+API key: stored as sha256 only. The local demo key is not written to this summary.
 
 Fans:
   93d80484-84f0-41fb-9bb8-3a4a0e163e3c  Alice Chen — clean hard match (PATH A)

@@ -37,9 +37,9 @@ const CSV_HEADER = [
 //   - WHERE f.deleted_at IS NULL (merged-away fans never appear as their own row)
 //   - f.id/created_at/updated_at instead of f.id/org_id (resolverEngine doesn't
 //     need timestamps; this export does)
-// NOTE (scale): synchronous by design at current scale (53 prod fans, 27k in
-// Thunder's full sample, well under Cloud Run's 300s default timeout). Would
-// need streaming/pagination at ~millions of rows — not built here, not needed yet.
+// NOTE (scale): synchronous by design at current volume, well under Cloud Run's
+// 300s default timeout. Streaming or pagination would be needed around millions
+// of rows. That is not built here.
 const FAN_PROJECTION_QUERY = `
   SELECT f.id, f.created_at, f.updated_at,
          il_email.identifier_value    AS email,

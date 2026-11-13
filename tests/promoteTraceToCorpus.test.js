@@ -116,14 +116,14 @@ describe('scripts/promoteTraceToCorpus — guards + shape (isolated test org)', 
       `INSERT INTO identifier_link
          (fan_id, identifier_type, identifier_value, org_id, source_system,
           schema_version, confidence_score, first_seen_at, last_seen_at)
-       VALUES ($1, 'email', 'promote.fixture@test-synth.com', $2, 'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+       VALUES ($1, 'email', 'promote.fixture@test-synth.com', $2, 'demo_app', 'v1', 1.0, NOW(), NOW())`,
       [fanId, testOrgId]
     );
     await client.query(
       `INSERT INTO identifier_link
          (fan_id, identifier_type, identifier_value, org_id, source_system,
           schema_version, confidence_score, first_seen_at, last_seen_at)
-       VALUES ($1, 'name', 'Promote Fixture', $2, 'thunder_app', 'v1', 1.0, NOW(), NOW())`,
+       VALUES ($1, 'name', 'Promote Fixture', $2, 'demo_app', 'v1', 1.0, NOW(), NOW())`,
       [fanId, testOrgId]
     );
 

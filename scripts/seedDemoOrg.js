@@ -1,7 +1,7 @@
 'use strict';
 
 // scripts/seedDemoOrg.js
-// Golden Record Fan Identity Platform — OKC Thunder — Thunder Innovations Cohort
+// Golden Record
 //
 // Seeds ONE permanent demo org: fixture fans inserted directly via SQL
 // (what a touchpoint already knows), then real resolutions fired through the
@@ -530,7 +530,7 @@ const CORPUS_PAIRS = [
     rationale: 'Email alone is a strong, exact signal; the candidate is otherwise sparse but has nothing to contradict it.',
   },
   // TODO — pairs 9-16 are pending Monique's labeling (ground-truth verdicts
-  // are Thunder-owned; see CLAUDE.md "Status as of 2026-07-14" / Stage 7).
+  // are customer-owned; see CLAUDE.md "Status as of 2026-07-14" / Stage 7).
   // Do NOT invent verdicts for them. Add as their own evaluation_corpus rows
   // once labeled — this file inserts exactly the 8 pairs above.
 ];
@@ -618,7 +618,7 @@ async function main() {
     log('\n=== SUMMARY ===');
     log(`org_id: ${DEMO_ORG_ID}`);
     log(`org_name: ${DEMO_ORG_NAME}`);
-    log(`raw API key (send as "Authorization: Bearer <key>"): ${DEMO_API_KEY}`);
+    log('API key: stored as sha256 only. The local demo key is not written to this summary.');
     log('');
     log('Fans:');
     log(`  ${s1.fan_id}  ${s1.label}`);

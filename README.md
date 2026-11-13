@@ -1,6 +1,6 @@
 # Golden Record — Fan Identity Resolution Platform
 
-OKC Thunder — Thunder Innovations Cohort  
+Golden Record  
 Author: Aaron Franklin  
 Stack: Node.js/Express · PostgreSQL on Cloud SQL · Firestore · GCP Cloud Run  
 Status: Production — Sprint 3 Complete
@@ -11,9 +11,9 @@ Status: Production — Sprint 3 Complete
 
 Golden Record is a production-grade fan identity resolution platform. It resolves fragmented fan identifiers — NFC card UIDs, emails, phone numbers, NBA IDs, Ticketmaster IDs — into a single canonical fan record.
 
-Every fan tap, login, or ingestion event flows through the identity graph. The system is the source of truth for who a fan is across all Thunder touchpoints.
+Every fan tap, login, or ingestion event flows through the identity graph. The system is the source of truth for who a fan is across every touchpoint.
 
-Live URL: `https://golden-record-970568355634.us-central1.run.app`
+Live URL: `https://YOUR_CLOUD_RUN_HOST`
 
 ---
 
@@ -29,8 +29,8 @@ Live URL: `https://golden-record-970568355634.us-central1.run.app`
 
 **1. Clone the repo**
 ```bash
-git clone https://github.com/Thunder-Innovations/identity-resolution-project.git
-cd identity-resolution-project
+git clone https://github.com/AFranklin30/golden-record.git
+cd golden-record
 ```
 
 **2. Install dependencies**
@@ -190,21 +190,21 @@ Full API reference: see `golden-record-api-docs.md`
 
 ### Build and Deploy
 ```bash
-gcloud builds submit --tag gcr.io/identity-resolution-production/golden-record
+gcloud builds submit --tag gcr.io/YOUR_GCP_PROJECT/golden-record
 
 gcloud run deploy golden-record \
-  --image gcr.io/identity-resolution-production/golden-record \
+  --image gcr.io/YOUR_GCP_PROJECT/golden-record \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars FIRESTORE_PROJECT_ID=identity-resolution-production \
+  --set-env-vars FIRESTORE_PROJECT_ID=YOUR_GCP_PROJECT \
   --set-secrets JWT_PRIVATE_KEY=jwt-private-key:latest,JWT_PUBLIC_KEY=jwt-public-key:latest,DATABASE_URL=database-url:latest \
-  --add-cloudsql-instances identity-resolution-production:us-central1:golden-record
+  --add-cloudsql-instances YOUR_GCP_PROJECT:us-central1:YOUR_SQL_INSTANCE
 ```
 
 ### Verify
 ```bash
-curl https://golden-record-970568355634.us-central1.run.app/health
+curl https://YOUR_CLOUD_RUN_HOST/health
 ```
 
 ### Rollback
@@ -253,4 +253,4 @@ npm test
 ## Contact
 
 Aaron Franklin — afrank25303@gmail.com  
-Backend Engineer — Thunder Innovations Cohort
+Backend Engineer

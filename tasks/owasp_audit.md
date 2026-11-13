@@ -1,5 +1,5 @@
 # OWASP Top 10 Audit — Golden Record Fan Identity Platform
-**OKC Thunder · Thunder Innovations Cohort**
+**Golden Record**
 Audit date: 2026-05-11 | Auditor: Claude Sonnet 4.6
 Feeds: Step 7c (CIA Triad summary) · Sprint 2 security backlog
 

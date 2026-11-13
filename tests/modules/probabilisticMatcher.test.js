@@ -286,8 +286,8 @@ describe('probabilisticMatcher — scoreMatch', () => {
 
   test('name_alone fires when name matches even when dob and zip are null', () => {
     const result = scoreMatch(
-      makeCandidate({ name: 'Alice Thunder' }),
-      makeInbound({  name: 'Alice Thunder' })
+      makeCandidate({ name: 'Alice Parker' }),
+      makeInbound({  name: 'Alice Parker' })
     );
     expect(result.signals_matched.some(s => s.signal === 'name_alone')).toBe(true);
     expect(result.score).toBeCloseTo(0.3, 5);
@@ -295,7 +295,7 @@ describe('probabilisticMatcher — scoreMatch', () => {
 
   test('name_alone does not fire on partial name match', () => {
     const result = scoreMatch(
-      makeCandidate({ name: 'Alice Thunder' }),
+      makeCandidate({ name: 'Alice Parker' }),
       makeInbound({  name: 'Alice' })
     );
     expect(result.signals_matched.some(s => s.signal === 'name_alone')).toBe(false);
@@ -307,8 +307,8 @@ describe('probabilisticMatcher — scoreMatch', () => {
     // email_similarity adjusted 0.7 * 1.0 = 0.70
     // name_alone adjusted 0.3 * 1.0 = 0.30 → additive sum 1.0
     const result = scoreMatch(
-      makeCandidate({ email: 'fan@example.com', name: 'Alice Thunder' }),
-      makeInbound({  email: 'fan@example.com', name: 'Alice Thunder' })
+      makeCandidate({ email: 'fan@example.com', name: 'Alice Parker' }),
+      makeInbound({  email: 'fan@example.com', name: 'Alice Parker' })
     );
     expect(result.score).toBeCloseTo(1.0, 5);
     expect(result.signals_matched.some(s => s.signal === 'email_similarity')).toBe(true);
@@ -319,8 +319,8 @@ describe('probabilisticMatcher — scoreMatch', () => {
 
   test('signals_matched entries use new shape (raw_score, recency_multiplier, adjusted_score)', () => {
     const result = scoreMatch(
-      makeCandidate({ name: 'Alice Thunder' }),
-      makeInbound({  name: 'Alice Thunder' })
+      makeCandidate({ name: 'Alice Parker' }),
+      makeInbound({  name: 'Alice Parker' })
     );
     const sig = result.signals_matched.find(s => s.signal === 'name_alone');
     expect(sig).toBeDefined();
@@ -574,8 +574,8 @@ describe('probabilisticMatcher — penalties + name double-count (Sprint 5 promp
   test('case 2 — name_alone still fires when no dob present (guard does not kill legitimate case)', () => {
     // No dob on either side → name_plus_dob cannot fire → nameCountedInCompositeSignal stays false
     const result = scoreMatch(
-      makeCandidate({ name: 'alice thunder', device_id: 'device-abc-x' }),
-      makeInbound({  name: 'alice thunder', device_id: 'device-abc-x' })
+      makeCandidate({ name: 'alice parker', device_id: 'device-abc-x' }),
+      makeInbound({  name: 'alice parker', device_id: 'device-abc-x' })
     );
     expect(result.signals_matched.some(s => s.signal === 'name_alone')).toBe(true);
   });
@@ -786,8 +786,8 @@ describe('probabilisticMatcher — email exact + name fuzzy (Sprint 5 prompt 4)'
 
   test('case 7 — exact name still matches: identical names fire via fast-path (left === right)', () => {
     const result = scoreMatch(
-      makeCandidate({ name: 'alice thunder' }),
-      makeInbound({  name: 'alice thunder' })
+      makeCandidate({ name: 'alice parker' }),
+      makeInbound({  name: 'alice parker' })
     );
     expect(result.signals_matched.some(s => s.signal === 'name_alone')).toBe(true);
   });

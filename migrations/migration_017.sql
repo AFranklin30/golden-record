@@ -3,7 +3,7 @@
 -- CSV fan export — export_run table
 -- migration_017.sql
 --
--- OKC Thunder — Thunder Innovations Cohort
+-- Golden Record
 -- Author: Aaron
 -- Version: 1.0 · September 2026 · Confidential
 --

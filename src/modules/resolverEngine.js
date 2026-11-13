@@ -312,7 +312,7 @@ async function resolverEngine(input, db) {
       // STEP 1 — find candidates for probabilistic scoring (module call before any db write)
       // Blocking: narrow to fans sharing an exact key with the inbound, then score
       // within that set. Replaces the LIMIT 100 scan, which took 100 arbitrary fans
-      // per org and at Thunder scale essentially never contained the true match.
+      // per org and at production scale essentially never contained the true match.
       const block = await findBlockCandidates(inbound, org_id, db);
 
       trace.block_keys_available = block.keysAvailable;
