@@ -1,3 +1,31 @@
+# Customer CSV import
+
+## Context
+A customer file has a name, email, birthday, ZIP, and phone on one row. One resolve call keeps only the single identifier it was given, so the next row cannot find that person. The import calls the existing resolver, then stores the rest of the row on the fan the resolver returns. Matching does not change. Nothing merges on its own.
+
+## Files
+- `migrations/migration_018.sql` — narrow `uq_identifier_per_org`; add `import_batch`, `import_row`, and audit event `import_identifiers_attached`
+- `src/modules/customerImport.js` — parse, validate, call `resolverEngine`, then insert the remaining identifiers
+- `tests/modules/customerImport.test.js` — validation with no resolver call, and the ten-row file on local Postgres
+- `CLAUDE.md` — uniqueness and the new audit event
+
+## THE FIX
+`uq_identifier_per_org` stays unique for email, phone, nfc_uid, nba_id, ticketmaster_id, guardian_email, and guardian_phone when `source_system != 'fan_pass'`. name, dob, and zip may repeat across fans. The row key is sha256 of org plus normalized email, name, dob, zip, and phone. A completed key is not sent to the resolver again. Remaining identifiers are inserted only on the returned fan_id. A second birthday on an exact email match is not stored. Phone is stored and is not sent to the scorer.
+
+## THE TEST
+1. A row with no email and no name-plus-birthday is an error and creates no fan.
+2. Rows 1 and 2 are one fan. Name, birthday, ZIP, phone, and email are stored.
+3. Rows 3 and 4 open a pending review. Nothing is merged.
+4. Rows 5 and 6 open a pending review with Robert. Nothing is merged.
+5. Rows 7 and 8 are different fans. Robert Jones is not reviewed against Bob Smith.
+6. Rows 9 and 10 are one fan. The 1992 birthday is not stored. Both phones are stored.
+7. Importing the file again adds no fans, no reviews, and no identifier rows.
+8. Confirming the Jon and John review through `POST /v1/conflicts/:id/confirm` soft-deletes only the new fan. `GET /v1/export/fans` omits that fan.
+9. Confirming Bob into Robert works once. The other two reviews stay pending. Confirming that same review again returns 409. When another pending review names Robert as the target, that confirm returns 409 because one fan can absorb only one merge.
+
+## DO NOT
+Do not change `resolverEngine` or `probabilisticMatcher`. Do not auto-merge. Do not store a disagreeing birthday on the exact-email fan. Do not send phone into scoring. Do not reset the local database. Do not deploy.
+
 # Name-and-birthday review floor
 
 ## Context

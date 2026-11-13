@@ -495,7 +495,8 @@ the SAME change. This has broken production THREE times (migrations 007, 009, 01
 event_type ×2, match_type ×1). Currently allowed: resolution, session_issued,
 conflict_confirmed, conflict_rejected, merge_reversed, household_created,
 household_member_added, household_member_updated, household_member_severed,
-household_member_aged_up, child_session_issued, profile_claimed, ingest_failure.
+household_member_aged_up, child_session_issued, profile_claimed, ingest_failure,
+import_identifiers_attached (migration_018).
 Verify against the latest migration before any INSERT with a new event_type.
 
 ---
@@ -517,7 +518,7 @@ Key tables:
 - `resolved_by`/`merged_by`/`severed_by`/`aged_up_initiated_by` are TEXT = org_name, NOT individual staff identity (no staff auth layer exists).
 
 **Uniqueness indexes on identifier_link — two, scoped to disjoint row sets, they never conflict:**
-- `uq_identifier_per_org` on (identifier_type, identifier_value, org_id) **WHERE source_system != 'fan_pass'** — migration_013, revised 2026-06-28. The `WHERE` clause is load-bearing: siblings legitimately share `guardian_email`/`guardian_phone`, and an unfiltered index blocked adding a second child to any household. **Do NOT remove the WHERE clause to "simplify."**
+- `uq_identifier_per_org` on (identifier_type, identifier_value, org_id) **WHERE source_system != 'fan_pass' AND identifier_type is a hard type** — migration_013, narrowed by migration_018. Hard types: email, phone, nfc_uid, nba_id, ticketmaster_id, guardian_email, guardian_phone. name, dob, and zip may repeat across fans in one org; a shared birthday is not a unique person. The `source_system != 'fan_pass'` clause stays: siblings legitimately share `guardian_email`/`guardian_phone`. **Do NOT remove that clause, and do NOT put name, dob, or zip back into the unique set.**
 - `uq_identifier_link_managed` on (fan_id, identifier_type, org_id) WHERE source_system = 'fan_pass' — "one identifier per child," allows different children to share a guardian.
 
 ---
