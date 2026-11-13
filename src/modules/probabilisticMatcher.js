@@ -58,9 +58,8 @@ const SIGNAL_CONFIG = {
   // comparison — how each field is compared. Calibration dials. Product defaults.
   // name_similarity_threshold: minimum levenshteinSimilarity for two names to
   //   count as the same person. 0.85 accepts 'jon smith' vs 'john smith'
-  //   (0.9) and rejects genuinely different names. Does NOT catch nicknames
-  //   ('bob smith' vs 'robert smith' = ~0.67) — that is a separate body of
-  //   work, not a threshold problem.
+  //   (0.9) and rejects genuinely different names. Nicknames are a separate
+  //   given-name list in GIVEN_NAME_GROUPS, not a lower threshold.
   // email is compared EXACTLY — no threshold, by design (Sprint 5 prompt 4).
   comparison: {
     name_similarity_threshold: 0.85,
@@ -90,7 +89,7 @@ function computeScorerFingerprint(config, weights) {
 // Composite scorer version. Manual 'v1' tracks LOGIC changes (bump by hand
 // when you change code without moving a value). The hash tracks CONFIG
 // changes (auto). See Stage 7 prompt 3 context for why both are needed.
-const SCORER_VERSION = `v1+${computeScorerFingerprint(SIGNAL_CONFIG, SIGNAL_WEIGHTS)}`;
+const SCORER_VERSION = `v2+${computeScorerFingerprint(SIGNAL_CONFIG, SIGNAL_WEIGHTS)}`;
 
 // Approximate months between last_seen_at and now.
 // Uses 30.44 days/month — close enough for staleness bucketing.
@@ -133,19 +132,52 @@ function levenshteinSimilarity(a, b) {
   return 1.0 - levenshteinDistance(a, b) / maxLength;
 }
 
-// Name comparison — FUZZY as of Sprint 5 prompt 4.
-// Names are where fuzzy matching earns its keep: 'jon smith' vs
-// 'john smith' (similarity 0.9) is the same person and exact matching
-// missed it entirely. Threshold is SIGNAL_CONFIG-driven, not hardcoded.
-// STILL does not handle nicknames (Bob vs Robert ~0.67) — Levenshtein
-// measures typos, not synonyms. That remains unimplemented and out of scope.
-// Normalization (trim/lowercase) is retained: fuzziness is for typos, not
-// for casing and whitespace, which normalizer.js already handles upstream.
+// Given-name groups. First token only. Last token still uses the spelling check.
+// A shared list, not per org. Add a name by putting it in an existing group.
+const GIVEN_NAME_GROUPS = [
+  ['robert', 'rob', 'bob', 'bobby', 'robbie'],
+  ['william', 'will', 'bill', 'billy', 'willy'],
+  ['elizabeth', 'eliza', 'liz', 'beth', 'betty', 'libby'],
+  ['james', 'jim', 'jimmy', 'jamie'],
+  ['john', 'johnny', 'jack'],
+];
+
+const GIVEN_NAME_GROUP = new Map();
+for (let groupIndex = 0; groupIndex < GIVEN_NAME_GROUPS.length; groupIndex++) {
+  for (const name of GIVEN_NAME_GROUPS[groupIndex]) {
+    GIVEN_NAME_GROUP.set(name, groupIndex);
+  }
+}
+
+function givenNamesEquivalent(left, right) {
+  const leftGroup = GIVEN_NAME_GROUP.get(left);
+  const rightGroup = GIVEN_NAME_GROUP.get(right);
+  return leftGroup != null && leftGroup === rightGroup;
+}
+
+// First token is a listed nickname and the last token passes the spelling check.
+// Single-word names stay on the full-string spelling check below.
+function nicknameNameMatch(left, right) {
+  const leftParts = left.split(' ');
+  const rightParts = right.split(' ');
+  if (leftParts.length < 2 || rightParts.length < 2) return false;
+  if (!givenNamesEquivalent(leftParts[0], rightParts[0])) return false;
+  const leftLast = leftParts[leftParts.length - 1];
+  const rightLast = rightParts[rightParts.length - 1];
+  if (leftLast === rightLast) return true;
+  return levenshteinSimilarity(leftLast, rightLast) >= SIGNAL_CONFIG.comparison.name_similarity_threshold;
+}
+
+// Name comparison — spelling first, then a given-name list.
+// 'jon smith' vs 'john smith' (similarity 0.9) passes the spelling check.
+// 'bob smith' vs 'robert smith' (~0.67) fails spelling and passes the list.
+// Threshold stays 0.85. Normalization (trim/lowercase) is retained.
 function normalizedNameMatch(a, b) {
   const left  = a.trim().toLowerCase();
   const right = b.trim().toLowerCase();
   if (left === right) return true;
-  return levenshteinSimilarity(left, right) >= SIGNAL_CONFIG.comparison.name_similarity_threshold;
+  if (levenshteinSimilarity(left, right) >= SIGNAL_CONFIG.comparison.name_similarity_threshold) return true;
+  return nicknameNameMatch(left, right);
 }
 
 // detectConflicts — pure. Flags fields present on BOTH records that disagree.

@@ -306,6 +306,13 @@ describe('eval/harness + eval/runCorpus — Stage 7 evaluation replay', () => {
     expect(row.expected_verdict).toBe('match');
   });
 
+  it('fixture (e): name and birthday under 0.60 replays as path D and keeps the real score', () => {
+    const row = findRow(corpusIdE);
+    expect(row.replayed_score).toBeLessThan(0.60);
+    expect(row.signals_matched.some((s) => s.signal === 'name_plus_dob')).toBe(true);
+    expect(row.replayed_path).toBe('D');
+  });
+
   it('7. fixture (f): score_source replayed, trace_score null, gate_status passed', () => {
     const row = findRow(corpusIdF);
     expect(row.score_source).toBe('replayed');

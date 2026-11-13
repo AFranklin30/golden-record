@@ -22,7 +22,8 @@ const { scoreMatch } = require('../../src/modules/probabilisticMatcher');
 const { resolverEngine } = require('../../src/modules/resolverEngine');
 
 const ORG_ID       = 'aaaaaaaa-0000-0000-0000-000000000001';
-const CANDIDATE_ID = 'bbbbbbbb-0000-0000-0000-000000000002';
+const CANDIDATE_ID       = 'bbbbbbbb-0000-0000-0000-000000000002';
+const FLOOR_CANDIDATE_ID = 'eeeeeeee-0000-0000-0000-000000000005';
 const FAN_ID       = 'cccccccc-0000-0000-0000-000000000003';
 const AUDIT_ID     = 'dddddddd-0000-0000-0000-000000000004';
 
@@ -791,6 +792,134 @@ describe('resolverEngine — resolution_path per setup helper (guards the fixtur
 
     expect(result.match_type).toBe('conflict');
     expect(tracePathOf(db)).toBe('D');
+  });
+
+});
+
+describe('resolverEngine — name-and-birthday review floor', () => {
+
+  function conflictInsertOf(db) {
+    return db.query.mock.calls.find(
+      c => typeof c[0] === 'string' && c[0].includes('INSERT INTO conflict_queue')
+    );
+  }
+
+  function setupTwoCandidates() {
+    return buildMockDb({
+      blockEmail: { rows: [{ fan_id: CANDIDATE_ID }, { fan_id: FLOOR_CANDIDATE_ID }] },
+      candidateJoin: {
+        rows: [
+          candidateRow,
+          { ...candidateRow, id: FLOOR_CANDIDATE_ID },
+        ],
+      },
+    });
+  }
+
+  test('name_plus_dob at 0.40 opens review and stores the real score', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({
+      score: 0.40,
+      signals_matched: [{ signal: 'name_plus_dob' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.40);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert).toBeDefined();
+    expect(conflictInsert[1][1]).toBe(CANDIDATE_ID);
+    expect(conflictInsert[1][4]).toBe(0.40);
+  });
+
+  test('a 0.40 score with no name_plus_dob signal stays a new fan and writes no queue row', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({
+      score: 0.40,
+      signals_matched: [{ signal: 'name_alone' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('hard');
+    expect(result.confidence_score).toBe(1.0);
+    expect(tracePathOf(db)).toBe('B');
+    expect(conflictInsertOf(db)).toBeUndefined();
+  });
+
+  test('name_plus_dob at 0.90 stays path C', async () => {
+    const db = setupPathC();
+    scoreMatch.mockReturnValue({
+      score: 0.90,
+      signals_matched: [{ signal: 'name_plus_dob' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('soft');
+    expect(result.confidence_score).toBe(0.90);
+    expect(tracePathOf(db)).toBe('C');
+  });
+
+  test('a 0.70 score with no name_plus_dob signal stays path D', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({ score: 0.70, signals_matched: [] });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.70);
+    expect(tracePathOf(db)).toBe('D');
+  });
+
+  test('a name-and-birthday candidate under 0.60 is reviewed ahead of a higher score that is still under 0.60', async () => {
+    const db = setupTwoCandidates();
+    scoreMatch
+      .mockReturnValueOnce({ score: 0.50, signals_matched: [{ signal: 'device_id' }] })
+      .mockReturnValueOnce({ score: 0.40, signals_matched: [{ signal: 'name_plus_dob' }] });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.40);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert[1][1]).toBe(FLOOR_CANDIDATE_ID);
+    expect(conflictInsert[1][4]).toBe(0.40);
+  });
+
+  test('a candidate that already clears 0.60 stays the winner over a lower name-and-birthday score', async () => {
+    const db = setupTwoCandidates();
+    scoreMatch
+      .mockReturnValueOnce({ score: 0.70, signals_matched: [{ signal: 'email_similarity' }] })
+      .mockReturnValueOnce({ score: 0.40, signals_matched: [{ signal: 'name_plus_dob' }] });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.70);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert[1][1]).toBe(CANDIDATE_ID);
+    expect(conflictInsert[1][4]).toBe(0.70);
+  });
+
+  test('name_plus_dob clamped to 0 still opens review and stores 0', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({
+      score: 0,
+      signals_matched: [{ signal: 'name_plus_dob' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert[1][4]).toBe(0);
   });
 
 });

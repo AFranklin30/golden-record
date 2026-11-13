@@ -9,6 +9,21 @@ const THRESHOLD_PATH_C = 0.85;
 const THRESHOLD_PATH_D = 0.60;
 const BLOCK_SIZE_CAP   = 50;
 
+function hasNameAndDobAgreement(signals) {
+  return Array.isArray(signals) && signals.some((s) => s && s.signal === 'name_plus_dob');
+}
+
+// Path for one scored pair. The stored score is not changed.
+// Name + same birthday is review even when a penalty leaves the score under 0.60.
+// A score already at or above 0.85 stays PATH C. No name_plus_dob signal uses the
+// two thresholds exactly. A birthday veto returns no signals, so it stays PATH B.
+function pathForMatch(score, signals) {
+  if (score >= THRESHOLD_PATH_C) return 'C';
+  if (score >= THRESHOLD_PATH_D) return 'D';
+  if (hasNameAndDobAgreement(signals)) return 'D';
+  return 'B';
+}
+
 const firestore = new Firestore({
   projectId:  process.env.FIRESTORE_PROJECT_ID,
   databaseId: 'golden-record',
@@ -369,9 +384,12 @@ async function resolverEngine(input, db) {
       }
 
       // STEP 2 — score each candidate, track best
-      let bestMatch   = null;
-      let bestScore   = 0.0;
-      let bestSignals = [];
+      let bestMatch    = null;
+      let bestScore    = 0.0;
+      let bestSignals  = [];
+      let floorMatch   = null;
+      let floorScore   = -1;
+      let floorSignals = [];
 
       // Deduped, post-block set that reached the join — not a raw table scan.
       trace.candidates_considered = candidateRows.rows.length;
@@ -388,6 +406,21 @@ async function resolverEngine(input, db) {
           bestMatch   = candidate;
           bestSignals = result.signals_matched;
         }
+        // Score 0 still counts. Penalties can clamp a real name_plus_dob hit to 0,
+        // and `score > bestScore` would otherwise never record it.
+        if (hasNameAndDobAgreement(result.signals_matched) && result.score > floorScore) {
+          floorScore   = result.score;
+          floorMatch   = candidate;
+          floorSignals = result.signals_matched;
+        }
+      }
+
+      // A name-and-birthday agreement under 0.60 is still the pair a person
+      // should see, unless some other candidate already clears 0.60.
+      if (pathForMatch(bestScore, bestSignals) === 'B' && floorMatch !== null) {
+        bestScore   = floorScore;
+        bestMatch   = floorMatch;
+        bestSignals = floorSignals;
       }
 
       if (trace.candidates_considered === 0) {
@@ -440,7 +473,9 @@ async function resolverEngine(input, db) {
         }
       }
 
-      if (bestScore >= THRESHOLD_PATH_C) {
+      const resolutionPath = pathForMatch(bestScore, bestSignals);
+
+      if (resolutionPath === 'C') {
         // PATH C — high confidence soft match, hold for staff review (priority 1)
         trace.resolution_path = 'C';
         const new_fan_id = crypto.randomUUID();
@@ -472,8 +507,9 @@ async function resolverEngine(input, db) {
            bestScore, JSON.stringify(bestSignals)]
         );
 
-      } else if (bestScore >= THRESHOLD_PATH_D) {
-        // PATH D — lower confidence possible match, hold for staff review (priority 2)
+      } else if (resolutionPath === 'D') {
+        // PATH D — review. Score is in [0.60, 0.85), or name_plus_dob fired below 0.60.
+        // The queue stores bestScore, which may be under 0.60. Nothing auto-merges.
         trace.resolution_path = 'D';
         const new_fan_id = crypto.randomUUID();
         fan_id           = new_fan_id;
@@ -505,7 +541,7 @@ async function resolverEngine(input, db) {
         );
 
       } else {
-        // PATH B — no match, new record (score below THRESHOLD_PATH_D or no candidates)
+        // PATH B — no name-and-birthday agreement and score below 0.60, or no candidates
         trace.resolution_path = 'B';
         const new_fan_id = crypto.randomUUID();
 
@@ -701,4 +737,5 @@ module.exports = {
   THRESHOLD_PATH_C,
   THRESHOLD_PATH_D,
   BLOCK_SIZE_CAP,
+  pathForMatch,
 };

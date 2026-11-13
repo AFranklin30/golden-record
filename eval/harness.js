@@ -13,8 +13,7 @@
 
 const probabilisticMatcher = require('../src/modules/probabilisticMatcher');
 const {
-  THRESHOLD_PATH_C,
-  THRESHOLD_PATH_D,
+  pathForMatch,
   passesSignalEligibilityGate,
 } = require('../src/modules/resolverEngine');
 
@@ -124,10 +123,7 @@ function evaluateRow(corpusRow, traceRow, labelRows) {
       penalties_applied  = result.penalties_applied;
       dob_veto           = result.dob_veto === true;
 
-      replayed_path =
-        replayed_score >= THRESHOLD_PATH_C ? 'C' :
-        replayed_score >= THRESHOLD_PATH_D ? 'D' :
-        'B';
+      replayed_path = pathForMatch(replayed_score, signals_matched);
     }
   }
 

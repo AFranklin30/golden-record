@@ -1,3 +1,34 @@
+# Name-and-birthday review floor
+
+## Context
+Bob and Robert with the same birthday and different emails score about 0.4 after the 0.3 email penalty. That is under 0.60, so today the system saves a second fan and writes no review row. The penalty stays. The path changes: a `name_plus_dob` agreement is review even when the stored score is under 0.60.
+
+## Files
+- `src/modules/resolverEngine.js` — `pathForMatch`, used for the path decision and for choosing which candidate is reviewed
+- `eval/harness.js` — replay uses the same function
+- `tests/modules/probabilisticMatcher.test.js` — penalty still applied
+- `tests/modules/resolverEngine.test.js` — path and queue
+- `tests/eval.harness.test.js` — replay path
+- `CLAUDE.md` — PATH D description
+
+## THE FIX
+`pathForMatch(score, signals)` returns `C` at or above 0.85, `D` at or above 0.60, and also `D` when `signals` contains `name_plus_dob` and the score is under 0.60. The stored score is the real score. A stronger candidate that already clears 0.60 stays the winner. A name with no birthday still needs 0.60. A birthday conflict still scores 0 with no signals and stays two fans.
+
+## THE TEST
+1. Nickname, same birthday, different emails: score is about 0.4, email penalty is present, score is under 0.60.
+2. That pair's path is `D`, `match_type` is `conflict`, and the queue stores the real score.
+3. A 0.4 score with no `name_plus_dob` signal stays path `B` and writes no queue row.
+4. A 0.90 score with `name_plus_dob` stays path `C`.
+5. A 0.70 score with no `name_plus_dob` stays path `D`.
+6. When one candidate scores 0.50 with no name-and-birthday signal and another scores 0.40 with `name_plus_dob`, the queue is for the 0.40 candidate.
+7. When one candidate already scores 0.70, a 0.40 name-and-birthday candidate does not replace it.
+8. Harness replay of a name-and-birthday score under 0.60 reports path `D` and keeps that score.
+
+## DO NOT
+Do not change the 0.3 email penalty, the 0.60 or 0.85 thresholds, the nickname list, blocking, or auto-merge. Nothing auto-merges.
+
+---
+
 # Eval scorecard — totals over existing harness rows
 
 ## Context

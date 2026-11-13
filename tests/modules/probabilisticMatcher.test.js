@@ -804,14 +804,61 @@ describe('probabilisticMatcher — email exact + name fuzzy (Sprint 5 prompt 4)'
     expect(result.penalties_applied).toContainEqual({ field: 'name', penalty: SIGNAL_CONFIG.disagreement.name });
   });
 
-  test('case 9 — nickname matching remains unimplemented (DESIGN DECISION 2): "bob smith" vs "robert smith" → no name signal', () => {
-    // levenshtein('bob smith','robert smith') ≈ 0.67 < 0.85 — Levenshtein measures typos,
-    // not synonyms. This test EXISTS TO DOCUMENT the known gap, not to flag a bug.
+  test('case 9 — nickname given name plus the same last name matches: "bob smith" vs "robert smith" → name_alone', () => {
     const result = scoreMatch(
       makeCandidate({ name: 'robert smith' }),
       makeInbound({  name: 'bob smith' })
     );
+    expect(result.signals_matched.some(s => s.signal === 'name_alone')).toBe(true);
+    expect(result.conflicts_detected.some(c => c.field === 'name')).toBe(false);
+    expect(result.score).toBeCloseTo(SIGNAL_CONFIG.agreement.name_alone * 1.0, 5);
+  });
+
+  test('case 9b — nickname plus the same birthday is name_plus_dob at the existing weight', () => {
+    const result = scoreMatch(
+      makeCandidate({ name: 'robert smith', dob: '1990-01-15' }),
+      makeInbound({  name: 'bob smith',    dob: '1990-01-15' })
+    );
+    expect(result.signals_matched.some(s => s.signal === 'name_plus_dob')).toBe(true);
+    expect(result.signals_matched.some(s => s.signal === 'name_alone')).toBe(false);
+    expect(result.score).toBeCloseTo(SIGNAL_CONFIG.agreement.name_plus_dob * 1.0, 5);
+    expect(result.score).toBeGreaterThanOrEqual(0.60);
+    expect(result.score).toBeLessThan(0.85);
+  });
+
+  test('case 9c — nickname with a different last name does not match', () => {
+    const result = scoreMatch(
+      makeCandidate({ name: 'robert jones', dob: '1990-01-15' }),
+      makeInbound({  name: 'bob smith',    dob: '1990-01-15' })
+    );
     expect(result.signals_matched.some(s => s.signal.includes('name'))).toBe(false);
+  });
+
+  test('case 9e — nickname, same birthday, different emails keeps the email penalty', () => {
+    const result = scoreMatch(
+      makeCandidate({ name: 'robert smith', dob: '1990-01-15', email: 'robert@example.com' }),
+      makeInbound({  name: 'bob smith',    dob: '1990-01-15', email: 'bob@example.com' })
+    );
+    expect(result.signals_matched.some(s => s.signal === 'name_plus_dob')).toBe(true);
+    expect(result.penalties_applied).toContainEqual({
+      field: 'email',
+      penalty: SIGNAL_CONFIG.disagreement.email,
+    });
+    expect(result.score).toBeCloseTo(
+      SIGNAL_CONFIG.agreement.name_plus_dob - SIGNAL_CONFIG.disagreement.email,
+      5
+    );
+    expect(result.score).toBeLessThan(0.60);
+  });
+
+  test('case 9d — nickname with a conflicting birthday is still a veto', () => {
+    const result = scoreMatch(
+      makeCandidate({ name: 'robert smith', dob: '1985-11-22' }),
+      makeInbound({  name: 'bob smith',    dob: '1990-01-15' })
+    );
+    expect(result.score).toBe(0.0);
+    expect(result.dob_veto).toBe(true);
+    expect(result.signals_matched).toHaveLength(0);
   });
 
   test('case 10 — threshold is config-driven: SIGNAL_CONFIG.comparison.name_similarity_threshold === 0.85 and pairs below it do not match', () => {

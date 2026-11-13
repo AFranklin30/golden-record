@@ -274,7 +274,7 @@ change.
 - **PATH A** — exact identifier_link match (hard match). `match_type: 'hard'`, `is_new_record: false`, confidence 1.0. Updates `last_seen_at`. JOINs `fan` and checks `deleted_at IS NULL` (a deleted fan's tap falls through to PATH B).
 - **PATH B** — no match. New fan created. `match_type: 'hard'`, `is_new_record: true`, confidence 1.0. (`'hard'` here means "this link is certain," not "fan existed before" — `is_new_record` answers that.)
 - **PATH C** — soft match, score ≥ 0.85. `match_type: 'soft'`. Mints a NEW fan and creates a pending `conflict_queue` row for staff review.
-- **PATH D** — soft match, 0.60 ≤ score < 0.85. `match_type: 'conflict'`. Also mints a new fan + pending conflict_queue row.
+- **PATH D** — review. Either 0.60 ≤ score < 0.85, or `name_plus_dob` fired and the score is under 0.60. `match_type: 'conflict'`. Mints a new fan + pending conflict_queue row. The queue stores the real score, which may be under 0.60.
 
 **Nothing auto-merges.** PATH C and PATH D both create a pending conflict_queue row and
 wait for a human. The difference is confidence and review priority, not automation.
@@ -338,6 +338,8 @@ a bug), then conflict penalties subtract once, then `Math.max(0.0, Math.min(1.0,
 Penalties are NOT recency-adjusted — a conflict is a conflict regardless of staleness.
 `signals_matched` holds only the best candidate's signals; only matters for PATH C/D.
 
+**Name-and-birthday review floor.** `pathForMatch` in resolverEngine. A candidate whose signals include `name_plus_dob` is PATH D even when penalties or recency leave the score under 0.60. The stored score stays the real score: Bob/Robert with the same birthday and different emails remains about 0.4 (0.7 minus the 0.3 email penalty) and still opens a conflict_queue row. The 0.3 email penalty stays. `name_alone` and every other signal still need 0.60. A score already at or above 0.85 stays PATH C. A stronger candidate that already clears 0.60 stays the winner. A DOB veto never reaches this floor: it returns no signals.
+
 **DOB veto — safety invariant, NOT a config dial.** Conflicting DOB (present on both,
 different) → hard block: `scoreMatch` returns
 `{score: 0.0, signals_matched: [], conflicts_detected: [dob], dob_veto: true}`
@@ -361,8 +363,10 @@ name and one birthday. Now 0.7. `name_plus_zip` does NOT suppress `name_alone`.
 - **name → FUZZY**, `levenshteinSimilarity >= SIGNAL_CONFIG.comparison.name_similarity_threshold`
   (0.85). 'jon smith'/'john smith' = 0.9 passes. Threshold is tighter than it looks: 'jon'
   vs 'john' ALONE is 0.75 and would fail — it only passes on full-name strings.
-  **Does NOT handle nicknames** ('bob smith'/'robert smith' ≈ 0.67) — Levenshtein measures
-  typos, not synonyms. Nickname matching remains unimplemented (own body of work).
+  Nicknames are a given-name list in `GIVEN_NAME_GROUPS` (`bob`/`robert`, and the
+  William, Elizabeth, James, and John groups). The first token must share a group
+  and the last token must pass the same 0.85 spelling check. `bob smith`/`robert smith`
+  matches. `bob smith`/`robert jones` does not. The 0.85 cutoff is unchanged.
 - `normalizedNameMatch` is called in four places (name_plus_dob, name_plus_zip, name_alone,
   detectConflicts). Changing the body re-aims all four consistently — that is intentional.
   A name that fuzzy-matches must not also be flagged as a name conflict.
@@ -389,7 +393,7 @@ least once.
 
 **Exports (Stage 7 added three):** `scoreMatch, detectConflicts, SIGNAL_CONFIG,
 getRecencyMultiplier, SCORER_VERSION, computeScorerFingerprint`. `SCORER_VERSION` is a
-composite string `'v1+<8-hex>'` — the `v1` prefix is hand-bumped when scoring LOGIC changes,
+composite string `'v2+<8-hex>'` — the version prefix is hand-bumped when scoring LOGIC changes (`v2` is the given-name list),
 the 8-hex suffix is an auto sha256 fingerprint over `SIGNAL_CONFIG` + `SIGNAL_WEIGHTS`
 (order-independent) that changes whenever CONFIG changes. Both are stamped onto every
 `resolution_trace` row (see Status — Stage 7) so a trace can be tied back to the exact
