@@ -1,3 +1,28 @@
+# Eval scorecard — totals over existing harness rows
+
+## Context
+`evaluateRow` already sets `expected_verdict` and `replayed_path` (`C`, `D`, or `B`) or `gate_status: 'gated'`. `buildRun` returns those rows and never totals them. The 8 `CORPUS_PAIRS` in `scripts/seedDemoOrg.js` are the concrete example: exact agreement and the typo pair should count as found, the near-miss email, birthday veto, shared inbox, device-only, and sibling pairs should count as correct separation, and email-alone should count as found. This slice does not rescore them by hand. It counts whatever the harness already emitted.
+
+## Files
+- `eval/harness.js` — pure `summarizeScorecard(rows)`
+- `eval/runCorpus.js` — attach `scorecard` on the run object and print it
+- `tests/eval.harness.test.js` — five assertions, plain objects, no new Postgres fixtures
+
+## THE FIX
+`match` + path `C` or `D` → `found`. `match` + path `B` or `gated` → `silent_miss`. `not_match` + path `B` or `gated` → `correct_separation`. `not_match` + path `C` or `D` → `false_alarm`. `unsure` and skipped rows → `excluded`. `recall = found / (found + silent_miss)`, `precision = found / (found + false_alarm)`, null when the denominator is 0.
+
+## THE TEST
+1. One of each outcome → counts 1, 1, 1, 1, recall 0.5, precision 0.5.
+2. `unsure` and a skipped row increment `excluded` only.
+3. A gated `match` is a silent miss.
+4. Empty list → zeros and null rates.
+5. Regression: an existing `buildRun` result still has `counts.total`, and `scorecard` has the same keys.
+
+## DO NOT
+Do not change `scoreMatch`, blocking, path A, nicknames, corpus pairs, or the household test fix.
+
+---
+
 # tests/promoteTraceToCorpus.test.js — stale hardcoded trace ID fix (check-in required before implementation)
 
 ## Scope

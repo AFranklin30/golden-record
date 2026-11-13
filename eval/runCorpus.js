@@ -134,6 +134,7 @@ async function buildRun(client, org_id) {
     normalization_version:   NORMALIZATION_VERSION,
     thresholds:              { c: THRESHOLD_PATH_C, d: THRESHOLD_PATH_D },
     counts,
+    scorecard:               harness.summarizeScorecard(rows),
     rows,
   };
 }
@@ -161,6 +162,7 @@ async function main() {
     const filePath   = writeRunFile(runObject);
     console.log(`Run written: ${filePath}`);
     console.log('counts:', JSON.stringify(runObject.counts, null, 2));
+    console.log('scorecard:', JSON.stringify(runObject.scorecard, null, 2));
   } finally {
     await client.end();
   }
