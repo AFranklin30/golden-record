@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const REQUIRED_ENV = ['DATABASE_URL', 'FIRESTORE_PROJECT_ID'];
@@ -27,6 +29,9 @@ const householdRouter          = require('./src/routes/household');
 const { householdClaimRouter } = householdRouter;
 const adminHouseholdRouter     = require('./src/routes/admin/household');
 const exportRouter             = require('./src/routes/export');
+const dashboardSessionRouter   = require('./src/routes/dashboardSession');
+const dashboardRouter          = require('./src/routes/dashboard');
+const dashboardSessionMiddleware = require('./src/middleware/dashboardSessionMiddleware');
 const jwtMiddleware        = require('./src/middleware/jwtMiddleware');
 const pool                 = require('./src/db/pool');
 
@@ -53,7 +58,7 @@ const corsOptions = {
   },
   methods:        ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ALLOWED_HEADERS,
-  credentials:    false,
+  credentials:    true,
 };
 app.use(cors(corsOptions));
 app.ALLOWED_HEADERS = ALLOWED_HEADERS;
@@ -70,7 +75,7 @@ const healthRateLimiter = rateLimit({
   legacyHeaders:   false,
 });
 const healthLimitedRouter = express.Router();
-healthLimitedRouter.use(healthRateLimiter);
+healthLimitedRouter.use('/health', healthRateLimiter);
 healthLimitedRouter.use(healthRouter);
 app.use(healthLimitedRouter);
 
@@ -82,6 +87,39 @@ const rateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders:   false,
 });
+
+// Dashboard sign-in is outside the API-key stack. Middleware is path-scoped
+// so a request to /v1/resolve never enters it. Mounted before the API-key
+// router because that router's auth middleware answers every request it sees.
+const dashboardOpen = express.Router();
+dashboardOpen.use('/v1/dashboard', rateLimiter);
+dashboardOpen.use(dashboardSessionRouter);
+
+const dashboardClosed = express.Router();
+dashboardClosed.use('/v1/dashboard', rateLimiter);
+dashboardClosed.use('/v1/dashboard', dashboardSessionMiddleware);
+dashboardClosed.use('/v1/dashboard', rlsContextMiddleware);
+dashboardClosed.use('/v1/dashboard', correlationIdMiddleware);
+dashboardClosed.use(dashboardRouter);
+
+app.use(dashboardOpen);
+app.use(dashboardClosed);
+
+// The built dashboard is served here, before the API-key routers. Those routers
+// have no path prefix, and orgAuth rejects every request that reaches them
+// without a Bearer key. A page refresh must receive index.html instead.
+const dashboardDist = path.join(__dirname, 'web', 'dist');
+const dashboardIndex = path.join(dashboardDist, 'index.html');
+if (fs.existsSync(dashboardIndex)) {
+  app.use(express.static(dashboardDist));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path === '/health' || req.path.startsWith('/health/') || req.path === '/v1' || req.path.startsWith('/v1/')) {
+      return next();
+    }
+    res.sendFile(dashboardIndex);
+  });
+}
 
 const protectedRouter = express.Router();
 protectedRouter.use(rateLimiter);

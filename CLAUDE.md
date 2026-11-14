@@ -5,6 +5,7 @@ Stack: Node.js / Express · Postgres (Cloud SQL) with RLS · Firestore (named DB
 Last updated: 2026-08-02.
 
 **This file = PROJECT KNOWLEDGE ONLY.** Agent behavior rules live in `.claude/CLAUDE.md`.
+Before planning or implementing frontend work, read and follow `docs/engineering/frontend-engineering-framework.md`. Product-specific UI decisions live in `docs/engineering/golden-record-dashboard.md`, not in that framework.
 Do not duplicate agent rules here — duplication causes drift. This file replaces the
 April v1.0 root CLAUDE.md and the project-knowledge tail that was appended to
 `.claude/CLAUDE.md`. Those were stale and contradicted the code (see Firestore section).
@@ -88,6 +89,21 @@ are hard to debug.
 
 `/health` is mounted OUTSIDE this stack entirely: its own stricter rate limiter (60s
 window / 10 req), no auth, no RLS, no JWT.
+
+The dashboard is a second stack, not a step inserted into the one above. Sign-in is
+outside it and uses `pool` directly. Every other dashboard route is:
+
+```
+rate limiter
+ → dashboardSessionMiddleware // httpOnly operator cookie, not the org API key
+ → rlsContextMiddleware
+ → correlationIdMiddleware
+ → handler
+```
+
+`operator` and `operator_session` are auth tables, like `org`: no RLS, because the
+session lookup happens before `app.current_org_id` is set. The organization API key
+never goes to the browser. See `docs/engineering/golden-record-dashboard.md`.
 
 ---
 
@@ -496,7 +512,7 @@ event_type ×2, match_type ×1). Currently allowed: resolution, session_issued,
 conflict_confirmed, conflict_rejected, merge_reversed, household_created,
 household_member_added, household_member_updated, household_member_severed,
 household_member_aged_up, child_session_issued, profile_claimed, ingest_failure,
-import_identifiers_attached (migration_018).
+import_identifiers_attached (migration_018), dashboard_session_issued (migration_019).
 Verify against the latest migration before any INSERT with a new event_type.
 
 ---

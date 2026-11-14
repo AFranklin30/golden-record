@@ -91,7 +91,7 @@ const conflictsRouter  = require('../src/routes/conflicts');
 const householdRouter  = require('../src/routes/household');
 
 const DEMO_ORG_ID     = 'aaaaaaaa-0000-0000-0000-000000000001';
-const DEMO_ORG_NAME   = 'Demo Org';
+const DEMO_ORG_NAME   = 'Equip AI Labs';
 const DEMO_API_KEY    = 'demo-seed-key-do-not-use-in-production';
 const SCHEMA_VERSION  = 'v1';
 const AUTH_HEADER     = `Bearer ${DEMO_API_KEY}`;

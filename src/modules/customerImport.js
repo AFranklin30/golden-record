@@ -298,8 +298,61 @@ async function importCustomers(client, options) {
   return { batch_id: batchId, rows: results };
 }
 
+const IMPORT_FIELDS = ['first_name', 'last_name', 'email', 'birthday', 'zip', 'phone'];
+
+function readCustomerCsv(text, mapping) {
+  if (typeof text !== 'string' || text.trim() === '') {
+    return { ok: false, error: 'file is empty' };
+  }
+  if (text.length > 1000000) {
+    return { ok: false, error: 'file is too large' };
+  }
+  const lines = text.split(/\r?\n/).filter((line) => line.trim() !== '');
+  if (lines.length === 0) return { ok: false, error: 'file is empty' };
+
+  const headers = lines[0].split(',').map((header) => header.trim());
+  const parsed = lines.slice(1).map((line) => {
+    const cells = line.split(',');
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = cells[index] == null ? '' : cells[index].trim();
+    });
+    return row;
+  });
+
+  const sourceByField = {};
+  if (mapping == null) {
+    for (const field of IMPORT_FIELDS) {
+      if (headers.includes(field)) sourceByField[field] = field;
+    }
+  } else if (typeof mapping !== 'object' || Array.isArray(mapping)) {
+    return { ok: false, error: 'column mapping is invalid' };
+  } else {
+    for (const [field, source] of Object.entries(mapping)) {
+      if (!IMPORT_FIELDS.includes(field)) return { ok: false, error: 'column mapping is invalid' };
+      if (source == null || source === '') continue;
+      if (typeof source !== 'string' || !headers.includes(source)) {
+        return { ok: false, error: 'column mapping is invalid' };
+      }
+      sourceByField[field] = source;
+    }
+  }
+
+  const rows = parsed.map((row) => {
+    const out = {};
+    for (const field of IMPORT_FIELDS) {
+      const source = sourceByField[field];
+      out[field] = source ? (row[source] ?? '') : '';
+    }
+    return out;
+  });
+  return { ok: true, headers, rows };
+}
+
 module.exports = {
   parseCsv,
   parseCustomerRow,
   importCustomers,
+  readCustomerCsv,
+  IMPORT_FIELDS,
 };
