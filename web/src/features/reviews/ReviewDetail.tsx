@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api';
@@ -10,8 +10,15 @@ type Review = {
   status: string;
   confidence_score: string | number;
   signals_matched?: unknown;
+  reviewed_at?: string | null;
   person_a: Person;
   person_b: Person;
+};
+
+const CLOSED_COPY: Record<string, string> = {
+  confirmed: 'These records were merged.',
+  rejected: 'These records were kept separate.',
+  unmerged: 'A previous merge was reversed. These records are separate again.',
 };
 
 export function ReviewDetail() {
@@ -20,25 +27,34 @@ export function ReviewDetail() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [dialog, setDialog] = useState<'confirm' | 'unmerge' | null>(null);
+  const busy = useRef(false);
   const review = useQuery({
     queryKey: ['review', id],
     queryFn: () => api<Review>(`/v1/dashboard/reviews/${id}`),
   });
 
-  async function decide(action: 'confirm' | 'reject') {
+  async function decide(action: 'confirm' | 'reject' | 'unmerge') {
+    if (busy.current) return;
+    busy.current = true;
     setError('');
     setMessage('');
     setPending(true);
     try {
       await api(`/v1/dashboard/conflicts/${id}/${action}`, { method: 'POST', body: '{}' });
-      setMessage(action === 'confirm' ? 'These records were merged.' : 'These records were kept separate.');
-      setConfirming(false);
+      const done = {
+        confirm: 'These records were merged.',
+        reject: 'These records were kept separate.',
+        unmerge: 'A previous merge was reversed. These records are separate again.',
+      };
+      setMessage(done[action]);
+      setDialog(null);
       await queryClient.invalidateQueries({ queryKey: ['review', id] });
       await queryClient.invalidateQueries({ queryKey: ['reviews'] });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That action could not be completed.');
     } finally {
+      busy.current = false;
       setPending(false);
     }
   }
@@ -83,22 +99,43 @@ export function ReviewDetail() {
       {signals.length > 0 ? (
         <p>Signals the server recorded: {signals.join(', ')}.</p>
       ) : null}
+      {data.reviewed_at ? <p>Decision recorded {new Date(data.reviewed_at).toLocaleString()}.</p> : null}
       {data.status === 'pending' ? (
         <div className="row">
-          <Button type="button" disabled={pending} onClick={() => setConfirming(true)}>Confirm same person</Button>
+          <Button type="button" disabled={pending} onClick={() => setDialog('confirm')}>Confirm same person</Button>
           <Button type="button" secondary disabled={pending} onClick={() => decide('reject')}>Keep separate</Button>
         </div>
-      ) : <Banner kind="ok">This review is {data.status}.</Banner>}
+      ) : null}
+      {data.status === 'confirmed' ? (
+        <div className="stack">
+          <Banner kind="ok">{CLOSED_COPY.confirmed}</Banner>
+          <div className="row">
+            <Button type="button" secondary disabled={pending} onClick={() => setDialog('unmerge')}>Undo merge</Button>
+          </div>
+        </div>
+      ) : null}
+      {data.status === 'rejected' ? <Banner kind="ok">{CLOSED_COPY.rejected}</Banner> : null}
+      {data.status === 'unmerged' ? <Banner kind="ok">{CLOSED_COPY.unmerged}</Banner> : null}
       {message ? <Banner kind="ok">{message}</Banner> : null}
       {error ? <Banner kind="error">{error}</Banner> : null}
-      {confirming ? (
+      {dialog === 'confirm' ? (
         <ConfirmDialog
           title="Merge these records?"
           body="The existing record keeps the identifiers. The new record is retired. This does not run a new match."
           confirmLabel="Merge"
           pending={pending}
           onConfirm={() => decide('confirm')}
-          onCancel={() => setConfirming(false)}
+          onCancel={() => { if (!pending) setDialog(null); }}
+        />
+      ) : null}
+      {dialog === 'unmerge' ? (
+        <ConfirmDialog
+          title="Undo this merge?"
+          body="The previously merged records will be separated again. Identifiers that moved go back to the retired record, and that record becomes active again."
+          confirmLabel="Undo merge"
+          pending={pending}
+          onConfirm={() => decide('unmerge')}
+          onCancel={() => { if (!pending) setDialog(null); }}
         />
       ) : null}
     </div>

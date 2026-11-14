@@ -9,6 +9,7 @@ const exportRouter = require('./export');
 
 const router = express.Router();
 const PREVIEW_LIMIT = 25;
+const REVIEW_STATUSES = ['pending', 'confirmed', 'rejected', 'unmerged'];
 
 function dispatch(target, req, res, url) {
   req.url = url;
@@ -172,14 +173,18 @@ async function peopleFor(db, orgId, fanIds) {
 }
 
 router.get('/v1/dashboard/reviews', async (req, res) => {
+  const status = req.query.status === undefined ? 'pending' : req.query.status;
+  if (typeof status !== 'string' || !REVIEW_STATUSES.includes(status)) {
+    return res.status(400).json({ error: 'invalid status' });
+  }
   try {
     const result = await req.db.query(
-      `SELECT id, fan_id_a, fan_id_b, confidence_score, status, created_at
+      `SELECT id, fan_id_a, fan_id_b, confidence_score, status, created_at, reviewed_at
          FROM conflict_queue
-        WHERE org_id = $1 AND status = 'pending'
+        WHERE org_id = $1 AND status = $2
         ORDER BY created_at DESC
         LIMIT 100`,
-      [req.context.org_id]
+      [req.context.org_id, status]
     );
     const fanIds = result.rows.flatMap((row) => [row.fan_id_a, row.fan_id_b]);
     const people = fanIds.length ? await peopleFor(req.db, req.context.org_id, fanIds) : {};
@@ -191,6 +196,7 @@ router.get('/v1/dashboard/reviews', async (req, res) => {
         confidence_score: row.confidence_score,
         status: row.status,
         created_at: row.created_at,
+        reviewed_at: row.reviewed_at,
         person_a: people[row.fan_id_a] || {},
         person_b: people[row.fan_id_b] || {},
       })),
@@ -210,7 +216,7 @@ router.get('/v1/dashboard/reviews/:id', async (req, res) => {
   }
   try {
     const result = await req.db.query(
-      `SELECT id, fan_id_a, fan_id_b, confidence_score, signals_matched, status, created_at
+      `SELECT id, fan_id_a, fan_id_b, confidence_score, signals_matched, status, created_at, reviewed_at
          FROM conflict_queue
         WHERE id = $1 AND org_id = $2`,
       [req.params.id, req.context.org_id]
@@ -226,6 +232,7 @@ router.get('/v1/dashboard/reviews/:id', async (req, res) => {
       signals_matched: row.signals_matched,
       status: row.status,
       created_at: row.created_at,
+      reviewed_at: row.reviewed_at,
       person_a: people[row.fan_id_a] || {},
       person_b: people[row.fan_id_b] || {},
     });
@@ -250,6 +257,13 @@ router.post('/v1/dashboard/conflicts/:id/reject', (req, res) => {
     return res.status(400).json({ error: 'conflict_id must be a valid UUID' });
   }
   dispatch(conflictsRouter, req, res, `/v1/conflicts/${req.params.id}/reject`);
+});
+
+router.post('/v1/dashboard/conflicts/:id/unmerge', (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'conflict_id must be a valid UUID' });
+  }
+  dispatch(conflictsRouter, req, res, `/v1/conflicts/${req.params.id}/unmerge`);
 });
 
 router.get('/v1/dashboard/exports/fans', (req, res) => {

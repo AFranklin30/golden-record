@@ -1,7 +1,31 @@
-# Hosted Neon database is created
+# Review queue: unmerge and completed decisions
 
 ## Context
-Neon project `golden_record` is in AWS US East (Ohio). The production branch has migrations 001–019, role `golden_record_app`, and one organization. Render was not created.
+Confirm and Keep separate already run through the dashboard. A confirmed pair then leaves the pending list, and `POST /v1/conflicts/:id/unmerge` is not forwarded. The operator cannot find or undo a merge.
+
+## Files
+- `src/routes/dashboard.js` — status filter on the existing review query, and forward unmerge
+- `web/src/features/reviews/ReviewList.tsx` — Pending, Confirmed, Rejected, Unmerged on the same page
+- `web/src/features/reviews/ReviewDetail.tsx` — Undo merge only when the status is confirmed
+- `tests/routes/dashboardReviews.test.js` — session, tenant, status, unmerge, import-to-export workflow
+- `web/src/features/reviews/ReviewQueue.test.tsx` — queue views and the undo dialog
+
+## THE FIX
+Default list stays pending, so Overview's pending count is unchanged. `reviewed_at` is shown when the row has one. The operator's name is not invented: merge history stores the organization name. Unmerge calls the existing handler.
+
+## THE TEST
+1. A signed-in operator lists confirmed and rejected rows for that organization only.
+2. Unauthenticated, cross-organization, body `org_id`, a bad id, and a second unmerge are rejected.
+3. Import, confirm, undo, and export restore the source fan and reverse the merge history.
+4. The queue defaults to pending, Undo merge is only on a confirmed review, and one click cannot submit twice.
+
+## DO NOT
+Do not change the resolver, merge rules, households, navigation, or hosting.
+
+# Hosted Neon database and Render service are created
+
+## Context
+Neon project `golden_record` is in AWS US East (Ohio). The production branch has migrations 001–019, role `golden_record_app`, and one organization. Render web service `golden-record` is live in Ohio on the free plan at `https://golden-record.onrender.com`. It builds `productization/remove-thunder` from the Dockerfile. The platform health check path is empty, so a sleeping database cannot fail a deploy. Cloud Run was not changed.
 
 ## Result
 - Production host is the direct Ohio endpoint. Pooling is off.
@@ -11,7 +35,7 @@ Neon project `golden_record` is in AWS US East (Ohio). The production branch has
 - A manual snapshot was not taken. Neon bills snapshot storage even on the free plan.
 
 ## DO NOT
-Do not run the init command again. Do not point the local seed or Jest isolation tests at Neon. Do not put the owner URL in `.env`. Do not create Render until a separate approval.
+Do not run the init command again. Do not point the local seed or Jest isolation tests at Neon. Do not put the owner URL in `.env`. Do not change the Render service off the free plan.
 
 # Hosted Neon setup procedure
 
