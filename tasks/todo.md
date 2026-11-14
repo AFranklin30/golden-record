@@ -1,3 +1,34 @@
+# Import survives a missing Firestore wallet
+
+## Context
+The live import saved two fans, then crashed. Firestore has no credentials on Render. The caught `set()` still leaves an unhandled rejection, Node exits, and the browser shows "The request could not be completed."
+
+## Files
+- `src/modules/resolverEngine.js` — skip the wallet write when this process has no Firestore credentials
+- `index.js` — a credential rejection must not exit the process
+- `tests/modules/firestoreSync.test.js` — off, on, and Cloud Run
+
+## THE FIX
+`FIRESTORE_SYNC=off` skips the write. `FIRESTORE_SYNC=on`, `GOOGLE_APPLICATION_CREDENTIALS`, or Cloud Run's `K_SERVICE` keeps it. With none of those, and no local gcloud credential file, the write is skipped. A leftover "Could not load the default credentials" rejection is logged and ignored. Any other unhandled rejection still exits.
+
+## DO NOT
+Do not change matching, the import mapping, or the hosted database. Do not point this host at a Firestore project.
+
+# Synthetic demo file
+
+## Context
+The hosted organization has no fans. The operator imports one CSV. The existing matcher decides which later rows become reviews.
+
+## Files
+- `demo/synthetic-customers-200.csv` — 200 rows, originals first
+- `scripts/buildSyntheticDemoCsv.js` — rebuilds that file and checks scores
+
+## THE FIX
+80 first people, then 5 repeated emails, 55 lookalikes, and 60 people who share a last name with a different birthday. Headers match the importer fields. Every row passes `parseCustomerRow`. The 55 lookalikes score as reviews. The 60 different birthdays do not.
+
+## DO NOT
+Do not import this file from here. Do not change the resolver. Do not commit unless asked.
+
 # Review queue: unmerge and completed decisions
 
 ## Context

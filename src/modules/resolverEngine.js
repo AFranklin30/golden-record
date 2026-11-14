@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto    = require('crypto');
+const fs        = require('fs');
+const path      = require('path');
 const { Firestore } = require('@google-cloud/firestore');
 const { scoreMatch, SCORER_VERSION } = require('./probabilisticMatcher');
 const { NORMALIZATION_VERSION }      = require('./normalizer');
@@ -28,6 +30,18 @@ const firestore = new Firestore({
   projectId:  process.env.FIRESTORE_PROJECT_ID,
   databaseId: 'golden-record',
 });
+
+// The wallet write is optional. Render has no Google credentials, and the
+// client library rejects a second promise that try/catch cannot see. Calling
+// set() there restarts the process in the middle of an import.
+function firestoreSyncEnabled() {
+  if (process.env.FIRESTORE_SYNC === 'off') return false;
+  if (process.env.FIRESTORE_SYNC === 'on') return true;
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE) return true;
+  const home = process.env.HOME || '';
+  if (home === '') return false;
+  return fs.existsSync(path.join(home, '.config', 'gcloud', 'application_default_credentials.json'));
+}
 
 const logger = require('../lib/logger');
 
@@ -579,7 +593,7 @@ async function resolverEngine(input, db) {
     await db.query('COMMIT');
 
     // STEP 4B — Firestore sync — after COMMIT, outside transaction, new records only
-    if (is_new_record === true) {
+    if (is_new_record === true && firestoreSyncEnabled()) {
       try {
         await firestore.collection('golden-record').doc(fan_id).set({
           fan_id:         fan_id,
@@ -738,4 +752,5 @@ module.exports = {
   THRESHOLD_PATH_D,
   BLOCK_SIZE_CAP,
   pathForMatch,
+  firestoreSyncEnabled,
 };

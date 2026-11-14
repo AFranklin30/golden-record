@@ -34,6 +34,17 @@ const dashboardRouter          = require('./src/routes/dashboard');
 const dashboardSessionMiddleware = require('./src/middleware/dashboardSessionMiddleware');
 const jwtMiddleware        = require('./src/middleware/jwtMiddleware');
 const pool                 = require('./src/db/pool');
+const logger               = require('./src/lib/logger');
+
+// A missing Firestore credential rejects a promise the caller cannot catch.
+// That rejection was restarting the process during import. Log it and stay up.
+// Every other unhandled rejection still exits.
+process.on('unhandledRejection', (reason) => {
+  const message = reason && reason.message ? reason.message : String(reason);
+  logger.error('unhandled rejection', { error: message });
+  if (message.includes('Could not load the default credentials')) return;
+  process.exit(1);
+});
 
 const app  = express();
 app.set('trust proxy', 1);
