@@ -46,7 +46,7 @@ Buckets and row order are unchanged: 80 originals, 5 same-email copies, 10 nickn
 | Scenario | Rows | Role | Identity truth | Policy-expected | Path | Notes |
 |---|---|---|---|---|---|---|
 | A-ORIGINAL | 80 | first_seen | first_seen | separate | B | First row of that person. The block is empty. |
-| A-SAME-EMAIL | 5 | probe | same_person | import_replay | B | Byte-identical copy of originals 1–5. The import row key matches, so the resolver is not called. |
+| A-SAME-EMAIL | 5 | probe | same_person | import_replay | B | Same person as originals 1–5. The import replays the stored row. Path B is the anchor's stored path, not a new person. |
 | A-NICKNAME | 10 | probe | same_person | review | D | Nickname, new email, new ZIP, same birthday. |
 | A-SPELLING | 10 | probe | same_person | review | D | First-name spelling, new email, new ZIP, same birthday. |
 | A-SAME-NAME | 20 | probe | same_person | review | D | Same name and birthday, new email, new ZIP. |
@@ -56,7 +56,7 @@ Buckets and row order are unchanged: 80 originals, 5 same-email copies, 10 nickn
 Policy sentences:
 
 - Empty block: "If the lookup misses, the system searches only people who share an exact email, an exact guardian email, or the same last name and the same birthday."
-- Replay: "One email, and one phone, still belong to one person in an organization, outside household rows." The replay itself is import behavior, recorded in the notes.
+- Replay: "One email, and one phone, still belong to one person in an organization, outside household rows." The replay itself is import behavior. See "Import replay" below.
 - Nickname and spelling: "A nickname or a close spelling is scored only when a search key already found that person."
 - Same name: "A name and the same birthday can still open a review when the score is low, unless another person already scores high enough for review."
 - No email: "The same exact name and the same birthday."
@@ -75,7 +75,7 @@ A Set B probe may share an email, a phone, an exact name, or a last name plus bi
 | SFE-2 | 6 | distinct | hard_match | A | S0 | Shared email, different first name, probe birthday missing. |
 | SFE-3 | 3 | distinct | hard_match | A | S0 | Shared email, different first name, same birthday. |
 | RP-1 | 6 | distinct | import_error | B | S1 | Same phone, different name, email, birthday, and ZIP. |
-| RP-2 | 4 | same | import_error | D | S1 | Same phone, name, and birthday. New email. Different ZIP, so the score stays under the review floor rather than clearing it. |
+| RP-2 | 4 | same | import_error | D | S1 | Same phone, name, and birthday. New email. Different ZIP. Path stays D. |
 | MB-1 | 4 | same | hard_match | A | | Same email and name. Probe birthday missing. |
 | MB-2 | 5 | same | separate | B | S2 | New email. Probe birthday missing. |
 | MB-3 | 5 | distinct | hard_match | A | S0 | Anchor has an email and no birthday. Probe has the same name, no email, and a birthday. |
@@ -91,12 +91,25 @@ A Set B probe may share an email, a phone, an exact name, or a last name plus bi
 
 That is 39 same-person probes and 41 distinct-person probes. Nineteen probes are S0 (SFE-2, SFE-3, MB-3, CA-4). Thirteen are S2 (MB-2, CO-1, CO-2). Ten are S1 (RP-1, RP-2).
 
+### Observable fields and known identity
+
+MB-3 and MB-4 are the same shape on the fields an import can see. In both, the anchor has an email and no birthday. The probe has the same name, no email, and a birthday. Nothing in those columns says whether the probe is the anchor.
+
+Identity truth is assigned from the recipe, before any engine run. MB-3's probe is a different person who carries the anchor's name. MB-4's probe is the same person, and the birthday was missing on the first row. The policy treats the two shapes the same way: a missing birthday keeps the name hard match. The labels keep both truths. They are not collapsed to remove the ambiguity. An evaluator must not infer identity from the shared fields or from the shared hard-match expectation.
+
+### Import replay
+
+The five same-email copies are the same people as originals 1–5. `identity_truth` is `same_person`. `policy_expected` is `import_replay`. `expected_path` is B only because that is the path stored on the original row, which was new when it was first imported. The copy does not create a person and does not ask the resolver for a new decision.
+
+An import replay is not a new identity. In identity-resolution metrics it must not be counted as a new person, a separation, or a fresh path B miss. Keep three records separate: identity truth, the policy-expected matching outcome, and the import outcome. A future evaluation must not infer identity truth from `expected_path` alone. Path B on these five rows is a copied stored result.
+
 Policy sentences, from `docs/engineering/matching-policy.md`:
 
 - SFE-1 and CA-1: "A review opens only when every stored birthday differs from the inbound birthday."
 - SFE-2, MB-1, MB-3, and MB-4: "A missing birthday on either side keeps the hard match."
 - SFE-3 and CA-2: "One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs."
 - RP-1 and RP-2: "A second person cannot store the same phone. The first person is already saved, so the second write fails. That failure is not a review." The phone is also not a search key: "The matcher does not read it, so a phone on a file cannot find a person and cannot be compared with a birthday."
+- RP-2 path: the 0.60 threshold keeps a name-and-birthday agreement in review. The different ZIP keeps the score below 0.85, so the path stays D instead of rising to C. The expected path remains D.
 - MB-2, CO-1, and CO-2: "If the lookup misses, the system searches only people who share an exact email, an exact guardian email, or the same last name and the same birthday."
 - CA-3: "A review opens only when every stored birthday differs from the inbound birthday." The lookup here is the exact name.
 - CA-4: "The same exact name and the same birthday."

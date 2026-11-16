@@ -697,7 +697,7 @@ function notesFor(scenario) {
     case 'RP-1':
       return 'Distinct person, same phone, nothing else shared. The matcher does not read the phone, so the row is new. The second phone write then fails.';
     case 'RP-2':
-      return 'Same person, same phone, new email, different ZIP, same name and birthday. The name and birthday keep a low score in review. The second phone write then fails.';
+      return 'Same person, same phone, new email, different ZIP, same name and birthday. The 0.60 threshold keeps a name-and-birthday agreement in review, and the different ZIP keeps the score below 0.85, so the path stays D. The second phone write then fails.';
     case 'MB-1':
       return 'Same person, same email, probe birthday missing. A missing birthday keeps the hard match.';
     case 'MB-2':

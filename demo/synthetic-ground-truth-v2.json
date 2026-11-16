@@ -6111,7 +6111,7 @@
       "severity_if_auto_merged": null,
       "flag": "S1",
       "truth_policy_disagreement": false,
-      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The name and birthday keep a low score in review. The second phone write then fails."
+      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The 0.60 threshold keeps a name-and-birthday agreement in review, and the different ZIP keeps the score below 0.85, so the path stays D. The second phone write then fails."
     },
     {
       "row": 305,
@@ -6131,7 +6131,7 @@
       "severity_if_auto_merged": null,
       "flag": "S1",
       "truth_policy_disagreement": false,
-      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The name and birthday keep a low score in review. The second phone write then fails."
+      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The 0.60 threshold keeps a name-and-birthday agreement in review, and the different ZIP keeps the score below 0.85, so the path stays D. The second phone write then fails."
     },
     {
       "row": 306,
@@ -6151,7 +6151,7 @@
       "severity_if_auto_merged": null,
       "flag": "S1",
       "truth_policy_disagreement": false,
-      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The name and birthday keep a low score in review. The second phone write then fails."
+      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The 0.60 threshold keeps a name-and-birthday agreement in review, and the different ZIP keeps the score below 0.85, so the path stays D. The second phone write then fails."
     },
     {
       "row": 307,
@@ -6171,7 +6171,7 @@
       "severity_if_auto_merged": null,
       "flag": "S1",
       "truth_policy_disagreement": false,
-      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The name and birthday keep a low score in review. The second phone write then fails."
+      "notes": "Same person, same phone, new email, different ZIP, same name and birthday. The 0.60 threshold keeps a name-and-birthday agreement in review, and the different ZIP keeps the score below 0.85, so the path stays D. The second phone write then fails."
     },
     {
       "row": 308,
