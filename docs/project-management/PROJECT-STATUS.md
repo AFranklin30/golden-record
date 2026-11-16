@@ -1,79 +1,102 @@
 # Golden Record — Project Status
 
-As of 2026-11-16. Source commit `7fa878d`.
-Figures below were measured in this audit unless marked **UNVERIFIED**.
+Corrected 2026-11-16. The first audit measured `main` at `7fa878d092d027c89db4e2020558934b7e03e8aa`. That commit is stale.
+
+The engineering tip is `productization/remove-thunder` at `cc83b1b97867d70257b2445afd07221d817c996b`. It is 8 commits ahead of the merge-base with `main` (`762e469ac069c926de37ae064d18beebf932f2a4`). Those 8 commits are not on `main` and were not in the first audit. Merging this branch into `main` is Aaron's decision. It has not been done.
 
 ## Dashboard
 
 | | |
 |---|---|
-| Health | Yellow. The engine, review API, unmerge, and fan export are in the repo and a large part of the Jest suite passes. The commercial demo is not assembled. The quality numbers in the brief were not reproduced. |
+| Health | Yellow for the commercial release process, because `main` does not contain the demo work. The tip itself has a passing root suite and a 60-scenario benchmark. |
 | Current milestone | Commercial demo on the existing engine. |
-| Current sprint | Sprint 0 — scope freeze and audit. IN PROGRESS. |
-| MVP tasks complete | 5 of 35 (14%). Deferred pilot tasks are not in that 35. |
-| Current task | S0-06. Aaron approves the proposed scope. |
-| Completed | S0-01 inventory, S0-02 Jest, S0-03 harness, S0-04 data check, S0-05 these docs. |
-| Remaining in this sprint | S0-06 only. |
-| Blockers | Scope not approved. No UI in this repo. Firestore credentials missing, which dirtied the integration-test run. Hosted database role for row-level security is UNVERIFIED. Render is up; the deployed git SHA is UNVERIFIED. |
-| MVP planning window | Aaron's envelopes add up to 10.5–16 days after scope approval (Sprints 1–4). That is the window he set, not a new estimate. |
-| Next action | Approve or cut `SCOPE-AND-BACKLOG.md`. |
-| Next three priorities | 1. Approve D-002, D-003, and D-005 (do not retune the matcher, do not cite the missing 60-scenario numbers, do not assume a dashboard). 2. S1-01, lock the 9-row scorecard. 3. S1-02, specify the 200-record synthetic set. |
+| Current sprint | Sprint 0. IN PROGRESS until Aaron accepts this corrected scope. |
+| Code under review | `cc83b1b97867d70257b2445afd07221d817c996b` on `productization/remove-thunder`. |
+| `main` | `7fa878d092d027c89db4e2020558934b7e03e8aa`. Lags the tip. |
+| MVP tasks complete | 5 of 6 Sprint 0 tasks, plus the correction S0-07. Later sprint tasks below are re-scoped, not started as new work. |
+| Current task | S0-06. Aaron approves the corrected scope, including whether `productization/remove-thunder` becomes `main`. |
+| Blockers | The tip is not merged to `main`. No GitHub Actions workflow exists. The hosted service's git SHA is UNVERIFIED. |
+| Next action | Read the correction table in this file and approve or cut the remaining gaps. |
+| Next three priorities | 1. Decide whether to merge `productization/remove-thunder` into `main`. 2. Keep the 60-scenario benchmark as the regression baseline. 3. Do not rebuild the dashboard or the matcher. |
 
-## Measured test run
+## Corrected test run
 
-`npx jest --runInBand` after migrations `001`–`017` on local PostgreSQL 16.
+Command, from a detached worktree at `cc83b1b97867d70257b2445afd07221d817c996b`, after `scripts/resetLocalDb.sh` and `node scripts/seedDemoOrg.js`, with `web/` built so `web/dist/index.html` exists:
 
-Second run (unhandled rejections set to warn, so a missing Google credential did not kill the process):
+```
+env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIALS \
+  DATABASE_URL=postgresql://postgres:postgres@localhost:5432/golden_record \
+  FIRESTORE_PROJECT_ID=local-audit \
+  JWT_PRIVATE_KEY=<local test PEM> \
+  JWT_PUBLIC_KEY=<local test PEM> \
+  npx jest --forceExit
+```
 
-- 541 passed
-- 46 failed
-- 1 skipped
-- 588 total
-- 17 suites passed, 7 failed
+No application-default credential file was present, so `firestoreSyncEnabled()` in `src/modules/resolverEngine.js` skips the wallet write. `FIRESTORE_EMULATOR_HOST` was unset. An earlier run that inherited `FIRESTORE_EMULATOR_HOST=127.0.0.1:8099` stalled and was discarded.
 
-The one skip is the `all_candidates_gated` test, skipped in source.
+Output:
 
-The 46 failures are broken down in `SPRINT-TRACKER.md`. Two are documented in the test file as pre-existing. Five are the demo-seed suite running against an empty database. Thirty-nine are Jest reporting the Firestore credential error at `resolverEngine.js` during real Postgres resolutions. Those 39 were not observed as matching-logic assertion failures.
+```
+Test Suites: 39 passed, 39 total
+Tests:       1 skipped, 691 passed, 692 total
+```
 
-This is not "691 passed."
+The one skip is `tests/modules/resolverEngine.trace.test.js`, "all_candidates_gated", marked `test.skip` in the file.
 
-`CLAUDE.md` still says 546 passed / 558 total as of 2026-08-17. An older pull request body says 570 passed / 582 total. Neither matches this run. The suite has grown since those notes.
+Without `web/dist`, the same command was `689 passed, 3 skipped, 692 total`, because `tests/routes/dashboardStatic.test.js` skips both of its tests when `web/dist/index.html` is missing.
 
-The 29 smoke and unit scripts outside Jest were not run. `npm test` does not include them.
+`tests/seedDemoOrg.test.js` does not seed the database itself. It fails if `node scripts/seedDemoOrg.js` has not already been run. That is why a fresh database is not a fair run of this suite.
 
-## Measured benchmark
+Jest config in `package.json` ignores `/web/`. The 9 Vitest files under `web/` were not run. Their result is UNVERIFIED.
 
-`node eval/runCorpus.js` on the synthetic demo org after `scripts/seedDemoOrg.js`:
+File counts from `git ls-tree`: 39 `*.test.js` files on the tip, 24 on `main`. The "61 files vs 46" count was not reproduced by that listing.
+
+## Corrected benchmark
+
+`npx jest --forceExit` runs `tests/eval.benchmark.test.js`, which executes every case in `eval/fixtures/benchmarkCases.js` and rewrites:
+
+- `eval/reports/benchmark-report.md`
+- `eval/reports/benchmark-report.json`
+
+Those generated files were restored after the run (`git checkout -- eval/reports`). The regenerated summary matched the committed report:
 
 | | |
 |---|---|
-| Rows | 9 (8 synthetic, 1 promoted) |
-| Found | 3 |
-| Silent miss | 0 |
-| Correct separation | 5 |
-| False alarm | 1 |
-| Recall | 1 |
-| Precision | 0.75 |
-| Scorer | `v1+d7d646f3` |
-| Thresholds | 0.85 and 0.60 |
+| Scenarios | 60 |
+| Policy mismatches | 0 |
+| Precision | 0.9048 |
+| Recall | 0.7917 |
+| Reviews | 27 |
+| True positives | 19 |
+| False positives | 2 |
+| False negatives | 5 |
+| True negatives | 7 |
 
-There is no 60-scenario file and no stored 90.5% or 79.2% result. The 200-record dataset is not in the repo. It is Sprint 1 work.
+`eval/fixtures/benchmarkCases.js` contains 60 `scenario({...})` calls. The test asserts `summary.total === cases.length` and `summary.policy_mismatches === 0`.
 
-Recall of 1 on 9 rows means every labeled match was queued for review. It does not mean records were merged. The false alarm is the promoted demo trace: labeled `not_match`, replayed as path D at 0.7, in agreement with the stored trace, with label disagreement.
+Precision and recall here exclude reviews. A review is not counted as an automatic match. See `docs/engineering/matching-policy.md` and `eval/benchmark.js`.
 
-## Hosted checks
+## Original audit, for the record
 
-- `GET https://golden-record.onrender.com/health` on 2026-11-16: HTTP 200, `{"status":"ok","timestamp":"2026-11-16T04:18:05.042Z"}`.
-- `https://golden-record-six.vercel.app/`: HTTP 500, `FUNCTION_INVOCATION_FAILED`.
+On `main` at `7fa878d`, `npx jest --runInBand` with a local Postgres and no Google credentials reported `541 passed, 46 failed, 1 skipped, 588 total`. That run is explained in `SPRINT-TRACKER.md`. It is not the tip.
 
-## Customer data
+## Finding table
 
-No customer records are in the current tree. A deleted evaluation script remains in git history (commit `0d2187c`). It was not restored and its rows were not copied. See D-004.
-
-## If the scope has to shrink
-
-Cut in this order. Do not cut the matcher freeze or the synthetic-data rule.
-
-1. Sprint 4 sample report and use-case list (S4-05, S4-07) can follow the first live demo.
-2. Sprint 2 summary metrics (S2-05) can be the written report instead of a widget.
-3. Do not cut the isolation check (S3-03), the baseline lock (S1-01), or the "no customer data" rule.
+| Finding | Original (`main` `7fa878d`) | Reconciled (`cc83b1b`) | Still valid? |
+|---|---|---|---|
+| Commit audited | `7fa878d` on `main` | Tip is `cc83b1b` on `productization/remove-thunder`, 8 commits past the merge-base. `main` has not moved. | The first commit hash was right for `main`. It was the wrong tip. |
+| Root Jest | 541 passed, 46 failed, 1 skipped, 588 total | 691 passed, 1 skipped, 0 failed, 692 total, 39 suites, after seed and `web/dist` | Original number described `main` only. Aaron's 691 is reproduced on the tip. |
+| 46 failures | Classified as 2 intentional test failures, 5 empty-demo-org setup failures, 39 Firestore credential rejections | Those suites were changed on the tip. The tip run had 0 failures. Firestore writes are skipped when no credential file exists (`b388ad419c85e03c5c384590c4403a27b049dc51`). | The classification stands for the `main` run. It is not the tip's status. |
+| 588 vs 691 | Treated as one suite | `main` has 24 `*.test.js` files. The tip has 39. Jest on the tip reports 692 tests. | The gap is a different commit, not a missing smoke run. |
+| 60-scenario benchmark | Reported absent on `main` | Present: `eval/benchmark.js`, `eval/fixtures/benchmarkCases.js`, `tests/eval.benchmark.test.js`, `eval/reports/benchmark-report.md`. Re-ran: 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. | Absent on `main`. Present and reproduced on the tip. |
+| Dashboard | Reported absent | `web/` (Vite, React, TypeScript), `src/routes/dashboard.js`, `docs/engineering/golden-record-dashboard.md`, served from `web/dist` by `index.js`. Commit `5e394acd8baef908073e0ba1b4dcb6bbbd3a9167`. | Absent on `main`. Present on the tip. Overlooked because the audit never left `main`. |
+| Vercel homepage | HTTP 500 on 2026-11-16 | Same observation. `render.yaml` on the tip deploys this branch to the Render service `golden-record` in Ohio. The live SHA is still UNVERIFIED. | The 500 is still a fact. It is not this dashboard's source. |
+| Path C / D | Both mint a new fan and a pending review. Thresholds 0.85 and 0.60. No auto-merge. | Same, plus two policy changes: a name-and-birthday agreement under 0.60 is still path D (`pathForMatch`), and an exact email or exact name whose stored birthdays all differ is held for review. Documented in `docs/engineering/matching-policy.md`. | "No auto-merge" and "path C does not return the existing fan" still hold. The path rules are not identical to `main`. |
+| README path C sentence | Says the existing fan is returned | The same sentence is still in `README.md` on the tip (line 131). | Still a doc bug. Do not change the engine to match it. |
+| RLS | Policies exist; local superuser bypasses them; hosted role UNVERIFIED | `tests/routes/tenantIsolation.test.js` creates `golden_record_app` with `NOSUPERUSER NOBYPASSRLS` and passed inside the 691. `operator` and `operator_session` are auth tables without RLS (`migration_019.sql`). | Policies are now tested with a non-superuser role on the tip. The default local URL used here was still the `postgres` superuser. |
+| CSV upload | No ingest route | `POST /v1/dashboard/imports` and `POST /v1/dashboard/imports/preview` read CSV text through `src/modules/customerImport.js`. Migration `018`. | The "no CSV upload" finding is false on the tip. |
+| Decision export | Fan snapshot only, no score or signals | `GET /v1/dashboard/exports/fans` forwards to `GET /v1/export/fans`. `CSV_HEADER` in `src/routes/export.js` is still the fan snapshot without score or signals. | The fan-export gap remains. Reviews are on screen, not in that CSV. |
+| Unmerge | API exists; multi-hop blocked | API still in `src/routes/conflicts.js`. The dashboard calls `POST /v1/dashboard/conflicts/:id/unmerge` (`web/src/features/reviews/ReviewDetail.tsx`). | Unmerge was not missing. The screen to use it is on the tip. |
+| CI | No workflow | Still no `.github` workflow on the tip. | Still valid. |
+| Customer data | None in the `main` tree. A deleted script remains in git history. | Not re-copied. The tip's benchmark fixtures are synthetic. | Still do not restore that history. |
+| 200-record set | Not in the tree | `scripts/buildSyntheticDemoCsv.js` writes `demo/synthetic-customers-200.csv`. That CSV is not in the commit. The script was not run here. | The generator exists. The file and its measured result are UNVERIFIED. |
