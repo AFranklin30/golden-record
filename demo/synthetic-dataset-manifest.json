@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "seed": "synthetic-set-b-v1",
+  "import_order": "Set A rows 1-200 in the original builder order, then Set B anchors in scenario order (rows 201-280), then Set B probes in that same case order (rows 281-360).",
+  "source_commit": "846f0e928ab52c06dfb8ec16379d5a92bf9deeb7",
+  "label_file": "demo/synthetic-ground-truth-v2.json",
+  "label_sha256": "de5deb941ad1e7c0030c57d5993f67a44b181acea8195c6a4c2d5e1612ca04f9",
+  "set_a_csv_sha256": "3fb01339fa4144d63a566c97a39fe3869cd96a1c9d4df86fb288a3a783bf2bc7",
+  "set_b_csv_sha256": "9c010f0ee4fa88ecc4b6e57f7cae4f8766a42475640e0ba40a02ec9862f062f8",
+  "row_count": 360,
+  "set_a_rows": 200,
+  "set_b_rows": 160,
+  "disagreement_count": 32
+}

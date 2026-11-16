@@ -87,6 +87,16 @@ Measured again on 2026-11-16 during `npx jest --forceExit`: 60 scenarios, 0 poli
 
 **Alternative.** Keep treating `cc83b1b` as an unmerged tip. That was true during the correction earlier on Nov 16. It is not true after `f867e62`.
 
+## D-021 — Expand the labeled synthetic set from 200 rows to 360 before any engine run
+
+**Status:** APPROVED
+
+**Decision.** Aaron approved this on Nov 16, 2026, about 1:04 PM CT, before any import. Keep the existing 200 rows byte for byte as Set A. Add about 160 rows as Set B: 80 anchor-and-probe cases across the 17 scenarios in the evaluation-design review (SFE-1 through CO-3). Each label has identity truth from the recipe and a separate policy-expected outcome. Where those two disagree, both stay and the row is flagged. Do not edit identity truth to match the engine. The spec is `docs/evaluation/synthetic-dataset-spec.md`. The label file is `demo/synthetic-ground-truth-v2.json`.
+
+**Why.** The 200-row mix was built so the labels agreed with what the code would do. A clean run of that file would not show the birthday veto, a shared family email, a missing birthday, or a distinct person who reaches scoring. The expansion is about one extra day. Nothing else on the Sprint 1 board moves. S1-04, the import, still waits for Aaron.
+
+**Alternative.** Relabel the same 200 rows and stop. That keeps the file small and leaves the missing scenarios untested.
+
 ## D-004 — Do not restore the deleted client evaluation
 
 **Status:** PROPOSED. Unchanged.

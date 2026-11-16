@@ -2,7 +2,7 @@
 
 Updated Nov 16, 2026. Sprint 0 is COMPLETED. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-Sprint 1 is IN PROGRESS. S1-01 and S1-02 are COMPLETED. The 60-scenario benchmark was re-run and did not move. Ground truth for the 200-row mix is committed. Those rows have not been imported.
+Sprint 1 is IN PROGRESS. S1-01 and S1-02 are COMPLETED. The 60-scenario benchmark was re-run and did not move. Aaron approved expanding the labeled set from 200 to 360 rows on Nov 16 (D-021). Those rows have not been imported.
 
 `main` is the source of truth at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` sets `branch: main` (D-020). The first audit's claim that `main` was still `7fa878d` and that the tip was unmerged is historical only.
 
@@ -101,4 +101,4 @@ On `main` at `7fa878d`, `npx jest --runInBand` with a local Postgres and no Goog
 | Unmerge | API exists; multi-hop blocked | API still in `src/routes/conflicts.js`. The dashboard calls `POST /v1/dashboard/conflicts/:id/unmerge` (`web/src/features/reviews/ReviewDetail.tsx`). | Unmerge was not missing. The screen to use it is on the tip. |
 | CI | No workflow | Still no `.github` workflow on the tip. | Still valid. |
 | Customer data | None in the `main` tree. A deleted script remains in git history. | Not re-copied. The tip's benchmark fixtures are synthetic. | Still do not restore that history. |
-| 200-record set | Not in the tree | `scripts/buildSyntheticDemoCsv.js` writes `demo/synthetic-customers-200.csv`. That CSV is not in the commit. `demo/synthetic-200-ground-truth.json` is the committed label file. The 200 rows have not been imported. | The labels are saved. The measured import result is still UNVERIFIED. |
+| 200-record set | Not in the tree | The CSV is still not committed. `demo/synthetic-200-ground-truth.json` is the first label file. `demo/synthetic-ground-truth-v2.json` is the 360-row file approved in D-021. The rows have not been imported. | The labels are saved. The measured import result is still UNVERIFIED. |
