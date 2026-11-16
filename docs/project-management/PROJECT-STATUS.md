@@ -2,7 +2,7 @@
 
 Updated Nov 16, 2026. Sprint 0 is COMPLETED. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-Sprint 1 is IN PROGRESS as a plan. No new benchmark has been run and the 200-row file has not been generated.
+Sprint 1 is IN PROGRESS. S1-01 and S1-02 are COMPLETED. The 60-scenario benchmark was re-run and did not move. Ground truth for the 200-row mix is committed. Those rows have not been imported.
 
 `main` is the source of truth at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` sets `branch: main` (D-020). The first audit's claim that `main` was still `7fa878d` and that the tip was unmerged is historical only.
 
@@ -10,16 +10,16 @@ Sprint 1 is IN PROGRESS as a plan. No new benchmark has been run and the 200-row
 
 | | |
 |---|---|
-| Health | Green for Sprint 0. Sprint 1 is planned and not yet measured. |
+| Health | Green for Sprint 0 and for S1-01. S1-02 labels are saved. The 200-row import is not measured yet. |
 | Current milestone | Commercial demo on the existing engine. |
 | Current sprint | Sprint 1. IN PROGRESS since Nov 16, 2026. Sprint 0 is COMPLETED. |
 | `main` | `f867e62921e6332e6e02aeebeacba86351844699`. Render deploys this branch. |
 | Sprint 0 tasks | 7 of 7 COMPLETED. |
-| Sprint 1 tasks | 0 of 7 COMPLETED. Next is S1-01. |
-| Current task | S1-01. Re-run the 60-scenario benchmark and confirm it did not move. |
-| Blockers | The 200-row script does not save ground truth and does not run the resolver. `*.csv` is gitignored, so the CSV stays local. The 60-scenario test overwrites `eval/reports/benchmark-report.md`, so the new report needs its own file. |
-| Next action | S1-01, then S1-02. Do not generate the 200-row file until S1-02 defines the labels. |
-| Next three priorities | 1. Confirm the 60-scenario report is unchanged. 2. Persist ground truth for the existing 200-row mix. 3. Import that file through `importCustomers` and write a separate report. |
+| Sprint 1 tasks | 2 of 7 COMPLETED. Next is S1-03. |
+| Current task | S1-03. Generate `demo/synthetic-customers-200.csv`. Do not import it until S1-04. |
+| Blockers | None for S1-01 or S1-02. `*.csv` is still gitignored. `node scripts/seedDemoOrg.js` still needs `--unhandled-rejections=warn` when Firestore has no credentials, because the household child write rejects outside `index.js`. The 60-scenario test still overwrites `eval/reports/benchmark-report.md`, so the later 200-row report needs its own file. |
+| Next action | S1-03, then wait for Aaron before S1-04. |
+| Next three priorities | 1. Keep the 60-scenario report unchanged. 2. Generate the local CSV from the existing script. 3. Import that file through `importCustomers` only after Aaron says to start S1-04, and write a separate report. |
 
 ## Corrected test run
 
@@ -101,4 +101,4 @@ On `main` at `7fa878d`, `npx jest --runInBand` with a local Postgres and no Goog
 | Unmerge | API exists; multi-hop blocked | API still in `src/routes/conflicts.js`. The dashboard calls `POST /v1/dashboard/conflicts/:id/unmerge` (`web/src/features/reviews/ReviewDetail.tsx`). | Unmerge was not missing. The screen to use it is on the tip. |
 | CI | No workflow | Still no `.github` workflow on the tip. | Still valid. |
 | Customer data | None in the `main` tree. A deleted script remains in git history. | Not re-copied. The tip's benchmark fixtures are synthetic. | Still do not restore that history. |
-| 200-record set | Not in the tree | `scripts/buildSyntheticDemoCsv.js` writes `demo/synthetic-customers-200.csv`. That CSV is not in the commit. The script was not run here. | The generator exists. The file and its measured result are UNVERIFIED. |
+| 200-record set | Not in the tree | `scripts/buildSyntheticDemoCsv.js` writes `demo/synthetic-customers-200.csv`. That CSV is not in the commit. `demo/synthetic-200-ground-truth.json` is the committed label file. The 200 rows have not been imported. | The labels are saved. The measured import result is still UNVERIFIED. |

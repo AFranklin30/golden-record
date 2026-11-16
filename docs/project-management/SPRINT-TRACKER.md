@@ -6,7 +6,7 @@ Corrected 2026-11-16.
 
 Sprint 0 is COMPLETED as of Nov 16, 2026. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-Sprint 1 is IN PROGRESS, started Nov 16, 2026. This entry is the plan only. The 200-row file has not been generated, and no new benchmark has been run.
+Sprint 1 is IN PROGRESS, started Nov 16, 2026. S1-01 and S1-02 are COMPLETED. The 200 rows have not been imported.
 
 Source of truth is `main` at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` on that commit sets `branch: main` (D-020).
 
@@ -76,28 +76,53 @@ What already exists on `main`:
 
 - `eval/benchmark.js` classifies a resolver trace. Automatic decisions are hard matches and path B. Reviews stay out of precision and recall. Policy mismatches are counted apart from those rates.
 - `tests/eval.benchmark.test.js` runs the 60 cases and rewrites `eval/reports/benchmark-report.md` and `.json`. The committed summary is 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews.
-- `scripts/buildSyntheticDemoCsv.js` builds 200 synthetic rows and writes `demo/synthetic-customers-200.csv`. The mix is 80 originals, 5 same-email copies, 10 nicknames, 10 spellings, 20 same name with a different email, 15 name+birthday+zip with no email, and 60 different first name and birthday. It checks lookalikes with `scoreMatch` only, prints the counts, and does not save labels. It does not call `importCustomers`.
-- `*.csv` is gitignored, so the CSV itself will not be committed.
+- `scripts/buildSyntheticDemoCsv.js` builds 200 synthetic rows and writes `demo/synthetic-customers-200.csv`. The mix is 80 originals, 5 same-email copies, 10 nicknames, 10 spellings, 20 same name with a different email, 15 name+birthday+zip with no email, and 60 different first name and birthday. It checks lookalikes with `scoreMatch` only, prints the counts, and does not call `importCustomers`. `node scripts/buildSyntheticDemoCsv.js --labels` also writes `demo/synthetic-200-ground-truth.json` from that same construction.
+- `*.csv` is gitignored, so the CSV itself will not be committed. The ground-truth file is JSON and is committed.
 
-What is new:
+What is still new:
 
-- A committed ground-truth file for those 200 rows.
 - An import of that file through the existing resolver.
 - A second report, `eval/reports/synthetic-200-report.md`, so the 60-scenario files are not overwritten.
 - Four demo examples taken from that run.
 
 | ID | Title | Status | Size |
 |---|---|---|---|
-| S1-01 | Re-run the 60-scenario benchmark and confirm it did not move | NOT STARTED | S |
-| S1-02 | Save ground truth for the existing 200-row mix | NOT STARTED | M |
+| S1-01 | Re-run the 60-scenario benchmark and confirm it did not move | COMPLETED | S |
+| S1-02 | Save ground truth for the existing 200-row mix | COMPLETED | M |
 | S1-03 | Generate the CSV with `scripts/buildSyntheticDemoCsv.js` | NOT STARTED | S |
 | S1-04 | Import the 200 rows through `importCustomers` | NOT STARTED | M |
 | S1-05 | Measure precision, recall, false matches, missed matches, and review volume | NOT STARTED | M |
 | S1-06 | Write `eval/reports/synthetic-200-report.md` | NOT STARTED | S |
 | S1-07 | Pick four demo examples from the import | NOT STARTED | S |
 
-Firestore: on this `main`, `firestoreSyncEnabled()` skips the wallet write when no credential file exists, and `index.js` ignores a "Could not load the default credentials" rejection. `node scripts/seedDemoOrg.js` should not need a flag. The `--unhandled-rejections=warn` workaround belongs to `main` at `7fa878d`, before `b388ad4`. If a seed or import still dies on that rejection, rerun the process with `node --unhandled-rejections=warn`. That is an environment workaround, not a matcher change.
+Firestore: `firestoreSyncEnabled()` skips the wallet write in the resolver when no credential file exists, and `index.js` ignores a "Could not load the default credentials" rejection. The Jest suite did not need a flag. `node scripts/seedDemoOrg.js` still exited during Scenario 4, because `household.js` writes the child wallet outside that handler. `node --unhandled-rejections=warn scripts/seedDemoOrg.js` finished the seed. That is an environment workaround, not a matcher change.
+
+## S1-01 result
+
+Database `postgresql://postgres:postgres@localhost:5432/golden_record` was rebuilt with `scripts/resetLocalDb.sh`. `web/` was built so `web/dist/index.html` exists. The first `node scripts/seedDemoOrg.js` died on the household Firestore rejection above. The warn rerun completed, then:
+
+```
+env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIALS \
+  npx jest --forceExit
+```
+
+That run, before the ground-truth test existed, printed:
+
+```
+Test Suites: 39 passed, 39 total
+Tests:       1 skipped, 691 passed, 692 total
+```
+
+`tests/eval.benchmark.test.js` rewrote `eval/reports/benchmark-report.md` and `.json`. The summary was 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. True positives 19, false positives 2, true negatives 7, false negatives 5. The files were restored with `git checkout`. The body differed by generated fan ids, so it was not committed. The summary matched the committed report. No matcher or fixture file was edited.
+
+After `tests/syntheticGroundTruth.test.js` was added, the same command printed 40 suites, 692 passed, 1 skipped, 693 total. The benchmark summary was unchanged. The extra pass is that new test.
+
+## S1-02 result
+
+`node scripts/buildSyntheticDemoCsv.js --labels` wrote `demo/synthetic-200-ground-truth.json`. The CSV rows matched the previous script. The 200 rows were not imported.
+
+Each label has one identity and one intended outcome. Outcomes: 20 hard matches (5 same-email copies and 15 no-email rows), 40 reviews (10 nicknames, 10 spellings, 20 same-name rows), 140 separations (80 originals and 60 different-birthday rows). A no-email row repeats the original name and birthday, and an import sends that name as the singular identifier, so the intended outcome is a hard match. The other same-person rows use a different email, so the intended outcome is a review. `tests/syntheticGroundTruth.test.js` checks the 200 labels, one per row, and those bucket counts.
 
 ## Remaining
 
-S1-01 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it.
+S1-03 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it. Do not import the 200 rows until Aaron says to start S1-04.

@@ -1,0 +1,1621 @@
+{
+  "source": "scripts/buildSyntheticDemoCsv.js",
+  "description": "Ground truth for the 200-row synthetic mix. Each label says which original the row belongs to, or that the row is a distinct person, and whether the intended outcome is a hard match, a review, or a separation. Assigned before any resolver or import run.",
+  "row_count": 200,
+  "buckets": {
+    "original": 80,
+    "same_email": 5,
+    "nickname": 10,
+    "spelling": 10,
+    "same_name": 20,
+    "no_email": 15,
+    "different_birthday": 60
+  },
+  "outcomes": {
+    "hard_match": 20,
+    "review": 40,
+    "separate": 140
+  },
+  "labels": [
+    {
+      "row": 1,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-1",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 2,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-2",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 3,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-3",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 4,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-4",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 5,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-5",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 6,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-6",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 7,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-7",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 8,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-8",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 9,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-9",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 10,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-10",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 11,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-11",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 12,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-12",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 13,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-13",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 14,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-14",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 15,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-15",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 16,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-16",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 17,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-17",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 18,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-18",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 19,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-19",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 20,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-20",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 21,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-21",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 22,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-22",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 23,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-23",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 24,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-24",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 25,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-25",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 26,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-26",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 27,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-27",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 28,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-28",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 29,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-29",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 30,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-30",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 31,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-31",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 32,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-32",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 33,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-33",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 34,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-34",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 35,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-35",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 36,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-36",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 37,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-37",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 38,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-38",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 39,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-39",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 40,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-40",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 41,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-41",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 42,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-42",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 43,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-43",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 44,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-44",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 45,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-45",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 46,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-46",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 47,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-47",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 48,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-48",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 49,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-49",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 50,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-50",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 51,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-51",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 52,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-52",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 53,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-53",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 54,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-54",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 55,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-55",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 56,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-56",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 57,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-57",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 58,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-58",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 59,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-59",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 60,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-60",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 61,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-61",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 62,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-62",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 63,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-63",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 64,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-64",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 65,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-65",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 66,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-66",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 67,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-67",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 68,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-68",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 69,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-69",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 70,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-70",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 71,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-71",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 72,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-72",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 73,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-73",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 74,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-74",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 75,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-75",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 76,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-76",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 77,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-77",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 78,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-78",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 79,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-79",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 80,
+      "bucket": "original",
+      "identity": "original",
+      "person_key": "original-80",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 81,
+      "bucket": "same_email",
+      "identity": "same_person",
+      "person_key": "original-1",
+      "same_as_original_row": 1,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 82,
+      "bucket": "same_email",
+      "identity": "same_person",
+      "person_key": "original-2",
+      "same_as_original_row": 2,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 83,
+      "bucket": "same_email",
+      "identity": "same_person",
+      "person_key": "original-3",
+      "same_as_original_row": 3,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 84,
+      "bucket": "same_email",
+      "identity": "same_person",
+      "person_key": "original-4",
+      "same_as_original_row": 4,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 85,
+      "bucket": "same_email",
+      "identity": "same_person",
+      "person_key": "original-5",
+      "same_as_original_row": 5,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 86,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-1",
+      "same_as_original_row": 1,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 87,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-2",
+      "same_as_original_row": 2,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 88,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-3",
+      "same_as_original_row": 3,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 89,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-4",
+      "same_as_original_row": 4,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 90,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-5",
+      "same_as_original_row": 5,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 91,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-6",
+      "same_as_original_row": 6,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 92,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-7",
+      "same_as_original_row": 7,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 93,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-8",
+      "same_as_original_row": 8,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 94,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-9",
+      "same_as_original_row": 9,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 95,
+      "bucket": "nickname",
+      "identity": "same_person",
+      "person_key": "original-10",
+      "same_as_original_row": 10,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 96,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-11",
+      "same_as_original_row": 11,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 97,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-12",
+      "same_as_original_row": 12,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 98,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-13",
+      "same_as_original_row": 13,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 99,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-14",
+      "same_as_original_row": 14,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 100,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-15",
+      "same_as_original_row": 15,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 101,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-16",
+      "same_as_original_row": 16,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 102,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-17",
+      "same_as_original_row": 17,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 103,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-18",
+      "same_as_original_row": 18,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 104,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-19",
+      "same_as_original_row": 19,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 105,
+      "bucket": "spelling",
+      "identity": "same_person",
+      "person_key": "original-20",
+      "same_as_original_row": 20,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 106,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-21",
+      "same_as_original_row": 21,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 107,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-22",
+      "same_as_original_row": 22,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 108,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-23",
+      "same_as_original_row": 23,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 109,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-24",
+      "same_as_original_row": 24,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 110,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-25",
+      "same_as_original_row": 25,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 111,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-26",
+      "same_as_original_row": 26,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 112,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-27",
+      "same_as_original_row": 27,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 113,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-28",
+      "same_as_original_row": 28,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 114,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-29",
+      "same_as_original_row": 29,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 115,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-30",
+      "same_as_original_row": 30,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 116,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-31",
+      "same_as_original_row": 31,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 117,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-32",
+      "same_as_original_row": 32,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 118,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-33",
+      "same_as_original_row": 33,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 119,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-34",
+      "same_as_original_row": 34,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 120,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-35",
+      "same_as_original_row": 35,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 121,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-36",
+      "same_as_original_row": 36,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 122,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-37",
+      "same_as_original_row": 37,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 123,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-38",
+      "same_as_original_row": 38,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 124,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-39",
+      "same_as_original_row": 39,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 125,
+      "bucket": "same_name",
+      "identity": "same_person",
+      "person_key": "original-40",
+      "same_as_original_row": 40,
+      "intended_outcome": "review"
+    },
+    {
+      "row": 126,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-41",
+      "same_as_original_row": 41,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 127,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-42",
+      "same_as_original_row": 42,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 128,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-43",
+      "same_as_original_row": 43,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 129,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-44",
+      "same_as_original_row": 44,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 130,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-45",
+      "same_as_original_row": 45,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 131,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-46",
+      "same_as_original_row": 46,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 132,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-47",
+      "same_as_original_row": 47,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 133,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-48",
+      "same_as_original_row": 48,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 134,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-49",
+      "same_as_original_row": 49,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 135,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-50",
+      "same_as_original_row": 50,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 136,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-51",
+      "same_as_original_row": 51,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 137,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-52",
+      "same_as_original_row": 52,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 138,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-53",
+      "same_as_original_row": 53,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 139,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-54",
+      "same_as_original_row": 54,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 140,
+      "bucket": "no_email",
+      "identity": "same_person",
+      "person_key": "original-55",
+      "same_as_original_row": 55,
+      "intended_outcome": "hard_match"
+    },
+    {
+      "row": 141,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-1",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 142,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-2",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 143,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-3",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 144,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-4",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 145,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-5",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 146,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-6",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 147,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-7",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 148,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-8",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 149,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-9",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 150,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-10",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 151,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-11",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 152,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-12",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 153,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-13",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 154,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-14",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 155,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-15",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 156,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-16",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 157,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-17",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 158,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-18",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 159,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-19",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 160,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-20",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 161,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-21",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 162,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-22",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 163,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-23",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 164,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-24",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 165,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-25",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 166,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-26",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 167,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-27",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 168,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-28",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 169,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-29",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 170,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-30",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 171,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-31",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 172,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-32",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 173,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-33",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 174,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-34",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 175,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-35",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 176,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-36",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 177,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-37",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 178,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-38",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 179,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-39",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 180,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-40",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 181,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-41",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 182,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-42",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 183,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-43",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 184,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-44",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 185,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-45",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 186,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-46",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 187,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-47",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 188,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-48",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 189,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-49",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 190,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-50",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 191,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-51",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 192,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-52",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 193,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-53",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 194,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-54",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 195,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-55",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 196,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-56",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 197,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-57",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 198,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-58",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 199,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-59",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    },
+    {
+      "row": 200,
+      "bucket": "different_birthday",
+      "identity": "distinct_person",
+      "person_key": "distinct-60",
+      "same_as_original_row": null,
+      "intended_outcome": "separate"
+    }
+  ]
+}

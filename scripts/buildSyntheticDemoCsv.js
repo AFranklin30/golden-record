@@ -3,12 +3,13 @@
 // Builds demo/synthetic-customers-200.csv.
 // Original people come first. Later rows resemble some of them so the
 // existing importer and matcher can open reviews. Nothing here is a real person.
+//
+// node scripts/buildSyntheticDemoCsv.js --labels
+// also writes demo/synthetic-200-ground-truth.json. Those labels come from
+// how each row is built. They are not a resolver result.
 
 const fs = require('fs');
 const path = require('path');
-const { parseCustomerRow } = require('../src/modules/customerImport');
-const { normalizeIdentifier } = require('../src/modules/normalizer');
-const { scoreMatch } = require('../src/modules/probabilisticMatcher');
 
 const FIRST = [
   'Ava', 'Noah', 'Mia', 'Liam', 'Sofia', 'Ethan', 'Amelia', 'Lucas',
@@ -93,122 +94,224 @@ function firstNameFor(index) {
   return FIRST[index];
 }
 
-const originals = [];
-for (let i = 0; i < 80; i += 1) {
-  const first = firstNameFor(i);
-  const last = LAST[i];
-  originals.push(row(first, last, emailFor(first, last, '1'), dobFor(i), zipFor(i)));
-}
+function buildDataset() {
+  const originals = [];
+  for (let i = 0; i < 80; i += 1) {
+    const first = firstNameFor(i);
+    const last = LAST[i];
+    originals.push(row(first, last, emailFor(first, last, '1'), dobFor(i), zipFor(i)));
+  }
 
-const sameEmail = originals.slice(0, 5).map((person) => row(
-  person.first_name,
-  person.last_name,
-  person.email,
-  person.birthday,
-  person.zip
-));
+  const sameEmail = originals.slice(0, 5).map((person) => row(
+    person.first_name,
+    person.last_name,
+    person.email,
+    person.birthday,
+    person.zip
+  ));
 
-const reviewByNickname = NICKNAMES.map(([formal, shortName], index) => {
-  const person = originals[index];
-  return row(shortName, person.last_name, emailFor(shortName, person.last_name, '2'), person.birthday, zipFor(index + 3));
-});
+  const reviewByNickname = NICKNAMES.map(([formal, shortName], index) => {
+    const person = originals[index];
+    return row(shortName, person.last_name, emailFor(shortName, person.last_name, '2'), person.birthday, zipFor(index + 3));
+  });
 
-const reviewBySpelling = SPELLING.map(([formal, variant], index) => {
-  const person = originals[10 + index];
-  return row(variant, person.last_name, emailFor(variant, person.last_name, '2'), person.birthday, zipFor(index + 5));
-});
+  const reviewBySpelling = SPELLING.map(([formal, variant], index) => {
+    const person = originals[10 + index];
+    return row(variant, person.last_name, emailFor(variant, person.last_name, '2'), person.birthday, zipFor(index + 5));
+  });
 
-const reviewBySameName = originals.slice(20, 40).map((person, index) => row(
-  person.first_name,
-  person.last_name,
-  emailFor(person.first_name, person.last_name, '2'),
-  person.birthday,
-  zipFor(index + 7)
-));
+  const reviewBySameName = originals.slice(20, 40).map((person, index) => row(
+    person.first_name,
+    person.last_name,
+    emailFor(person.first_name, person.last_name, '2'),
+    person.birthday,
+    zipFor(index + 7)
+  ));
 
-const highScore = originals.slice(40, 55).map((person) => row(
-  person.first_name,
-  person.last_name,
-  '',
-  person.birthday,
-  person.zip
-));
+  const highScore = originals.slice(40, 55).map((person) => row(
+    person.first_name,
+    person.last_name,
+    '',
+    person.birthday,
+    person.zip
+  ));
 
-const differentBirthday = originals.slice(0, 60).map((person, index) => row(
-  FIRST[(index + 7) % FIRST.length],
-  person.last_name,
-  emailFor(FIRST[(index + 7) % FIRST.length], person.last_name, '3'),
-  shiftDob(person.birthday),
-  zipFor(index + 1)
-));
+  const differentBirthday = originals.slice(0, 60).map((person, index) => row(
+    FIRST[(index + 7) % FIRST.length],
+    person.last_name,
+    emailFor(FIRST[(index + 7) % FIRST.length], person.last_name, '3'),
+    shiftDob(person.birthday),
+    zipFor(index + 1)
+  ));
 
-const rows = [
-  ...originals,
-  ...sameEmail,
-  ...reviewByNickname,
-  ...reviewBySpelling,
-  ...reviewBySameName,
-  ...highScore,
-  ...differentBirthday,
-];
+  const rows = [
+    ...originals,
+    ...sameEmail,
+    ...reviewByNickname,
+    ...reviewBySpelling,
+    ...reviewBySameName,
+    ...highScore,
+    ...differentBirthday,
+  ];
 
-if (rows.length !== 200) {
-  throw new Error(`expected 200 rows, built ${rows.length}`);
-}
+  if (rows.length !== 200) {
+    throw new Error(`expected 200 rows, built ${rows.length}`);
+  }
 
-for (const [index, built] of rows.entries()) {
-  const parsed = parseCustomerRow(built);
-  if (!parsed.ok) throw new Error(`row ${index + 1} failed: ${parsed.error}`);
-}
-
-const ORG = '00000000-0000-4000-8000-000000000001';
-
-function normalizedPerson(built) {
-  const parsed = parseCustomerRow(built);
   return {
-    org_id: ORG,
-    name: parsed.fields.name || null,
-    email: parsed.fields.email || null,
-    dob: parsed.fields.dob || null,
-    zip: parsed.fields.zip || null,
+    originals,
+    sameEmail,
+    reviewByNickname,
+    reviewBySpelling,
+    reviewBySameName,
+    highScore,
+    differentBirthday,
+    rows,
   };
 }
 
-function expectReview(original, lookalike, label) {
-  const result = scoreMatch(normalizedPerson(original), { ...normalizedPerson(lookalike), org_id: ORG });
-  const signals = result.signals_matched.map((item) => item.signal);
-  const review = result.score >= 0.85 || result.score >= 0.60 || signals.includes('name_plus_dob');
-  if (!review || result.dob_veto) {
-    throw new Error(`${label} did not score as a review: ${result.score} ${signals.join(',')}`);
-  }
-  return { label, kind: 'review', score: result.score, signals };
+function labelFor(rowNumber, bucket, identity, personKey, sameAsOriginalRow, intendedOutcome) {
+  return {
+    row: rowNumber,
+    bucket,
+    identity,
+    person_key: personKey,
+    same_as_original_row: sameAsOriginalRow,
+    intended_outcome: intendedOutcome,
+  };
 }
 
-function expectNoReview(original, other, label) {
-  const result = scoreMatch(normalizedPerson(original), { ...normalizedPerson(other), org_id: ORG });
-  const signals = result.signals_matched.map((item) => item.signal);
-  const review = !result.dob_veto && (result.score >= 0.60 || signals.includes('name_plus_dob'));
-  if (review) {
-    throw new Error(`${label} scored as a review: ${result.score} ${signals.join(',')}`);
-  }
-  return { label, kind: 'separate', score: result.score, veto: Boolean(result.dob_veto) };
+function labelGroup(labels, people, bucket, identity, intendedOutcome, originalIndex) {
+  people.forEach((_, index) => {
+    const source = originalIndex(index);
+    const distinct = identity === 'distinct_person';
+    labels.push(labelFor(
+      labels.length + 1,
+      bucket,
+      identity,
+      distinct ? `distinct-${index + 1}` : `original-${source + 1}`,
+      identity === 'same_person' ? source + 1 : null,
+      intendedOutcome
+    ));
+  });
 }
 
-const samples = [
-  ...reviewByNickname.map((lookalike, index) => expectReview(originals[index], lookalike, `nickname ${index + 1}`)),
-  ...reviewBySpelling.map((lookalike, index) => expectReview(originals[10 + index], lookalike, `spelling ${index + 1}`)),
-  ...reviewBySameName.map((lookalike, index) => expectReview(originals[20 + index], lookalike, `same name ${index + 1}`)),
-  ...highScore.map((lookalike, index) => expectReview(originals[40 + index], lookalike, `high score ${index + 1}`)),
-  ...differentBirthday.map((other, index) => expectNoReview(originals[index], other, `different birthday ${index + 1}`)),
-];
+// Identity and the intended decision are fixed by construction.
+// A no-email row repeats the original name and birthday. An import sends
+// that name as the singular identifier, and the same birthday keeps a hard
+// match. Nickname, spelling, and same-name rows carry a different email, so
+// the intended decision is a review. This is not read from a resolver run.
+function buildGroundTruth() {
+  const dataset = buildDataset();
+  const labels = [];
+  labelGroup(labels, dataset.originals, 'original', 'original', 'separate', (index) => index);
+  labelGroup(labels, dataset.sameEmail, 'same_email', 'same_person', 'hard_match', (index) => index);
+  labelGroup(labels, dataset.reviewByNickname, 'nickname', 'same_person', 'review', (index) => index);
+  labelGroup(labels, dataset.reviewBySpelling, 'spelling', 'same_person', 'review', (index) => 10 + index);
+  labelGroup(labels, dataset.reviewBySameName, 'same_name', 'same_person', 'review', (index) => 20 + index);
+  labelGroup(labels, dataset.highScore, 'no_email', 'same_person', 'hard_match', (index) => 40 + index);
+  labelGroup(labels, dataset.differentBirthday, 'different_birthday', 'distinct_person', 'separate', () => null);
 
-const header = 'first_name,last_name,email,birthday,zip,phone';
-const lines = rows.map((built) => [built.first_name, built.last_name, built.email, built.birthday, built.zip, built.phone].join(','));
-const outPath = path.join(__dirname, '..', 'demo', 'synthetic-customers-200.csv');
-fs.mkdirSync(path.dirname(outPath), { recursive: true });
-fs.writeFileSync(outPath, `${header}\n${lines.join('\n')}\n`);
+  return {
+    source: 'scripts/buildSyntheticDemoCsv.js',
+    description: 'Ground truth for the 200-row synthetic mix. Each label says which original the row belongs to, or that the row is a distinct person, and whether the intended outcome is a hard match, a review, or a separation. Assigned before any resolver or import run.',
+    row_count: labels.length,
+    buckets: tally(labels, 'bucket', [
+      'original', 'same_email', 'nickname', 'spelling', 'same_name', 'no_email', 'different_birthday',
+    ]),
+    outcomes: tally(labels, 'intended_outcome', ['hard_match', 'review', 'separate']),
+    labels,
+  };
+}
 
-const reviewSamples = samples.filter((sample) => sample.kind === 'review');
-const quietSamples = samples.filter((sample) => sample.kind === 'separate');
-console.log(`wrote ${rows.length} rows to ${outPath}`);
-console.log(`scored ${reviewSamples.length} lookalikes as reviews and ${quietSamples.length} different-birthday rows as separate people`);
+function tally(labels, key, order) {
+  const totals = {};
+  for (const name of order) totals[name] = 0;
+  for (const label of labels) totals[label[key]] += 1;
+  return totals;
+}
+
+function main() {
+  const { parseCustomerRow } = require('../src/modules/customerImport');
+  const { scoreMatch } = require('../src/modules/probabilisticMatcher');
+  const dataset = buildDataset();
+  const {
+    originals,
+    reviewByNickname,
+    reviewBySpelling,
+    reviewBySameName,
+    highScore,
+    differentBirthday,
+    rows,
+  } = dataset;
+
+  for (const [index, built] of rows.entries()) {
+    const parsed = parseCustomerRow(built);
+    if (!parsed.ok) throw new Error(`row ${index + 1} failed: ${parsed.error}`);
+  }
+
+  const ORG = '00000000-0000-4000-8000-000000000001';
+
+  function normalizedPerson(built) {
+    const parsed = parseCustomerRow(built);
+    return {
+      org_id: ORG,
+      name: parsed.fields.name || null,
+      email: parsed.fields.email || null,
+      dob: parsed.fields.dob || null,
+      zip: parsed.fields.zip || null,
+    };
+  }
+
+  function expectReview(original, lookalike, label) {
+    const result = scoreMatch(normalizedPerson(original), { ...normalizedPerson(lookalike), org_id: ORG });
+    const signals = result.signals_matched.map((item) => item.signal);
+    const review = result.score >= 0.85 || result.score >= 0.60 || signals.includes('name_plus_dob');
+    if (!review || result.dob_veto) {
+      throw new Error(`${label} did not score as a review: ${result.score} ${signals.join(',')}`);
+    }
+    return { label, kind: 'review', score: result.score, signals };
+  }
+
+  function expectNoReview(original, other, label) {
+    const result = scoreMatch(normalizedPerson(original), { ...normalizedPerson(other), org_id: ORG });
+    const signals = result.signals_matched.map((item) => item.signal);
+    const review = !result.dob_veto && (result.score >= 0.60 || signals.includes('name_plus_dob'));
+    if (review) {
+      throw new Error(`${label} scored as a review: ${result.score} ${signals.join(',')}`);
+    }
+    return { label, kind: 'separate', score: result.score, veto: Boolean(result.dob_veto) };
+  }
+
+  const samples = [
+    ...reviewByNickname.map((lookalike, index) => expectReview(originals[index], lookalike, `nickname ${index + 1}`)),
+    ...reviewBySpelling.map((lookalike, index) => expectReview(originals[10 + index], lookalike, `spelling ${index + 1}`)),
+    ...reviewBySameName.map((lookalike, index) => expectReview(originals[20 + index], lookalike, `same name ${index + 1}`)),
+    ...highScore.map((lookalike, index) => expectReview(originals[40 + index], lookalike, `high score ${index + 1}`)),
+    ...differentBirthday.map((other, index) => expectNoReview(originals[index], other, `different birthday ${index + 1}`)),
+  ];
+
+  const header = 'first_name,last_name,email,birthday,zip,phone';
+  const lines = rows.map((built) => [built.first_name, built.last_name, built.email, built.birthday, built.zip, built.phone].join(','));
+  const outPath = path.join(__dirname, '..', 'demo', 'synthetic-customers-200.csv');
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, `${header}\n${lines.join('\n')}\n`);
+
+  const reviewSamples = samples.filter((sample) => sample.kind === 'review');
+  const quietSamples = samples.filter((sample) => sample.kind === 'separate');
+  console.log(`wrote ${rows.length} rows to ${outPath}`);
+  console.log(`scored ${reviewSamples.length} lookalikes as reviews and ${quietSamples.length} different-birthday rows as separate people`);
+
+  if (process.argv.includes('--labels')) {
+    const groundTruth = buildGroundTruth();
+    const labelPath = path.join(__dirname, '..', 'demo', 'synthetic-200-ground-truth.json');
+    fs.writeFileSync(labelPath, `${JSON.stringify(groundTruth, null, 2)}\n`);
+    console.log(`wrote ${groundTruth.labels.length} labels to ${labelPath}`);
+  }
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = { buildDataset, buildGroundTruth };
