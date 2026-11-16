@@ -1,0 +1,2791 @@
+{
+  "summary": {
+    "total": 60,
+    "true_positives": 19,
+    "false_positives": 2,
+    "true_negatives": 7,
+    "false_negatives": 5,
+    "precision": 0.9048,
+    "recall": 0.7917,
+    "f1": 0.8444,
+    "reviews": 27,
+    "correct_reviews": 26,
+    "incorrect_reviews": 0,
+    "missed_reviews": 0,
+    "review_rate": 0.45,
+    "correct_review_rate": 0.963,
+    "incorrect_review_rate": 0,
+    "reviews_of_different_people": 10,
+    "same_person": 37,
+    "same_person_reviewed": 13,
+    "incorrect_new_person": 5,
+    "incorrect_new_person_rate": 0.1351,
+    "retrieval_expected": 29,
+    "retrieval_hits": 29,
+    "candidate_retrieval_rate": 1,
+    "blocking_misses": 4,
+    "policy_mismatches": 0,
+    "unspecified": 1,
+    "by_category": [
+      {
+        "category": "exact_match",
+        "total": 6,
+        "policy_matches": 6,
+        "true_positives": 6,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "reviews": 0
+      },
+      {
+        "category": "incomplete",
+        "total": 8,
+        "policy_matches": 8,
+        "true_positives": 7,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "reviews": 1
+      },
+      {
+        "category": "identity_change",
+        "total": 7,
+        "policy_matches": 7,
+        "true_positives": 3,
+        "false_positives": 0,
+        "false_negatives": 2,
+        "reviews": 2
+      },
+      {
+        "category": "similar_different",
+        "total": 7,
+        "policy_matches": 7,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 1,
+        "reviews": 4
+      },
+      {
+        "category": "household",
+        "total": 7,
+        "policy_matches": 7,
+        "true_positives": 1,
+        "false_positives": 1,
+        "false_negatives": 1,
+        "reviews": 2
+      },
+      {
+        "category": "conflicting_evidence",
+        "total": 10,
+        "policy_matches": 10,
+        "true_positives": 2,
+        "false_positives": 1,
+        "false_negatives": 0,
+        "reviews": 7
+      },
+      {
+        "category": "blocking",
+        "total": 6,
+        "policy_matches": 6,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 1,
+        "reviews": 4
+      },
+      {
+        "category": "ambiguity",
+        "total": 9,
+        "policy_matches": 9,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "reviews": 7
+      }
+    ]
+  },
+  "rows": [
+    {
+      "id": "exact-email",
+      "category": "exact_match",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The same email and the same birthday are a hard match.",
+      "existing": [
+        {
+          "email": "ada.exact@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "ada.exact@example.com",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "be8c7dfd-98aa-481d-a8eb-b7f55e5222c3",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "exact-name-and-birthday",
+      "category": "exact_match",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The same exact name and the same birthday are a hard match. No email is present.",
+      "existing": [
+        {
+          "name": "grace hopper",
+          "dob": "1906-12-09"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "grace hopper",
+        "dob": "1906-12-09"
+      },
+      "fan_id": "378c337f-099e-428d-8e79-9e33f32af049",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "exact-phone",
+      "category": "exact_match",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "A phone sent as the singular identifier hard-matches. This is the direct resolve path, not a customer-file import.",
+      "existing": [
+        {
+          "phone": "4055550101",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "phone",
+        "phone": "4055550101",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "bca0268e-61c1-40d8-baeb-c21d7fc6fe44",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "exact-nfc",
+      "category": "exact_match",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The same card id is a hard match.",
+      "existing": [
+        {
+          "nfc_uid": "A1B2C3D4",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A1B2C3D4",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "130e00ce-b78a-4f07-b913-7e6cbd047746",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "exact-ticketmaster",
+      "category": "exact_match",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The same Ticketmaster id is a hard match.",
+      "existing": [
+        {
+          "ticketmaster_id": "tm-10001",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "ticketmaster_id",
+        "ticketmaster_id": "tm-10001",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "674d1303-173d-4c94-9e9f-246e82328d05",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "exact-nba",
+      "category": "exact_match",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The same NBA id is a hard match.",
+      "existing": [
+        {
+          "nba_id": "nba-10001",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "nba_id",
+        "nba_id": "nba-10001",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "51faa1f9-7920-42a1-a310-cde53c8974c1",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "missing-inbound-birthday",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "A missing inbound birthday is not a conflict. The email still hard-matches.",
+      "existing": [
+        {
+          "email": "ada.nodob.in@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "ada.nodob.in@example.com",
+        "name": "ada lovelace"
+      },
+      "fan_id": "52d1a026-1acc-423e-a2f4-e2222a904ef5",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "missing-stored-birthday",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "A missing stored birthday is not a conflict. The email still hard-matches.",
+      "existing": [
+        {
+          "email": "ada.nodob.stored@example.com",
+          "name": "ada lovelace"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "ada.nodob.stored@example.com",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "cd67223e-cf9c-4524-9260-7303d0ed4d53",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "missing-email",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The incoming row has no email. The exact name and birthday still hard-match the stored person, who does have an email.",
+      "existing": [
+        {
+          "email": "grace.present@example.com",
+          "name": "grace hopper",
+          "dob": "1906-12-09"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "grace hopper",
+        "dob": "1906-12-09"
+      },
+      "fan_id": "dd32bb67-0327-47ab-a7c6-b7e12f9f0bf3",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "name-only",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Two rows with only the same name hard-match. A missing birthday is not a conflict.",
+      "existing": [
+        {
+          "name": "name only person"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "name only person"
+      },
+      "fan_id": "6bdfffe3-14ed-416e-95f5-6aeba71b191e",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "email-only",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Two rows with only the same email hard-match.",
+      "existing": [
+        {
+          "email": "only.email@example.com"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "only.email@example.com"
+      },
+      "fan_id": "21fef48e-7caa-4d6e-b3a3-9cada1a1c317",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "zip-on-one-side-only",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The ZIP exists on only one row, so it is not a disagreement. The shared name and birthday open a review. The emails differ, so this is not a hard match.",
+      "existing": [
+        {
+          "email": "zip.one@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02",
+          "zip": "73101"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "D1B2C3D4",
+        "email": "zip.two@example.com",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "08a13260-5dc8-4966-9c09-0879e4f5b91d",
+      "is_new_record": true,
+      "conflict_fan_a": "be4b955a-a7c6-47b9-af0d-19485bf58a6e",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.400",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "different-attributes-across-imports",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The stored row has an email and a name. The incoming row has the same name and a birthday, and no email. The name matches and the stored birthday is missing, so the result is a hard match.",
+      "existing": [
+        {
+          "email": "attrs@example.com",
+          "name": "ada lovelace"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "fd82cbfd-4831-444f-bf31-28e51b58b3dc",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "import-phone-is-not-compared",
+      "category": "incomplete",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "A customer-file phone is not sent to the matcher. The same email hard-matches even though the phone numbers differ.",
+      "existing": [
+        {
+          "email": "phone.ignored@example.com",
+          "phone": "4055550102",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "phone.ignored@example.com",
+        "phone": "4055550103",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "0f24f97a-4145-4cf1-9cd0-b0cd41ea73f9",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "changed-email",
+      "category": "identity_change",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The email changed. The same name and birthday are retrieved and opened for review.",
+      "existing": [
+        {
+          "email": "old.ada@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "new.ada@example.com",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "45c083b2-2149-453f-9b92-d71eacd9e61c",
+      "is_new_record": true,
+      "conflict_fan_a": "367c92b5-ad9e-4649-b510-2638703416da",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.400",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "changed-phone-with-name-and-birthday",
+      "category": "identity_change",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The phone is the singular identifier and it changed, so the phone lookup misses. The name and birthday still retrieve the person and open a review. The phone itself is not scored.",
+      "existing": [
+        {
+          "phone": "4055550104",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "phone",
+        "phone": "4055550105",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "a0e3e3f1-86b2-4ae6-b0ac-12bede220a9d",
+      "is_new_record": true,
+      "conflict_fan_a": "78173b98-51e0-4305-ad3d-b3ca4df64b60",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.700",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "changed-phone-only",
+      "category": "identity_change",
+      "identity": "same_person",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The phone changed and no email, name, or birthday is present. No search key exists, so the same person is not retrieved and a new person is created.",
+      "existing": [
+        {
+          "phone": "4055550106"
+        }
+      ],
+      "inbound": {
+        "singular": "phone",
+        "phone": "4055550107"
+      },
+      "fan_id": "1767133c-93d0-4b5c-b9e0-832cd5f4ad2f",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "no_block_key",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": []
+      }
+    },
+    {
+      "id": "changed-last-name-same-email",
+      "category": "identity_change",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The last name changed. The email and birthday agree, so the email lookup hard-matches before the name is compared.",
+      "existing": [
+        {
+          "email": "lastname@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "lastname@example.com",
+        "name": "ada smith",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "cc2814af-597a-4c57-ab20-c35c66564015",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "changed-zip-same-email",
+      "category": "identity_change",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The ZIP changed. The email and birthday agree, so the ZIP is never compared.",
+      "existing": [
+        {
+          "email": "zip.change@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02",
+          "zip": "73101"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "zip.change@example.com",
+        "name": "ada lovelace",
+        "dob": "1990-04-02",
+        "zip": "10001"
+      },
+      "fan_id": "1387bda6-4049-4902-8554-96f41139a4b9",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "several-changes-at-once",
+      "category": "identity_change",
+      "identity": "same_person",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The email, last name, birthday, and ZIP all changed. None of the three search keys match, so the earlier person is not retrieved.",
+      "existing": [
+        {
+          "email": "before@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02",
+          "zip": "73101"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "after@example.com",
+        "name": "ada king",
+        "dob": "1991-05-06",
+        "zip": "10001"
+      },
+      "fan_id": "f90f0c1b-5c12-4240-a433-cc49b3c520f3",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "empty_block",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "email-no-longer-present",
+      "category": "identity_change",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The incoming row no longer carries the email. The exact name and birthday still hard-match.",
+      "existing": [
+        {
+          "email": "was.here@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "231e8c8b-e110-472c-9b6c-b4514b7e0e1c",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "same-name-different-birthday",
+      "category": "similar_different",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Two different people share an exact name and have different birthdays. The policy opens a review. The name stays on both people. The name search does not retrieve the stored person, because the birthday differs. The exact-name lookup still records that person.",
+      "existing": [
+        {
+          "name": "jane doe",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "jane doe",
+        "dob": "1988-01-15"
+      },
+      "fan_id": "d4aed675-91ff-4cdb-93f5-93945627b1de",
+      "is_new_record": true,
+      "conflict_fan_a": "1b27d055-365b-418e-a387-ade0f60cd73a",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 0,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "same-last-name-different-first",
+      "category": "similar_different",
+      "identity": "different_people",
+      "expected": "scored_separation",
+      "actual": "scored_separation",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Jane Doe and John Doe share a birthday and a last name. The names are not close enough to score, so the result is a new person after the search.",
+      "existing": [
+        {
+          "email": "jane.last@example.com",
+          "name": "jane doe",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "E1B2C3D4",
+        "email": "john.last@example.com",
+        "name": "john doe",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "9dcfe809-69e9-4497-a896-0749db2d21d5",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 1,
+        "signal_results": [],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "similar-names-different-birthdays",
+      "category": "similar_different",
+      "identity": "different_people",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Jon Smith and John Smith have different birthdays. The birthday search requires the same birthday, and the emails differ, so neither person is retrieved.",
+      "existing": [
+        {
+          "email": "jon.smith@example.com",
+          "name": "jon smith",
+          "dob": "1988-01-15"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "john.smith@example.com",
+        "name": "john smith",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "4e677a78-5c7c-414f-a265-462f338c8f1a",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "empty_block",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "nickname-same-birthday",
+      "category": "similar_different",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Bob Smith and Robert Smith share a birthday. The nickname list plus the birthday opens a review. The emails differ.",
+      "existing": [
+        {
+          "email": "robert.nick@example.com",
+          "name": "robert smith",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "bob.nick@example.com",
+        "name": "bob smith",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "9ca270ac-29b2-42f4-8059-02409b73ca8a",
+      "is_new_record": true,
+      "conflict_fan_a": "e80253f0-91f1-4691-a83b-20690e79c164",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.400",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "close-spelling",
+      "category": "similar_different",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Jon Smith and John Smith share a birthday. The spelling is close enough, with the birthday, to open a review.",
+      "existing": [
+        {
+          "email": "john.spell@example.com",
+          "name": "john smith",
+          "dob": "1988-01-15"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "jon.spell@example.com",
+        "name": "jon smith",
+        "dob": "1988-01-15"
+      },
+      "fan_id": "08236394-7637-488d-a880-cdb3e18d1e66",
+      "is_new_record": true,
+      "conflict_fan_a": "c2a38f8f-6e97-498c-be09-8435a4c81e4c",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.400",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "transposed-characters",
+      "category": "similar_different",
+      "identity": "same_person",
+      "expected": "scored_separation",
+      "actual": "scored_separation",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Ajne Doe is a transposition of Jane Doe. The last name and birthday retrieve the person. The full name is not close enough, so a new person is created and no review is opened.",
+      "existing": [
+        {
+          "name": "jane doe",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "F1B2C3D4",
+        "name": "ajne doe",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "248189f7-57ae-4af7-baab-07a65b0c90e0",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 1,
+        "signal_results": [],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "common-name-unrelated",
+      "category": "similar_different",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Two unrelated people are both named James Smith and have different birthdays. The exact name opens a review.",
+      "existing": [
+        {
+          "name": "james smith",
+          "dob": "1975-03-03"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "james smith",
+        "dob": "1992-08-08"
+      },
+      "fan_id": "f61077d6-1ab5-458a-b7d7-9646ab620863",
+      "is_new_record": true,
+      "conflict_fan_a": "a7ecb493-3a32-4980-b7ab-befa1ff7f443",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 0,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "children-share-guardian-email",
+      "category": "household",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "A new card shares a guardian email with two children and has no name or birthday. Both children score 0.65, so a review opens against whichever child the lookup returns first. No household staging row is written, because the incoming call has no name.",
+      "existing": [
+        {
+          "name": "ann child",
+          "dob": "2012-01-01",
+          "guardian_email": "parent.share@example.com",
+          "source_system": "fan_pass"
+        },
+        {
+          "name": "ben child",
+          "dob": "2014-02-02",
+          "guardian_email": "parent.share@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A2B2C3D4",
+        "guardian_email": "parent.share@example.com"
+      },
+      "fan_id": "63212b7e-84cb-450c-8224-e649f12724ef",
+      "is_new_record": true,
+      "conflict_fan_a": "21d04713-79cd-4c29-a84d-45c399ef452c",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.650",
+        "candidates_considered": 2,
+        "signal_results": [
+          {
+            "signal": "guardian_email",
+            "raw_score": 0.65,
+            "adjusted_score": 0.65,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "guardian_email",
+            "dropped": false,
+            "block_size": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "children-share-guardian-phone",
+      "category": "household",
+      "identity": "different_people",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Two children share a guardian phone. That phone is not a search key. A new card with no name, email, or birthday does not retrieve them.",
+      "existing": [
+        {
+          "name": "ann phone",
+          "dob": "2012-01-01",
+          "guardian_phone": "4055550191",
+          "source_system": "fan_pass"
+        },
+        {
+          "name": "ben phone",
+          "dob": "2014-02-02",
+          "guardian_phone": "4055550191",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A3B2C3D4",
+        "guardian_phone": "4055550191"
+      },
+      "fan_id": "4c07ded8-b28b-43f9-965c-4464fed991ec",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "no_block_key",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": []
+      }
+    },
+    {
+      "id": "different-birthdays-same-guardian-email",
+      "category": "household",
+      "identity": "different_people",
+      "expected": "scored_separation",
+      "actual": "scored_separation",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The guardian email retrieves the sibling. The birthdays differ, so that sibling is vetoed and a new person is created with no review.",
+      "existing": [
+        {
+          "name": "ann guard",
+          "dob": "2012-01-01",
+          "guardian_email": "parent.dob@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A4B2C3D4",
+        "name": "ben guard",
+        "dob": "2014-02-02",
+        "guardian_email": "parent.dob@example.com"
+      },
+      "fan_id": "22a517d1-c34b-4084-ac36-5cc192e6c839",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 1,
+        "signal_results": [],
+        "block_results": [
+          {
+            "key": "guardian_email",
+            "dropped": false,
+            "block_size": 1
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "shared-guardian-and-unique-card",
+      "category": "household",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The same card hard-matches even though this call carries a different guardian email. The card is the singular identifier.",
+      "existing": [
+        {
+          "nfc_uid": "A5B2C3D4",
+          "guardian_email": "parent.card@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A5B2C3D4",
+        "guardian_email": "other.parent@example.com"
+      },
+      "fan_id": "3e596620-83df-43b9-af63-a652c428bb52",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "guardian-email-as-singular",
+      "category": "household",
+      "identity": "different_people",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "A resolve call that sends the guardian email as the singular identifier hard-matches one child and does not read the birthday. With two children, which child is returned is unordered.",
+      "existing": [
+        {
+          "name": "ann singular",
+          "dob": "2012-01-01",
+          "guardian_email": "parent.singular@example.com",
+          "source_system": "fan_pass"
+        },
+        {
+          "name": "ben singular",
+          "dob": "2014-02-02",
+          "guardian_email": "parent.singular@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "guardian_email",
+        "guardian_email": "parent.singular@example.com",
+        "name": "cam singular",
+        "dob": "2016-03-03"
+      },
+      "fan_id": "041ea566-a656-4093-93b9-73ca296dd0b3",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "guardian-email-fifty",
+      "category": "household",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Fifty live people share a guardian email and the incoming card has no name. The block is kept and each person scores 0.65, so a review opens against whichever row is returned first. No household staging row is written, because the incoming call has no name.",
+      "existing": [
+        {
+          "guardian_email": "parent.fifty@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A6B2C3D4",
+        "guardian_email": "parent.fifty@example.com"
+      },
+      "fan_id": "1475e57e-2841-46ec-8a61-bd87f3407543",
+      "is_new_record": true,
+      "conflict_fan_a": "a2533a6d-cac2-4b34-b7f3-73c478238001",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.650",
+        "candidates_considered": 50,
+        "signal_results": [
+          {
+            "signal": "guardian_email",
+            "raw_score": 0.65,
+            "adjusted_score": 0.65,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "guardian_email",
+            "dropped": false,
+            "block_size": 50
+          }
+        ]
+      }
+    },
+    {
+      "id": "guardian-email-fifty-one",
+      "category": "household",
+      "identity": "same_person",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Fifty-one live people share a guardian email. The whole block is dropped. The person inside that block is not scored, and a new person is created.",
+      "existing": [
+        {
+          "guardian_email": "parent.fiftyone@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A7B2C3D4",
+        "guardian_email": "parent.fiftyone@example.com"
+      },
+      "fan_id": "b6af08e4-2f15-4d28-babc-45a5af577428",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "block_dropped_oversize",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": [
+          {
+            "key": "guardian_email",
+            "dropped": true,
+            "block_size": 51
+          }
+        ]
+      }
+    },
+    {
+      "id": "email-conflicting-birthday",
+      "category": "conflicting_evidence",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The same email and two different birthdays open a review. The original person keeps the email. The new person does not receive it. Nothing merges.",
+      "existing": [
+        {
+          "email": "ada.conflict@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "ada.conflict@example.com",
+        "name": "ada lovelace",
+        "dob": "1991-04-02"
+      },
+      "fan_id": "0fc7a80c-044d-4a48-b881-04e0b1478236",
+      "is_new_record": true,
+      "conflict_fan_a": "d0a12891-39dd-4d8e-a13d-06f087135ec7",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 1
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "name-conflicting-birthday",
+      "category": "conflicting_evidence",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The same exact name and two different birthdays open a review. Both people keep the name.",
+      "existing": [
+        {
+          "name": "mary conflict",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "mary conflict",
+        "dob": "1991-04-02"
+      },
+      "fan_id": "9abd990a-1d4a-448d-9f01-78fd10067d32",
+      "is_new_record": true,
+      "conflict_fan_a": "2e56cecb-4331-437e-be9f-e830a9a8d975",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 0,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "email-different-name-same-birthday",
+      "category": "conflicting_evidence",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The email and birthday agree, so a different name does not open a review. The email lookup returns first.",
+      "existing": [
+        {
+          "email": "same.bday@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "same.bday@example.com",
+        "name": "ada king",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "dbb89fff-e8ce-4dfc-80be-671ec15621b4",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "name-different-email-same-birthday",
+      "category": "conflicting_evidence",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The emails differ. The same name and birthday open a review.",
+      "existing": [
+        {
+          "email": "jane.one@example.com",
+          "name": "jane doe",
+          "dob": "1992-06-01"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "jane.two@example.com",
+        "name": "jane doe",
+        "dob": "1992-06-01"
+      },
+      "fan_id": "d43cdba3-2582-4e61-8652-53eeb8999be5",
+      "is_new_record": true,
+      "conflict_fan_a": "ebc31f3c-0b73-4234-b4a0-044fe117c9c7",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.400",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "same-last-name-and-birthday-different-email",
+      "category": "conflicting_evidence",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The full name and birthday agree and the emails disagree. The name-and-birthday signal still opens a review when the score is under 0.60.",
+      "existing": [
+        {
+          "email": "last.one@example.com",
+          "name": "jane doe",
+          "dob": "1992-06-01",
+          "zip": "73101"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A8B2C3D4",
+        "email": "last.two@example.com",
+        "name": "jane doe",
+        "dob": "1992-06-01",
+        "zip": "10001"
+      },
+      "fan_id": "03a7a458-0ac6-41b0-9c9a-e7b2747d38f6",
+      "is_new_record": true,
+      "conflict_fan_a": "172ea862-5ced-4a3d-af07-624a321306e3",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.300",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "zip-disagreement",
+      "category": "conflicting_evidence",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The name and birthday agree and the ZIP codes differ. The ZIP lowers the score. The name-and-birthday signal still opens a review.",
+      "existing": [
+        {
+          "name": "ada zip",
+          "dob": "1990-04-02",
+          "zip": "73101"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "A9B2C3D4",
+        "name": "ada zip",
+        "dob": "1990-04-02",
+        "zip": "10001"
+      },
+      "fan_id": "db3dc843-ca33-4c38-99c9-04c9b79647a6",
+      "is_new_record": true,
+      "conflict_fan_a": "171cb657-e540-4719-84de-cc3f59f53fab",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.600",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "agreements-with-birthday-conflict",
+      "category": "conflicting_evidence",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The email and the name agree, and the birthdays differ. The birthday conflict opens a review before those agreements can make a hard match.",
+      "existing": [
+        {
+          "email": "agree.conflict@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "agree.conflict@example.com",
+        "name": "ada lovelace",
+        "dob": "1991-04-02"
+      },
+      "fan_id": "78b8ccb7-eec4-4506-b6e3-a15e2241b7d2",
+      "is_new_record": true,
+      "conflict_fan_a": "0eb17252-90de-4f29-89cc-d979b59dfb0b",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 1
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "disagreements-with-one-strong-agreement",
+      "category": "conflicting_evidence",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The email and the ZIP disagree. The name and birthday agree. That agreement still opens a review.",
+      "existing": [
+        {
+          "email": "strong.one@example.com",
+          "name": "ada strong",
+          "dob": "1990-04-02",
+          "zip": "73101"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "AABBCCD1",
+        "email": "strong.two@example.com",
+        "name": "ada strong",
+        "dob": "1990-04-02",
+        "zip": "10001"
+      },
+      "fan_id": "82534a0d-78a5-4e8f-9546-8247887341bc",
+      "is_new_record": true,
+      "conflict_fan_a": "b8ad2c22-1785-4880-879f-f5a871993c88",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.300",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "missing-birthday-on-either-side",
+      "category": "conflicting_evidence",
+      "identity": "same_person",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Both birthdays are missing. The same email hard-matches. A missing birthday is not a conflict.",
+      "existing": [
+        {
+          "email": "no.bday.either@example.com",
+          "name": "ada lovelace"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "no.bday.either@example.com",
+        "name": "ada lovelace"
+      },
+      "fan_id": "ca0d91a5-ac8a-42b9-b7a9-837e75b9dc04",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "card-id-with-conflicting-birthday",
+      "category": "conflicting_evidence",
+      "identity": "different_people",
+      "expected": "hard_match",
+      "actual": "hard_match",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The same card id hard-matches even though the birthdays differ. A card id is not subject to the email and name birthday review.",
+      "existing": [
+        {
+          "nfc_uid": "B1B2C3D4",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "B1B2C3D4",
+        "name": "ada lovelace",
+        "dob": "1991-04-02"
+      },
+      "fan_id": "659f67e4-bac2-45d1-b77d-cbac605d9f8f",
+      "is_new_record": false,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "A",
+        "skip_reason": "deterministic_match",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": null
+      }
+    },
+    {
+      "id": "email-retrieval-not-path-a",
+      "category": "blocking",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The singular identifier is a new card, so the email is not a hard match. The email search still retrieves the person.",
+      "existing": [
+        {
+          "email": "retrieve.email@example.com"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "B2B2C3D4",
+        "email": "retrieve.email@example.com"
+      },
+      "fan_id": "0919d725-2ff1-4bab-a21b-ad3fb4467b00",
+      "is_new_record": true,
+      "conflict_fan_a": "072d2a09-53b6-41ab-9b11-4127675448c8",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.700",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "email_similarity",
+            "raw_score": 0.7,
+            "similarity": 1,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "guardian-email-retrieval",
+      "category": "blocking",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "A new card with no name retrieves the child by guardian email. The score is 0.65, so a review opens with that child. No household staging row is written, because the incoming call has no name.",
+      "existing": [
+        {
+          "name": "ann retrieve",
+          "guardian_email": "parent.retrieve@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "B3B2C3D4",
+        "guardian_email": "parent.retrieve@example.com"
+      },
+      "fan_id": "d02e6fa2-3719-44dc-962f-bc47b41128f8",
+      "is_new_record": true,
+      "conflict_fan_a": "92d4b299-ccd9-40cb-b994-ae9feca810c2",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.650",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "guardian_email",
+            "raw_score": 0.65,
+            "adjusted_score": 0.65,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "guardian_email",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "name-and-birthday-retrieval",
+      "category": "blocking",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "A new email retrieves the person by the same last name and the same birthday.",
+      "existing": [
+        {
+          "email": "retrieve.name@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "retrieve.other@example.com",
+        "name": "ada lovelace",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "609a49a3-5594-4649-ad5c-30b2e1fc9a2b",
+      "is_new_record": true,
+      "conflict_fan_a": "fa3b5501-e9c8-4750-9e17-ecd49194f045",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.400",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "no-blocking-key",
+      "category": "blocking",
+      "identity": "different_people",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "The incoming row is a name with no birthday and no email. There is no search key, and the name is not the stored name.",
+      "existing": [
+        {
+          "email": "someone@example.com",
+          "name": "ada lovelace",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "bob jones"
+      },
+      "fan_id": "7800e351-bf88-43d9-ad3f-5879976eb124",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "no_block_key",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": []
+      }
+    },
+    {
+      "id": "several-candidates",
+      "category": "blocking",
+      "identity": "ambiguous",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Two stored people have the same name and birthday. Both are retrieved and score the same. A review opens against one of them. Which one is unordered.",
+      "existing": [
+        {
+          "name": "alex kim",
+          "dob": "1990-01-01"
+        },
+        {
+          "name": "alex kim",
+          "dob": "1990-01-01"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "B4B2C3D4",
+        "name": "alex kim",
+        "dob": "1990-01-01"
+      },
+      "fan_id": "d1dd238a-ed2c-4e02-9bc9-66870067e785",
+      "is_new_record": true,
+      "conflict_fan_a": "1176c597-49c5-4333-870e-89367e81e11a",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.700",
+        "candidates_considered": 2,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "person-exists-but-is-not-retrieved",
+      "category": "blocking",
+      "identity": "same_person",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Bob Smith and Bob Jones share a birthday and a first name. The last names differ, and the emails differ, so the true person is not retrieved.",
+      "existing": [
+        {
+          "email": "bob.smith@example.com",
+          "name": "bob smith",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "bob.jones@example.com",
+        "name": "bob jones",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "7be4ec1f-9dd0-4ed1-b814-8ed29c7d10af",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "empty_block",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "equal-scores",
+      "category": "ambiguity",
+      "identity": "ambiguous",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Two candidates score the same name and birthday. The review uses the earlier row from an unordered search.",
+      "existing": [
+        {
+          "name": "equal score",
+          "dob": "1985-05-05"
+        },
+        {
+          "name": "equal score",
+          "dob": "1985-05-05"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "B5B2C3D4",
+        "name": "equal score",
+        "dob": "1985-05-05"
+      },
+      "fan_id": "a798a031-1c0a-452b-86fc-a5804bd4633a",
+      "is_new_record": true,
+      "conflict_fan_a": "ee58dd49-321b-4daf-b612-d32d4bd07545",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.700",
+        "candidates_considered": 2,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "different-scores",
+      "category": "ambiguity",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "One child matches the name and birthday. The other child shares the guardian email and has a different birthday, so that child scores zero. The review is with the matching child.",
+      "existing": [
+        {
+          "name": "sam lee",
+          "dob": "2010-01-01",
+          "guardian_email": "parent.scores@example.com",
+          "source_system": "fan_pass"
+        },
+        {
+          "name": "pat lee",
+          "dob": "2012-02-02",
+          "guardian_email": "parent.scores@example.com",
+          "source_system": "fan_pass"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "B6B2C3D4",
+        "name": "sam lee",
+        "dob": "2010-01-01",
+        "guardian_email": "parent.scores@example.com"
+      },
+      "fan_id": "4e9d9c2e-a255-4b71-a530-dfb8230642ef",
+      "is_new_record": true,
+      "conflict_fan_a": "124fdce4-a8dd-48b6-bc99-23fcfb683c96",
+      "trace": {
+        "resolution_path": "C",
+        "skip_reason": null,
+        "best_score": "1.000",
+        "candidates_considered": 2,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          },
+          {
+            "signal": "guardian_email",
+            "raw_score": 0.65,
+            "adjusted_score": 0.65,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "guardian_email",
+            "dropped": false,
+            "block_size": 2
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "birthday-veto-beside-a-real-match",
+      "category": "ambiguity",
+      "identity": "same_person",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "One candidate shares the email and has a different birthday, so that candidate is vetoed. Another candidate shares the name and birthday. The card is the singular identifier, so the review is with the name-and-birthday person.",
+      "existing": [
+        {
+          "email": "veto.side@example.com",
+          "name": "ada old",
+          "dob": "1990-04-02"
+        },
+        {
+          "email": "other.side@example.com",
+          "name": "ada new",
+          "dob": "1991-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "nfc_uid",
+        "nfc_uid": "B7B2C3D4",
+        "email": "veto.side@example.com",
+        "name": "ada new",
+        "dob": "1991-04-02"
+      },
+      "fan_id": "25821a65-724d-4911-9bc3-21934a5c4a42",
+      "is_new_record": true,
+      "conflict_fan_a": "3469f7bc-9280-449f-adb9-d54fd8860539",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.400",
+        "candidates_considered": 2,
+        "signal_results": [
+          {
+            "signal": "name_plus_dob",
+            "raw_score": 0.7,
+            "adjusted_score": 0.7,
+            "recency_multiplier": 1
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 1
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "name-review-replaces-higher-score",
+      "category": "ambiguity",
+      "identity": "ambiguous",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The exact name Robert Doe has a different birthday, so that lookup opens a review. Bob Doe shares the incoming birthday and would score higher. The exact-name review replaces that winner.",
+      "existing": [
+        {
+          "name": "robert doe",
+          "dob": "1990-04-02"
+        },
+        {
+          "name": "bob doe",
+          "dob": "1991-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "robert doe",
+        "dob": "1991-04-02"
+      },
+      "fan_id": "4a8a403e-dcb7-42e4-98c7-286537e90c0c",
+      "is_new_record": true,
+      "conflict_fan_a": "9a8ae34c-690f-4c82-bd1e-a3eb36e4e614",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "email-review-replaces-higher-score",
+      "category": "ambiguity",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "The email owner has a different birthday, so the email review is with that person. Another person matches the incoming name and birthday and would score higher. The email review replaces that winner. The new person does not receive the email.",
+      "existing": [
+        {
+          "email": "hide.me@example.com",
+          "name": "ann old",
+          "dob": "1990-01-01"
+        },
+        {
+          "name": "ann new",
+          "dob": "1991-01-01"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "hide.me@example.com",
+        "name": "ann new",
+        "dob": "1991-01-01"
+      },
+      "fan_id": "3c46254c-8485-484b-b1fb-10c7383c8347",
+      "is_new_record": true,
+      "conflict_fan_a": "ddb98891-4d80-493e-8049-61ca985749cc",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 2,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 1
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "several-people-same-name",
+      "category": "ambiguity",
+      "identity": "different_people",
+      "expected": "review",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": true,
+      "retrieved": true,
+      "notes": "Two stored people share the exact name, and the incoming birthday matches neither. Whichever row the lookup reads, the birthdays differ, so a review opens.",
+      "existing": [
+        {
+          "name": "shared name",
+          "dob": "1980-01-01"
+        },
+        {
+          "name": "shared name",
+          "dob": "1981-01-01"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "shared name",
+        "dob": "1982-01-01"
+      },
+      "fan_id": "78e9e03f-e28a-4afd-a3d5-7ec43f9093f1",
+      "is_new_record": true,
+      "conflict_fan_a": "78da65d8-3e56-4654-945a-4645fe174cb7",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 0,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "same-name-one-birthday-matches",
+      "category": "ambiguity",
+      "identity": "ambiguous",
+      "expected": "unspecified",
+      "actual": "review",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": true,
+      "notes": "Two people share an exact name. existing_0 is born 1980-01-01. existing_1 is born 1982-01-01, which matches the incoming birthday. The lookup has no order. A hard match must be existing_1. A review must be existing_0, and both people must be in the candidate list.",
+      "existing": [
+        {
+          "name": "unordered name",
+          "dob": "1980-01-01"
+        },
+        {
+          "name": "unordered name",
+          "dob": "1982-01-01"
+        }
+      ],
+      "inbound": {
+        "singular": "name",
+        "name": "unordered name",
+        "dob": "1982-01-01"
+      },
+      "fan_id": "7d707895-70e4-43c5-bec2-2cda194ac2c8",
+      "is_new_record": true,
+      "conflict_fan_a": "bdb065cd-be67-4cbf-9bb8-779f2be617e6",
+      "trace": {
+        "resolution_path": "D",
+        "skip_reason": null,
+        "best_score": "0.000",
+        "candidates_considered": 1,
+        "signal_results": [
+          {
+            "signal": "dob_veto"
+          }
+        ],
+        "block_results": [
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "several-people-same-birthday",
+      "category": "ambiguity",
+      "identity": "different_people",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Several people share a birthday and do not share a last name or an email. A birthday alone does not retrieve them.",
+      "existing": [
+        {
+          "email": "bday.one@example.com",
+          "name": "ann day",
+          "dob": "1990-04-02"
+        },
+        {
+          "email": "bday.two@example.com",
+          "name": "ben day",
+          "dob": "1990-04-02"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "bday.three@example.com",
+        "name": "cam night",
+        "dob": "1990-04-02"
+      },
+      "fan_id": "0cf22fa8-02f8-43a0-bdfc-133b207725ae",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "empty_block",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "several-people-same-zip",
+      "category": "ambiguity",
+      "identity": "different_people",
+      "expected": "blocking_miss",
+      "actual": "blocking_miss",
+      "policy_match": true,
+      "check_failures": [],
+      "retrieval_expected": false,
+      "retrieved": false,
+      "notes": "Several people share a ZIP. A ZIP is not a search key, so a new person with that ZIP is not matched to them.",
+      "existing": [
+        {
+          "email": "zip.one.person@example.com",
+          "name": "ann zip",
+          "dob": "1980-01-01",
+          "zip": "73101"
+        },
+        {
+          "email": "zip.two.person@example.com",
+          "name": "ben zip",
+          "dob": "1981-01-01",
+          "zip": "73101"
+        }
+      ],
+      "inbound": {
+        "singular": "email",
+        "email": "zip.three.person@example.com",
+        "name": "cam zip",
+        "dob": "1982-01-01",
+        "zip": "73101"
+      },
+      "fan_id": "984fb082-9b0f-413f-98d8-9d13f92d8166",
+      "is_new_record": true,
+      "conflict_fan_a": null,
+      "trace": {
+        "resolution_path": "B",
+        "skip_reason": "empty_block",
+        "best_score": null,
+        "candidates_considered": 0,
+        "signal_results": null,
+        "block_results": [
+          {
+            "key": "email",
+            "dropped": false,
+            "block_size": 0
+          },
+          {
+            "key": "name_dob",
+            "dropped": false,
+            "block_size": 0
+          }
+        ]
+      }
+    }
+  ]
+}

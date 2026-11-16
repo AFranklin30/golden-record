@@ -287,7 +287,7 @@ change.
 
 ## The four resolution paths (resolverEngine.js)
 
-- **PATH A** — exact identifier_link match (hard match). `match_type: 'hard'`, `is_new_record: false`, confidence 1.0. Updates `last_seen_at`. JOINs `fan` and checks `deleted_at IS NULL` (a deleted fan's tap falls through to PATH B).
+- **PATH A** — exact identifier_link match (hard match). `match_type: 'hard'`, `is_new_record: false`, confidence 1.0. Updates `last_seen_at`. JOINs `fan` and checks `deleted_at IS NULL` (a deleted fan's tap falls through to PATH B). Email and exact name are the exception: both birthdays present and different opens a review instead of this hard match. The current policy for every identifier is `docs/engineering/matching-policy.md`.
 - **PATH B** — no match. New fan created. `match_type: 'hard'`, `is_new_record: true`, confidence 1.0. (`'hard'` here means "this link is certain," not "fan existed before" — `is_new_record` answers that.)
 - **PATH C** — soft match, score ≥ 0.85. `match_type: 'soft'`. Mints a NEW fan and creates a pending `conflict_queue` row for staff review.
 - **PATH D** — review. Either 0.60 ≤ score < 0.85, or `name_plus_dob` fired and the score is under 0.60. `match_type: 'conflict'`. Mints a new fan + pending conflict_queue row. The queue stores the real score, which may be under 0.60.

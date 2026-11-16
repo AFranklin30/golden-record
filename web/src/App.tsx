@@ -13,6 +13,8 @@ const ImportDetail = lazy(() => import('./features/imports/ImportDetail').then((
 const ReviewList = lazy(() => import('./features/reviews/ReviewList').then((m) => ({ default: m.ReviewList })));
 const ReviewDetail = lazy(() => import('./features/reviews/ReviewDetail').then((m) => ({ default: m.ReviewDetail })));
 const Exports = lazy(() => import('./features/exports/Exports').then((m) => ({ default: m.Exports })));
+const RecordList = lazy(() => import('./features/records/RecordList').then((m) => ({ default: m.RecordList })));
+const RecordDetail = lazy(() => import('./features/records/RecordDetail').then((m) => ({ default: m.RecordDetail })));
 
 const queryClient = createQueryClient();
 
@@ -29,6 +31,8 @@ export function App() {
               <Route path="/imports" element={<ImportList />} />
               <Route path="/imports/new" element={<ImportNew />} />
               <Route path="/imports/:id" element={<ImportDetail />} />
+              <Route path="/records" element={<RecordList />} />
+              <Route path="/records/:id" element={<RecordDetail />} />
               <Route path="/reviews" element={<ReviewList />} />
               <Route path="/reviews/:id" element={<ReviewDetail />} />
               <Route path="/exports" element={<Exports />} />

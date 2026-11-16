@@ -3,7 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { Banner, PageHeader } from '../../components/ui';
 
-type ImportSummary = { id: string; filename: string | null; created_at: string; row_count: number; error_count: number };
+type ImportSummary = {
+  id: string;
+  filename: string | null;
+  created_at: string;
+  data_removed_at: string | null;
+  row_count: number;
+  error_count: number;
+};
 
 export function ImportList() {
   const list = useQuery({
@@ -25,7 +32,7 @@ export function ImportList() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>File</th><th>Rows</th><th>Errors</th><th>When</th></tr>
+                <tr><th>File</th><th>Rows</th><th>Errors</th><th>People</th><th>When</th></tr>
               </thead>
               <tbody>
                 {list.data.imports.map((item) => (
@@ -33,6 +40,7 @@ export function ImportList() {
                     <td><Link to={`/imports/${item.id}`}>{item.filename || 'Untitled import'}</Link></td>
                     <td>{item.row_count}</td>
                     <td>{item.error_count}</td>
+                    <td>{item.data_removed_at ? 'Hidden' : 'Stored'}</td>
                     <td>{new Date(item.created_at).toLocaleString()}</td>
                   </tr>
                 ))}

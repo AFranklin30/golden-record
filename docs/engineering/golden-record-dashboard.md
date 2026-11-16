@@ -40,6 +40,8 @@ Confirm, reject, and export keep their existing handlers. The dashboard route fo
 - `/imports`
 - `/imports/new`
 - `/imports/:id`
+- `/records`
+- `/records/:id`
 - `/reviews`
 - `/reviews/:id`
 - `/exports`

@@ -398,6 +398,8 @@ describe('eval/harness + eval/runCorpus — Stage 7 evaluation replay', () => {
 
   it('5. buildRun still returns counts.total and a scorecard with the same keys', () => {
     expect(typeof runResult.counts.total).toBe('number');
+    expect(typeof runResult.duration_ms).toBe('number');
+    expect(runResult.blocking).toEqual({ blocking_miss: 0, scoring_miss: 0 });
     expect(Object.keys(runResult.scorecard).sort()).toEqual(SCORECARD_KEYS);
   });
 });

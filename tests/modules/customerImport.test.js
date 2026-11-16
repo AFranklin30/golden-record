@@ -108,7 +108,7 @@ describe('customer CSV import', () => {
       'SELECT id, deleted_at FROM fan WHERE org_id = $1',
       [orgId]
     );
-    expect(fans.rows).toHaveLength(8);
+    expect(fans.rows).toHaveLength(9);
     expect(fans.rows.every((row) => row.deleted_at === null)).toBe(true);
 
     const robertIds = await fanIdForEmail(client, orgId, 'robert@example.com');
@@ -131,22 +131,30 @@ describe('customer CSV import', () => {
     expect(await valuesFor(client, orgId, robertIds[0], 'zip')).toEqual(['78701']);
     expect(await valuesFor(client, orgId, robertIds[0], 'phone')).toEqual(['+15125550101']);
 
+    const aliceNewId = imported.rows[9].fan_id;
+    expect(aliceNewId).not.toBe(aliceIds[0]);
     expect(await valuesFor(client, orgId, aliceIds[0], 'dob')).toEqual(['1988-09-20']);
-    expect(await valuesFor(client, orgId, aliceIds[0], 'phone')).toEqual(['+15125550108', '+15125550109']);
-    expect(imported.rows[9].resolution_path).toBe('A');
-    expect(imported.rows[9].skipped.dob).toBe('birthday already stored for this email');
+    expect(await valuesFor(client, orgId, aliceIds[0], 'phone')).toEqual(['+15125550108']);
+    expect(await valuesFor(client, orgId, aliceNewId, 'email')).toEqual([]);
+    expect(await valuesFor(client, orgId, aliceNewId, 'name')).toEqual(['alice brown']);
+    expect(await valuesFor(client, orgId, aliceNewId, 'dob')).toEqual(['1992-09-20']);
+    expect(await valuesFor(client, orgId, aliceNewId, 'phone')).toEqual(['+15125550109']);
+    expect(imported.rows[9].resolution_path).toBe('D');
+    expect(imported.rows[9].conflict_id).toBeTruthy();
+    expect(imported.rows[9].skipped.dob).toBeUndefined();
 
     const conflicts = await client.query(
       `SELECT id, fan_id_a, fan_id_b, status FROM conflict_queue WHERE org_id = $1`,
       [orgId]
     );
-    expect(conflicts.rows).toHaveLength(4);
+    expect(conflicts.rows).toHaveLength(5);
     expect(conflicts.rows.every((row) => row.status === 'pending')).toBe(true);
 
     const pair = (left, right) => conflicts.rows.find((row) =>
       (row.fan_id_a === left && row.fan_id_b === right) ||
       (row.fan_id_a === right && row.fan_id_b === left)
     );
+    expect(pair(aliceIds[0], aliceNewId).status).toBe('pending');
     expect(pair(johnIds[0], jonIds[0])).toBeTruthy();
     expect(pair(robertIds[0], bobIds[0])).toBeTruthy();
     expect(pair(bobJonesIds[0], robertJonesIds[0])).toBeUndefined();
@@ -175,8 +183,8 @@ describe('customer CSV import', () => {
       'SELECT count(*)::int AS n FROM identifier_link WHERE org_id = $1',
       [orgId]
     );
-    expect(afterFans.rows[0].n).toBe(8);
-    expect(afterConflicts.rows[0].n).toBe(4);
+    expect(afterFans.rows[0].n).toBe(9);
+    expect(afterConflicts.rows[0].n).toBe(5);
     expect(afterLinks.rows[0].n).toBe(beforeLinks.rows[0].n);
 
     const johnConflict = pair(johnIds[0], jonIds[0]);
@@ -200,6 +208,7 @@ describe('customer CSV import', () => {
     expect(exported.text).toContain(jonIds[0]);
     expect(exportedFanIds).toContain(robertIds[0]);
     expect(exportedFanIds).toContain(aliceIds[0]);
+    expect(exportedFanIds).toContain(aliceNewId);
 
     const bobConflict = pair(robertIds[0], bobIds[0]);
     const firstSmith = await request(app)
@@ -216,7 +225,7 @@ describe('customer CSV import', () => {
       `SELECT id, fan_id_a FROM conflict_queue WHERE org_id = $1 AND status = 'pending'`,
       [orgId]
     );
-    expect(stillPending.rows).toHaveLength(2);
+    expect(stillPending.rows).toHaveLength(3);
 
     const repeated = await request(app)
       .post(`/v1/conflicts/${bobConflict.id}/confirm`)

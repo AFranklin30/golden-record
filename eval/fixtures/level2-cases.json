@@ -1,0 +1,283 @@
+[
+  {
+    "id": "exact-email",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "ada@example.com", "name": "ada lovelace", "dob": "1990-04-02" },
+    "person_b": { "email": "  ADA@Example.com ", "name": "  Ada   Lovelace ", "dob": "4/2/1990" }
+  },
+  {
+    "id": "nickname-same-birthday",
+    "expected_verdict": "match",
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "shape": "import",
+    "person_a": { "email": "robert.smith@example.com", "name": "robert smith", "dob": "1990-04-02" },
+    "person_b": { "email": "bob.smith@example.com", "name": "Bob Smith", "dob": "1990-04-02" }
+  },
+  {
+    "id": "close-spelling",
+    "expected_verdict": "match",
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "shape": "import",
+    "person_a": { "email": "john.smith@example.com", "name": "john smith", "dob": "1988-01-15" },
+    "person_b": { "email": "jon.smith@example.com", "name": "jon smith", "dob": "1988-01-15" }
+  },
+  {
+    "id": "same-name-different-email",
+    "expected_verdict": "match",
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "shape": "import",
+    "person_a": { "email": "jane.doe.1@example.com", "name": "jane doe", "dob": "1992-06-01" },
+    "person_b": { "email": "jane.doe.2@example.com", "name": "jane doe", "dob": "1992-06-01" }
+  },
+  {
+    "id": "missing-email-same-name",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "grace@example.com", "name": "grace hopper", "dob": "1990-12-09" },
+    "person_b": { "name": "Grace Hopper", "dob": "1990-12-09" }
+  },
+  {
+    "id": "different-birthday-different-email",
+    "expected_verdict": "not_match",
+    "expected_class": "correct_separation",
+    "expected_path": "B",
+    "expected_skip_reason": "empty_block",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "jane.doe@example.com", "name": "jane doe", "dob": "1990-04-02" },
+    "person_b": { "email": "john.doe@example.com", "name": "john doe", "dob": "1991-05-06" }
+  },
+  {
+    "id": "different-birthday-exact-name",
+    "expected_verdict": "not_match",
+    "expected_class": "false_alarm",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "expect_name_dob_veto": true,
+    "shape": "import",
+    "person_a": { "name": "jane doe", "dob": "1990-04-02" },
+    "person_b": { "name": "jane doe", "dob": "1991-05-06" }
+  },
+  {
+    "id": "exact-name-same-birthday",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "name": "jane same@example", "dob": "1990-04-02" },
+    "person_b": { "name": "jane same@example", "dob": "1990-04-02" }
+  },
+  {
+    "id": "exact-name-missing-inbound-dob",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "name": "jane missing inbound", "dob": "1990-04-02" },
+    "person_b": { "name": "jane missing inbound" }
+  },
+  {
+    "id": "exact-name-missing-stored-dob",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "name": "jane missing stored" },
+    "person_b": { "name": "jane missing stored", "dob": "1990-04-02" }
+  },
+  {
+    "id": "exact-name-both-missing-dob",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "name": "jane missing both" },
+    "person_b": { "name": "jane missing both" }
+  },
+  {
+    "id": "same-name-different-email-different-birthday",
+    "expected_verdict": "not_match",
+    "expected_class": "correct_separation",
+    "expected_path": "B",
+    "expected_skip_reason": "empty_block",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "jane.a.dob@example.com", "name": "jane doe", "dob": "1990-04-02" },
+    "person_b": { "email": "jane.b.dob@example.com", "name": "jane doe", "dob": "1991-05-06" }
+  },
+  {
+    "id": "birthday-veto",
+    "expected_verdict": "match",
+    "expected_class": "scoring_miss",
+    "expected_path": "B",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "shape": "advisory",
+    "person_a": { "email": "ada.veto@example.com", "name": "ada lovelace", "dob": "1990-04-02" },
+    "person_b": {
+      "nfc_uid": "A1B2C3D4",
+      "email": "ada.veto@example.com",
+      "name": "ada lovelace",
+      "dob": "1991-04-02"
+    }
+  },
+  {
+    "id": "shared-email-column",
+    "expected_verdict": "not_match",
+    "expected_class": "false_alarm",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "expect_dob_veto": true,
+    "shape": "import",
+    "person_a": { "email": "family@example.com", "name": "jane doe", "dob": "1990-04-02" },
+    "person_b": { "email": "family@example.com", "name": "bob smith", "dob": "1988-01-15" }
+  },
+  {
+    "id": "exact-email-different-birthday",
+    "expected_verdict": "not_match",
+    "expected_class": "false_alarm",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "expect_dob_veto": true,
+    "shape": "import",
+    "person_a": { "email": "ada.conflict@example.com", "name": "ada lovelace", "dob": "1990-04-02" },
+    "person_b": { "email": "ada.conflict@example.com", "name": "ada lovelace", "dob": "1991-04-02" }
+  },
+  {
+    "id": "exact-email-missing-inbound-dob",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "ada.nodob.in@example.com", "name": "ada lovelace", "dob": "1990-04-02" },
+    "person_b": { "email": "ada.nodob.in@example.com", "name": "ada lovelace" }
+  },
+  {
+    "id": "exact-email-missing-stored-dob",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "ada.nodob.stored@example.com", "name": "ada lovelace" },
+    "person_b": { "email": "ada.nodob.stored@example.com", "name": "ada lovelace", "dob": "1990-04-02" }
+  },
+  {
+    "id": "exact-email-both-missing-dob",
+    "expected_verdict": "match",
+    "expected_class": "hard_match",
+    "expected_path": "A",
+    "expected_skip_reason": "deterministic_match",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "ada.nodob.both@example.com", "name": "ada lovelace" },
+    "person_b": { "email": "ada.nodob.both@example.com", "name": "ada lovelace" }
+  },
+  {
+    "id": "guardian-email-different-birthday",
+    "expected_verdict": "not_match",
+    "expected_class": "correct_separation",
+    "expected_path": "B",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "expect_score": 0,
+    "shape": "advisory",
+    "person_a": {
+      "name": "jane doe",
+      "dob": "1990-04-02",
+      "guardian_email": "household.dob@example.com",
+      "source_system": "fan_pass"
+    },
+    "person_b": {
+      "nfc_uid": "D1B2C3D4",
+      "name": "bob smith",
+      "dob": "1988-01-15",
+      "guardian_email": "household.dob@example.com"
+    }
+  },
+  {
+    "id": "shared-guardian-email",
+    "expected_verdict": "not_match",
+    "expected_class": "correct_separation",
+    "expected_path": "B",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
+    "shape": "advisory",
+    "person_a": {
+      "name": "jane doe",
+      "guardian_email": "household@example.com",
+      "source_system": "fan_pass"
+    },
+    "person_b": {
+      "nfc_uid": "B1B2C3D4",
+      "name": "bob smith",
+      "guardian_email": "household@example.com"
+    }
+  },
+  {
+    "id": "no-shared-key",
+    "expected_verdict": "not_match",
+    "expected_class": "correct_separation",
+    "expected_path": "B",
+    "expected_skip_reason": "empty_block",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "jane.separate@example.com", "name": "jane doe", "dob": "1990-04-02" },
+    "person_b": { "email": "bob.separate@example.com", "name": "bob smith", "dob": "1988-01-15" }
+  },
+  {
+    "id": "unreachable-match",
+    "expected_verdict": "match",
+    "expected_class": "blocking_miss",
+    "expected_path": "B",
+    "expected_skip_reason": "empty_block",
+    "expect_retrieved": false,
+    "shape": "import",
+    "person_a": { "email": "bob.smith@example.com", "name": "bob smith", "dob": "1990-04-02" },
+    "person_b": { "email": "bob.jones@example.com", "name": "bob jones", "dob": "1985-02-02" }
+  },
+  {
+    "id": "oversized-guardian-email",
+    "expected_verdict": "match",
+    "expected_class": "blocking_miss",
+    "expected_path": "B",
+    "expected_skip_reason": "block_dropped_oversize",
+    "expect_retrieved": false,
+    "shape": "advisory",
+    "seed_count": 51,
+    "person_a": { "guardian_email": "big@fam.com", "source_system": "fan_pass" },
+    "person_b": { "nfc_uid": "C1B2C3D4", "guardian_email": "big@fam.com" }
+  }
+]

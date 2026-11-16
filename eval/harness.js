@@ -12,6 +12,7 @@
 'use strict';
 
 const probabilisticMatcher = require('../src/modules/probabilisticMatcher');
+const { normalizeIdentifier } = require('../src/modules/normalizer');
 const {
   pathForMatch,
   passesSignalEligibilityGate,
@@ -21,6 +22,8 @@ const VERDICTS       = ['match', 'not_match', 'unsure'];
 const LABEL_SOURCE    = 'manual';
 const FROZEN_CLOCK    = Date.parse('2026-07-01T00:00:00.000Z');
 const SCORE_TOLERANCE = 0.0005; // best_score is numeric(4,3)
+const BLOCK_MISS_REASONS = ['no_block_key', 'empty_block', 'block_dropped_oversize'];
+const REPLAY_SIZES = [100, 1000, 5000];
 
 if (typeof FROZEN_CLOCK !== 'number' || Number.isFinite(FROZEN_CLOCK) === false) {
   throw new Error('eval/harness.js: FROZEN_CLOCK failed to parse to a finite epoch-ms number');
@@ -67,6 +70,8 @@ function evaluateRow(corpusRow, traceRow, labelRows) {
     state = 'promoted_no_snapshot';
   }
 
+  const block_outcome = blockOutcome(traceRow);
+
   // GUARD — unscored trace has no comparable score. Do not replay even if a
   // snapshot is present. Do not throw — PATH A stubs legitimately land here.
   if (state !== 'synthetic' && traceRow.scoring_status !== 'performed') {
@@ -90,6 +95,7 @@ function evaluateRow(corpusRow, traceRow, labelRows) {
       labels:               [],
       label_disagreement:   false,
       verdict_vs_expected:  [],
+      block_outcome,
     };
   }
 
@@ -185,6 +191,7 @@ function evaluateRow(corpusRow, traceRow, labelRows) {
     labels,
     label_disagreement,
     verdict_vs_expected,
+    block_outcome,
   };
 }
 
@@ -214,6 +221,110 @@ function summarizeScorecard(rows) {
   };
 }
 
+function blockOutcome(traceRow) {
+  if (traceRow == null) return null;
+  if (BLOCK_MISS_REASONS.includes(traceRow.skip_reason)) return traceRow.skip_reason;
+  const results = Array.isArray(traceRow.block_results) ? traceRow.block_results : [];
+  if (results.length > 0 && results.every((item) => item && item.dropped === true)) {
+    return 'block_dropped_oversize';
+  }
+  if (results.some((item) => item && item.dropped === false)) return 'retrieved';
+  return null;
+}
+
+// A blocking miss is a labeled match the retriever never handed to scoring.
+// A scoring miss is a labeled match that was retrieved and then landed on
+// path B or the gate. summarizeScorecard still reports both inside silent_miss
+// when the row was actually scored.
+function classifyBlocking(row) {
+  if (row.expected_verdict !== 'match') return 'not_applicable';
+  if (BLOCK_MISS_REASONS.includes(row.block_outcome)) return 'blocking_miss';
+  if (row.skipped === true) return 'not_applicable';
+  const separated = row.replayed_path === 'B' || row.gate_status === 'gated';
+  if (row.block_outcome === 'retrieved' && separated) return 'scoring_miss';
+  return 'not_applicable';
+}
+
+function summarizeBlocking(rows) {
+  const counts = { blocking_miss: 0, scoring_miss: 0 };
+  for (const row of rows) {
+    const kind = classifyBlocking(row);
+    if (kind === 'blocking_miss' || kind === 'scoring_miss') counts[kind] += 1;
+  }
+  return counts;
+}
+
+function normalizePair(fields) {
+  const inbound = {
+    org_id: null, email: null, name: null, dob: null, zip: null, device_id: null, guardian_email: null,
+  };
+  const snapshot = {
+    id: '00000000-0000-4000-8000-000000000001',
+    org_id: null,
+    email: null, email_last_seen_at: null,
+    name: null, name_last_seen_at: null,
+    dob: null, dob_last_seen_at: null,
+    zip: null, zip_last_seen_at: null,
+    device_id: null, device_last_seen_at: null,
+    guardian_email: null, guardian_email_last_seen_at: null,
+  };
+  if (fields == null) return { inbound, snapshot: null };
+  for (const field of INBOUND_FIELDS) {
+    if (fields[field] == null || fields[field] === '') continue;
+    const value = field === 'device_id'
+      ? fields[field]
+      : normalizeIdentifier(field, String(fields[field]));
+    inbound[field] = value;
+    snapshot[field] = value;
+    if (field !== 'device_id') snapshot[`${field}_last_seen_at`] = '2026-07-01T00:00:00.000Z';
+    if (field === 'device_id') snapshot.device_last_seen_at = '2026-07-01T00:00:00.000Z';
+  }
+  return { inbound, snapshot };
+}
+
+function replayScenarios(scenarios) {
+  return scenarios.map((scenario) => {
+    const candidate = normalizePair(scenario.candidate);
+    const inbound = normalizePair(scenario.inbound);
+    const corpus = {
+      id: scenario.id,
+      source: scenario.source || 'synthetic',
+      trace_id: scenario.trace ? scenario.id : null,
+      inbound_identifiers: inbound.inbound,
+      candidate_snapshot: scenario.candidate == null ? null : candidate.snapshot,
+      expected_verdict: scenario.expected_verdict,
+    };
+    if (scenario.candidate) {
+      for (const field of INBOUND_FIELDS) {
+        if (candidate.snapshot[field] != null) {
+          corpus.candidate_snapshot[field] = candidate.snapshot[field];
+          const seen = field === 'device_id' ? 'device_last_seen_at' : `${field}_last_seen_at`;
+          corpus.candidate_snapshot[seen] = candidate.snapshot[seen];
+        }
+      }
+    }
+    const row = evaluateRow(corpus, scenario.trace || null, []);
+    return {
+      ...row,
+      scenario_id: scenario.id,
+      known_non_signal: scenario.known_non_signal || null,
+    };
+  });
+}
+
+// Repeats the same scored pairs. This is scoring time only. It does not
+// search a fan table, so it is not a blocking measurement.
+function timeReplay(scenarios, sizes = REPLAY_SIZES) {
+  const scored = scenarios.filter((scenario) => scenario.trace == null || scenario.trace.scoring_status === 'performed');
+  return sizes.map((pairs) => {
+    const started = Date.now();
+    for (let i = 0; i < pairs; i += 1) {
+      replayScenarios([scored[i % scored.length]]);
+    }
+    return { pairs, duration_ms: Date.now() - started };
+  });
+}
+
 function classifyScorecardRow(row) {
   if (row.skipped === true) return 'excluded';
   if (row.expected_verdict !== 'match' && row.expected_verdict !== 'not_match') return 'excluded';
@@ -236,4 +347,10 @@ module.exports = {
   parseInboundIdentifiers,
   evaluateRow,
   summarizeScorecard,
+  summarizeBlocking,
+  classifyBlocking,
+  replayScenarios,
+  timeReplay,
+  BLOCK_MISS_REASONS,
+  REPLAY_SIZES,
 };

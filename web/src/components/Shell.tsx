@@ -8,6 +8,7 @@ import { Banner, Button } from './ui';
 const LINKS = [
   { to: '/', label: 'Overview', end: true },
   { to: '/imports', label: 'Imports', end: false },
+  { to: '/records', label: 'Imported records', end: false },
   { to: '/reviews', label: 'Review queue', end: false },
   { to: '/exports', label: 'Exports', end: false },
   { to: '/account', label: 'Account', end: false },

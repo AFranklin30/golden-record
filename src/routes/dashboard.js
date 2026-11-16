@@ -10,6 +10,28 @@ const exportRouter = require('./export');
 const router = express.Router();
 const PREVIEW_LIMIT = 25;
 const REVIEW_STATUSES = ['pending', 'confirmed', 'rejected', 'unmerged'];
+const RECORD_PATHS = ['A', 'B', 'C', 'D'];
+const REVIEW_FILTERS = ['queued', 'none'];
+const RECORD_PAGE_MAX = 100;
+
+function recordFilters(query) {
+  const path = query.path === undefined || query.path === '' ? null : query.path;
+  const review = query.review === undefined || query.review === '' ? null : query.review;
+  const batch = query.batch_id === undefined || query.batch_id === '' ? null : query.batch_id;
+  const q = typeof query.q === 'string' ? query.q.trim() : '';
+  const limit = query.limit === undefined ? 50 : parseInt(query.limit, 10);
+  const offset = query.offset === undefined ? 0 : parseInt(query.offset, 10);
+  if (path !== null && !RECORD_PATHS.includes(path)) return { error: 'invalid path' };
+  if (review !== null && !REVIEW_FILTERS.includes(review)) return { error: 'invalid review filter' };
+  if (batch !== null && !UUID_RE.test(batch)) return { error: 'batch_id must be a uuid' };
+  if (!Number.isInteger(limit) || limit < 1 || limit > RECORD_PAGE_MAX) return { error: 'invalid limit' };
+  if (!Number.isInteger(offset) || offset < 0) return { error: 'invalid offset' };
+  return { path, review, batch, q, limit, offset };
+}
+
+function searchPattern(value) {
+  return `%${value.replace(/[\\%_]/g, '\\$&')}%`;
+}
 
 function dispatch(target, req, res, url) {
   req.url = url;
@@ -104,7 +126,7 @@ router.post('/v1/dashboard/imports', async (req, res) => {
 router.get('/v1/dashboard/imports', async (req, res) => {
   try {
     const result = await req.db.query(
-      `SELECT b.id, b.filename, b.created_at,
+      `SELECT b.id, b.filename, b.created_at, b.data_removed_at,
               COUNT(r.id)::int AS row_count,
               COUNT(r.id) FILTER (WHERE r.status = 'error')::int AS error_count
          FROM import_batch b
@@ -131,12 +153,12 @@ router.get('/v1/dashboard/imports/:id', async (req, res) => {
   }
   try {
     const batch = await req.db.query(
-      `SELECT id, filename, created_at FROM import_batch WHERE id = $1 AND org_id = $2`,
+      `SELECT id, filename, created_at, data_removed_at FROM import_batch WHERE id = $1 AND org_id = $2`,
       [req.params.id, req.context.org_id]
     );
     if (batch.rows.length === 0) return res.status(404).json({ error: 'import not found' });
     const rows = await req.db.query(
-      `SELECT row_number, status, fan_id, resolution_path, conflict_id, error, skipped
+      `SELECT id, row_number, status, fan_id, resolution_path, conflict_id, error, skipped
          FROM import_row
         WHERE batch_id = $1 AND org_id = $2
         ORDER BY row_number
@@ -146,6 +168,118 @@ router.get('/v1/dashboard/imports/:id', async (req, res) => {
     return res.status(200).json({ import: batch.rows[0], rows: rows.rows });
   } catch (err) {
     logger.error('dashboard import detail failed', {
+      error: err.message,
+      org_id: req.context.org_id,
+    });
+    return res.status(500).json({ error: 'internal error' });
+  }
+});
+
+function recordWhere(orgId, filters) {
+  const params = [orgId];
+  const where = ['r.org_id = $1'];
+  if (filters.batch) {
+    params.push(filters.batch);
+    where.push(`r.batch_id = $${params.length}`);
+  }
+  if (filters.path) {
+    params.push(filters.path);
+    where.push(`r.resolution_path = $${params.length}`);
+  }
+  if (filters.review === 'queued') where.push('r.conflict_id IS NOT NULL');
+  if (filters.review === 'none') where.push('r.conflict_id IS NULL');
+  if (filters.q) {
+    params.push(searchPattern(filters.q));
+    where.push(`EXISTS (
+      SELECT 1 FROM identifier_link il
+       WHERE il.org_id = r.org_id
+         AND il.fan_id = r.fan_id
+         AND il.identifier_value ILIKE $${params.length} ESCAPE '\\'
+    )`);
+  }
+  return { params, whereSql: where.join(' AND ') };
+}
+
+function presentRecord(row, people) {
+  return {
+    import_row_id: row.id,
+    batch_id: row.batch_id,
+    filename: row.filename,
+    row_number: row.row_number,
+    status: row.status,
+    fan_id: row.fan_id,
+    deleted_at: row.deleted_at,
+    resolution_path: row.resolution_path,
+    conflict_id: row.conflict_id,
+    conflict_status: row.conflict_status,
+    confidence_score: row.confidence_score,
+    error: row.error,
+    skipped: row.skipped,
+    person: row.fan_id ? (people[row.fan_id] || {}) : {},
+    review_opened: Boolean(row.conflict_id),
+  };
+}
+
+const RECORD_SELECT = `
+  SELECT r.id, r.batch_id, b.filename, r.row_number, r.status, r.fan_id,
+         r.resolution_path, r.conflict_id, r.error, r.skipped,
+         f.deleted_at,
+         c.status AS conflict_status, c.confidence_score
+    FROM import_row r
+    JOIN import_batch b ON b.id = r.batch_id AND b.org_id = r.org_id
+    LEFT JOIN fan f ON f.id = r.fan_id AND f.org_id = r.org_id
+    LEFT JOIN conflict_queue c ON c.id = r.conflict_id AND c.org_id = r.org_id
+`;
+
+router.get('/v1/dashboard/records', async (req, res) => {
+  const filters = recordFilters(req.query || {});
+  if (filters.error) return res.status(400).json({ error: filters.error });
+  try {
+    const built = recordWhere(req.context.org_id, filters);
+    const count = await req.db.query(
+      `SELECT COUNT(*)::int AS total FROM import_row r WHERE ${built.whereSql}`,
+      built.params
+    );
+    const rows = await req.db.query(
+      `${RECORD_SELECT}
+        WHERE ${built.whereSql}
+        ORDER BY b.created_at DESC, r.row_number ASC
+        LIMIT $${built.params.length + 1} OFFSET $${built.params.length + 2}`,
+      [...built.params, filters.limit, filters.offset]
+    );
+    const fanIds = rows.rows.map((row) => row.fan_id).filter(Boolean);
+    const people = fanIds.length ? await peopleFor(req.db, req.context.org_id, fanIds) : {};
+    return res.status(200).json({
+      records: rows.rows.map((row) => presentRecord(row, people)),
+      total: count.rows[0].total,
+      limit: filters.limit,
+      offset: filters.offset,
+    });
+  } catch (err) {
+    logger.error('dashboard record list failed', {
+      error: err.message,
+      org_id: req.context.org_id,
+    });
+    return res.status(500).json({ error: 'internal error' });
+  }
+});
+
+router.get('/v1/dashboard/records/:id', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'record id must be a uuid' });
+  }
+  try {
+    const result = await req.db.query(
+      `${RECORD_SELECT}
+        WHERE r.id = $1 AND r.org_id = $2`,
+      [req.params.id, req.context.org_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'record not found' });
+    const row = result.rows[0];
+    const people = row.fan_id ? await peopleFor(req.db, req.context.org_id, [row.fan_id]) : {};
+    return res.status(200).json({ record: presentRecord(row, people) });
+  } catch (err) {
+    logger.error('dashboard record detail failed', {
       error: err.message,
       org_id: req.context.org_id,
     });
@@ -182,6 +316,15 @@ router.get('/v1/dashboard/reviews', async (req, res) => {
       `SELECT id, fan_id_a, fan_id_b, confidence_score, status, created_at, reviewed_at
          FROM conflict_queue
         WHERE org_id = $1 AND status = $2
+          AND (
+            $2 <> 'pending'
+            OR NOT EXISTS (
+              SELECT 1 FROM fan f
+               WHERE f.org_id = conflict_queue.org_id
+                 AND f.id IN (conflict_queue.fan_id_a, conflict_queue.fan_id_b)
+                 AND f.deleted_at IS NOT NULL
+            )
+          )
         ORDER BY created_at DESC
         LIMIT 100`,
       [req.context.org_id, status]
@@ -242,6 +385,169 @@ router.get('/v1/dashboard/reviews/:id', async (req, res) => {
       org_id: req.context.org_id,
     });
     return res.status(500).json({ error: 'internal error' });
+  }
+});
+
+async function fanInActiveMerge(db, orgId, fanId) {
+  const result = await db.query(
+    `SELECT 1 FROM merge_history
+      WHERE org_id = $1 AND status = 'active'
+        AND (fan_id_source = $2 OR fan_id_target = $2)
+      LIMIT 1`,
+    [orgId, fanId]
+  );
+  return result.rows.length > 0;
+}
+
+async function hideFan(db, orgId, fanId) {
+  const fan = await db.query(
+    'SELECT id, deleted_at FROM fan WHERE id = $1 AND org_id = $2',
+    [fanId, orgId]
+  );
+  if (fan.rows.length === 0) return { error: 'record not found', status: 404 };
+  if (fan.rows[0].deleted_at) return { error: 'record already hidden', status: 409 };
+  if (await fanInActiveMerge(db, orgId, fanId)) {
+    return { error: 'record is part of an active merge', status: 409 };
+  }
+  await db.query(
+    `UPDATE fan SET deleted_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL`,
+    [fanId, orgId]
+  );
+  return { fanId };
+}
+
+router.post('/v1/dashboard/fans/:id/hide', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'fan id must be a uuid' });
+  }
+  try {
+    await req.db.query('BEGIN');
+    const hidden = await hideFan(req.db, req.context.org_id, req.params.id);
+    if (hidden.error) {
+      await req.db.query('ROLLBACK');
+      return res.status(hidden.status).json({ error: hidden.error });
+    }
+    await req.db.query(
+      `INSERT INTO audit_log (fan_id, org_id, event_type, status, schema_version)
+       VALUES ($1, $2, 'record_hidden', 'success', '1.0')`,
+      [hidden.fanId, req.context.org_id]
+    );
+    await req.db.query('COMMIT');
+    return res.status(200).json({ fan_id: hidden.fanId, hidden: true });
+  } catch (err) {
+    try { await req.db.query('ROLLBACK'); } catch (_) { /* already closed */ }
+    logger.error('dashboard fan hide failed', {
+      error: err.message,
+      org_id: req.context.org_id,
+    });
+    return res.status(500).json({ error: 'record could not be hidden' });
+  }
+});
+
+router.post('/v1/dashboard/imports/:id/remove', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'import id must be a uuid' });
+  }
+  const confirmName = req.body && typeof req.body.confirm_filename === 'string'
+    ? req.body.confirm_filename
+    : null;
+  if (confirmName === null) {
+    return res.status(400).json({ error: 'confirm_filename is required' });
+  }
+  try {
+    await req.db.query('BEGIN');
+    const batch = await req.db.query(
+      `SELECT id, filename, data_removed_at
+         FROM import_batch
+        WHERE id = $1 AND org_id = $2
+        FOR UPDATE`,
+      [req.params.id, req.context.org_id]
+    );
+    if (batch.rows.length === 0) {
+      await req.db.query('ROLLBACK');
+      return res.status(404).json({ error: 'import not found' });
+    }
+    const file = batch.rows[0];
+    const expected = file.filename || 'Untitled import';
+    if (confirmName !== expected) {
+      await req.db.query('ROLLBACK');
+      return res.status(400).json({ error: 'filename does not match' });
+    }
+    if (file.data_removed_at) {
+      await req.db.query('ROLLBACK');
+      return res.status(409).json({ error: 'import data already hidden' });
+    }
+    const rows = await req.db.query(
+      `SELECT row_number, fan_id, resolution_path
+         FROM import_row
+        WHERE batch_id = $1 AND org_id = $2
+        ORDER BY row_number`,
+      [file.id, req.context.org_id]
+    );
+    const removed = [];
+    const leftInPlace = [];
+    const skipped = [];
+    const seen = new Set();
+    for (const row of rows.rows) {
+      if (!row.fan_id || row.resolution_path === 'A') {
+        leftInPlace.push({
+          row_number: row.row_number,
+          fan_id: row.fan_id,
+          reason: row.resolution_path === 'A' ? 'already this person; not removed' : 'no person stored',
+        });
+        continue;
+      }
+      if (!['B', 'C', 'D'].includes(row.resolution_path)) {
+        leftInPlace.push({ row_number: row.row_number, fan_id: row.fan_id, reason: 'no person stored' });
+        continue;
+      }
+      if (seen.has(row.fan_id)) {
+        removed.push({ row_number: row.row_number, fan_id: row.fan_id });
+        continue;
+      }
+      const hidden = await hideFan(req.db, req.context.org_id, row.fan_id);
+      if (hidden.error === 'record is part of an active merge') {
+        skipped.push({ row_number: row.row_number, fan_id: row.fan_id, reason: hidden.error });
+        continue;
+      }
+      if (hidden.error === 'record already hidden') {
+        seen.add(row.fan_id);
+        removed.push({ row_number: row.row_number, fan_id: row.fan_id });
+        continue;
+      }
+      if (hidden.error) {
+        skipped.push({ row_number: row.row_number, fan_id: row.fan_id, reason: hidden.error });
+        continue;
+      }
+      seen.add(row.fan_id);
+      removed.push({ row_number: row.row_number, fan_id: row.fan_id });
+    }
+    const marked = await req.db.query(
+      `UPDATE import_batch SET data_removed_at = NOW()
+        WHERE id = $1 AND org_id = $2
+        RETURNING data_removed_at`,
+      [file.id, req.context.org_id]
+    );
+    await req.db.query(
+      `INSERT INTO audit_log (org_id, event_type, status, schema_version)
+       VALUES ($1, 'record_hidden', 'success', '1.0')`,
+      [req.context.org_id]
+    );
+    await req.db.query('COMMIT');
+    return res.status(200).json({
+      data_removed_at: marked.rows[0].data_removed_at,
+      removed,
+      left_in_place: leftInPlace,
+      skipped,
+    });
+  } catch (err) {
+    try { await req.db.query('ROLLBACK'); } catch (_) { /* already closed */ }
+    logger.error('dashboard import removal failed', {
+      error: err.message,
+      org_id: req.context.org_id,
+    });
+    return res.status(500).json({ error: 'import could not be hidden' });
   }
 });
 

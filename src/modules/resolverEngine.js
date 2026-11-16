@@ -306,7 +306,32 @@ async function resolverEngine(input, db) {
       [identifier_type, identifier_value, org_id]
     );
 
-    if (linkResult.rows.length > 0) {
+    let takeHardMatch = linkResult.rows.length > 0;
+    let emailDobVetoFanId = null;
+    let nameDobVetoFanId = null;
+    if (takeHardMatch && (identifier_type === 'email' || identifier_type === 'name')) {
+      const inboundDob = input.identifiers && typeof input.identifiers.dob === 'string'
+        ? input.identifiers.dob
+        : null;
+      if (inboundDob) {
+        const storedDob = await db.query(
+          `SELECT identifier_value
+             FROM identifier_link
+            WHERE fan_id = $1 AND org_id = $2 AND identifier_type = 'dob'`,
+          [linkResult.rows[0].fan_id, org_id]
+        );
+        const storedValues = storedDob.rows.map((row) => row.identifier_value);
+        const birthdayConflicts = storedValues.length > 0
+          && storedValues.every((value) => value !== inboundDob);
+        if (birthdayConflicts) {
+          takeHardMatch = false;
+          if (identifier_type === 'email') emailDobVetoFanId = linkResult.rows[0].fan_id;
+          else nameDobVetoFanId = linkResult.rows[0].fan_id;
+        }
+      }
+    }
+
+    if (takeHardMatch) {
       // PATH A — hard match
       fan_id           = linkResult.rows[0].fan_id;
       match_type       = 'hard';
@@ -457,9 +482,30 @@ async function resolverEngine(input, db) {
         trace.best_candidate_id = bestMatch ? bestMatch.id : null;
       }
 
-      // Soft link detection — guardian_email signal triggers staging write
+      // An exact email or exact name was found, and both birthdays exist and
+      // differ. Review that fan. The name-and-birthday block cannot retrieve
+      // them, because it requires the same birthday, so record the lookup here.
+      const dobVetoFanId = emailDobVetoFanId || nameDobVetoFanId;
+      if (dobVetoFanId) {
+        bestScore = 0;
+        bestSignals = [{ signal: 'dob_veto' }];
+        bestMatch = { id: dobVetoFanId };
+        trace.scoring_status = 'performed';
+        trace.skip_reason = null;
+        trace.best_score = 0;
+        trace.best_signals = bestSignals;
+        trace.best_candidate_id = dobVetoFanId;
+        if (!trace.candidate_ids.includes(dobVetoFanId)) {
+          trace.candidate_ids.push(dobVetoFanId);
+        }
+      }
+
+      // Soft link detection — guardian_email signal triggers staging write.
+      // child_name is NOT NULL. A null incoming name would abort the transaction
+      // and discard the review, so skip the side write and keep the resolution.
       const guardianEmailSignal = bestSignals.find(s => s.signal === 'guardian_email');
-      if (guardianEmailSignal !== undefined) {
+      if (guardianEmailSignal !== undefined && inbound.name != null) {
+        await db.query('SAVEPOINT staging_household');
         try {
           await db.query(
             `INSERT INTO staging_household_data
@@ -478,7 +524,9 @@ async function resolverEngine(input, db) {
               guardianEmailSignal.adjusted_score,
             ]
           );
+          await db.query('RELEASE SAVEPOINT staging_household');
         } catch (stagingErr) {
+          await db.query('ROLLBACK TO SAVEPOINT staging_household');
           logger.warn('soft link staging failed', {
             event:  'soft_link_staging_failure',
             error:  stagingErr.message,
@@ -487,7 +535,9 @@ async function resolverEngine(input, db) {
         }
       }
 
-      const resolutionPath = pathForMatch(bestScore, bestSignals);
+      const resolutionPath = (emailDobVetoFanId || nameDobVetoFanId)
+        ? 'D'
+        : pathForMatch(bestScore, bestSignals);
 
       if (resolutionPath === 'C') {
         // PATH C — high confidence soft match, hold for staff review (priority 1)
@@ -536,14 +586,16 @@ async function resolverEngine(input, db) {
            VALUES ($1, $2, 'platform', 1, NOW(), NOW())`,
           [new_fan_id, org_id]
         );
-        await db.query(
-          `INSERT INTO identifier_link
-             (fan_id, identifier_type, identifier_value, org_id, source_system,
-              schema_version, confidence_score, first_seen_at, last_seen_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-          [new_fan_id, identifier_type, identifier_value, org_id,
-           source_system, schema_version, bestScore]
-        );
+        if (!(emailDobVetoFanId && identifier_type === 'email')) {
+          await db.query(
+            `INSERT INTO identifier_link
+               (fan_id, identifier_type, identifier_value, org_id, source_system,
+                schema_version, confidence_score, first_seen_at, last_seen_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+            [new_fan_id, identifier_type, identifier_value, org_id,
+             source_system, schema_version, bestScore]
+          );
+        }
 
         conflict_id = crypto.randomUUID();
         await db.query(

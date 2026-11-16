@@ -1,3 +1,151 @@
+# Test cleanup after the benchmark
+
+## Context
+The benchmark is clean. Ten older tests fail. Alice's second birthday is a review, the demo org has leftover traces, and two resolver tests still expect a score call when blocking finds nobody.
+
+## Files
+- `tests/modules/customerImport.test.js`
+- `tests/promoteTraceToCorpus.test.js`
+- `tests/seedDemoOrg.test.js`
+- `tests/modules/resolverEngine.test.js`
+- `src/modules/resolverEngine.js` — savepoint around the staging insert only
+- `tests/modules/resolverEngine.staging.test.js`
+
+## THE FIX
+Update the stale expectations. Build the demo-org checks on a fresh org. Skip scoreMatch when blocking finds nobody. Roll a failed staging insert back to a savepoint so the review still commits.
+
+## DO NOT
+Do not change scores, blocking, thresholds, the matching policy, or the 60 benchmark expectations.
+
+# Guardian-email review abort
+
+## Context
+A guardian-email score of 0.65 already chooses a review. The staging insert then writes a null child name, Postgres aborts the transaction, and the review is never saved.
+
+## Files
+- `src/modules/resolverEngine.js` — skip the staging insert when the incoming name is null
+- `tests/modules/resolverEngine.test.js` — a named call still writes staging
+- `tests/eval.benchmark.test.js` — the three scenarios are reviews
+
+## THE FIX
+Do not insert `staging_household_data` when `inbound.name` is null. Leave the path D review in place. Calls that include a child name still write the staging row.
+
+## DO NOT
+Do not change scores, blocking, thresholds, the 51-person drop, or the matching policy.
+
+# Shared-name person check
+
+## Context
+`same-name-one-birthday-matches` accepts any hard match or any review. The wrong person can satisfy the benchmark.
+
+## Files
+- `eval/benchmark.js` — permitted person pairs
+- `eval/fixtures/benchmarkCases.js` — the one shared-name scenario
+- `tests/eval.benchmark.test.js` — local Postgres only
+
+## THE FIX
+A hard match must return the person whose birthday matches. A review must name the person whose birthday differs, and both people must be in the candidate list. Leave the other shared-name cases as they are.
+
+## DO NOT
+Do not change the resolver, scores, blocking, normalization, or the unique index.
+
+# Synthetic identity benchmark
+
+## Context
+Level 2 already runs the real resolver. The next measurement needs identity ground truth kept apart from the resolution the engine actually produces.
+
+## Files
+- `eval/benchmark.js` — outcome classes and metrics
+- `eval/fixtures/benchmarkCases.js` — synthetic people
+- `tests/eval.benchmark.test.js` — local Postgres only
+- `eval/reports/benchmark-report.md` — the measured report
+
+## THE FIX
+Seed isolated people, call `resolverEngine`, and score the trace against the November 15 policy. Do not change a result to make the count look better.
+
+## DO NOT
+Do not change the resolver, scores, blocking, normalization, or the unique index.
+
+# Matching policy baseline
+
+## Context
+Email and name now open a review when both birthdays differ. Other exact lookups still return before a birthday is read. The policy needs one written baseline before any further matching change.
+
+## Files
+- `docs/engineering/matching-policy.md` — current behavior
+- `CLAUDE.md` — pointer from the PATH A bullet
+
+## THE FIX
+Document the resolver as it behaves today. Do not change matching.
+
+## DO NOT
+Do not change the resolver, scores, blocking, the normalizer, or the unique index.
+
+# Exact name and a conflicting birthday
+
+## Context
+PATH A returns the existing person on an exact name before the birthday is read. The import then drops the incoming birthday. The name-and-birthday block cannot see that person when the birthdays differ.
+
+## Files
+- `src/modules/resolverEngine.js` — name PATH A guard, path D, name kept on the new fan
+- `eval/fixtures/level2-cases.json` — the name cases
+- `tests/eval.level2.test.js` — trace assertions
+
+## THE FIX
+When the singular identifier is a name, both birthdays are present, and they differ, do not take PATH A. Open a pending review against the existing fan. Record `dob_veto` and that fan, including on `candidate_ids`, even though the `name_dob` block size is 0. The new fan keeps the name. A missing birthday stays PATH A.
+
+## DO NOT
+Do not change thresholds, blocking, the normalizer, the email veto, phone, or guardian email.
+
+# Exact email and a conflicting birthday
+
+## Context
+PATH A returns the existing person before the birthday is read. A shared email with two different birthdays must not become that hard match.
+
+## Files
+- `src/modules/resolverEngine.js` — email PATH A guard, path D, no second email row
+- `eval/fixtures/level2-cases.json` — the birthday cases
+- `tests/eval.level2.test.js` — trace assertions
+
+## THE FIX
+When the singular identifier is an email, both birthdays are present, and they differ, do not take PATH A. The existing veto runs. The original fan keeps the email. A pending review is opened. The trace records `dob_veto` and that fan. A missing birthday stays PATH A.
+
+## DO NOT
+Do not change thresholds, blocking, the normalizer, name matching, or the guardian-email path.
+
+# Level 2 resolver evaluation
+
+## Context
+Level 1 scores two records that are already in hand. It does not retrieve candidates. Level 2 seeds a local org and calls `resolverEngine`, then classifies the trace that call writes.
+
+## Files
+- `eval/level2.js` — `classifyObserved`
+- `eval/fixtures/level2-cases.json` — person A, person B, expected class
+- `tests/eval.level2.test.js` — localhost only
+
+## THE FIX
+Import-shaped rows use email, or name when there is no email, as the singular identifier. The veto and the oversized guardian-email group use an `nfc_uid` singular identifier so PATH A does not consume the shared value. The classifier does not score.
+
+## DO NOT
+Do not change the resolver, blocking, scores, or the Level 1 fixture. Do not point the test at Neon.
+
+# Imported records, hide, and evaluation
+
+## Context
+The review queue shows pairs the matcher flagged. Imported people with no review have no page. Hiding a person is a soft delete. The evaluation harness scores labeled pairs and does not report blocking misses or time.
+
+## Files
+- `src/routes/dashboard.js` — records list and detail, hide one fan, hide a batch's minted fans
+- `migrations/migration_020.sql` — `import_batch.data_removed_at`, audit event `record_hidden`
+- `web/src/features/records/` — list and detail
+- `eval/harness.js`, `eval/runCorpus.js`, `eval/fixtures/scenarios.json`
+
+## THE FIX
+Records are read from `import_row` plus stored identifiers. No review means "No review was opened." Hide sets `deleted_at` and refuses an active merge. A batch hide keeps the batch and marks `data_removed_at`. The harness adds a blocking class and records replay duration. Scoring thresholds do not change.
+
+## DO NOT
+Do not change the resolver, blocking, or scores. Do not hard-delete fans, audit rows, or traces. Do not deploy.
+
 # Import survives a missing Firestore wallet
 
 ## Context

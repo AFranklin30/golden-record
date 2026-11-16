@@ -25,6 +25,7 @@ const { execFileSync } = require('child_process');
 const { Client } = require('pg');
 
 const { scoreMatch, SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
+const { resolverEngine } = require('../src/modules/resolverEngine');
 const { FROZEN_CLOCK, summarizeScorecard } = require('../eval/harness');
 const { buildRun } = require('../eval/runCorpus');
 
@@ -204,17 +205,58 @@ describe('seedDemoOrg — permanent demo org', () => {
     expect(result.score).toBe(0.0);
   });
 
-  // 6 — Scenario 2: conflict stays pending
+  // 6 — Scenario 2: a fresh org, so a later confirm on the permanent demo
+  // org cannot change this result.
   test('Scenario 2: Marcus Webb fixture has a pending conflict_queue row', async () => {
-    const marcusFanId = await findFanByNameDob(client, 'marcus webb', '1990-04-15');
-    expect(marcusFanId).toMatch(UUID_RE);
+    const orgId = crypto.randomUUID();
+    const fanId = crypto.randomUUID();
+    const hash = crypto.randomBytes(32).toString('hex');
+    try {
+      await client.query(
+        `INSERT INTO org (id, name, org_api_key_hash, is_active) VALUES ($1, $2, $3, true)`,
+        [orgId, '_marcus_pending', hash]
+      );
+      await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [orgId]);
+      await client.query(
+        `INSERT INTO fan (id, org_id, stewardship_tier, record_version, created_at, updated_at)
+         VALUES ($1, $2, 'platform', 1, NOW(), NOW())`,
+        [fanId, orgId]
+      );
+      for (const [type, value] of [['name', 'marcus webb'], ['dob', '1990-04-15']]) {
+        await client.query(
+          `INSERT INTO identifier_link
+             (fan_id, org_id, identifier_type, identifier_value, source_system,
+              schema_version, confidence_score, first_seen_at, last_seen_at)
+           VALUES ($1, $2, $3, $4, 'csv_import', '1.0', 1.0, NOW(), NOW())`,
+          [fanId, orgId, type, value]
+        );
+      }
 
-    const conflictResult = await client.query(
-      `SELECT status FROM conflict_queue WHERE org_id = $1 AND fan_id_a = $2`,
-      [DEMO_ORG_ID, marcusFanId]
-    );
-    expect(conflictResult.rows.length).toBeGreaterThanOrEqual(1);
-    expect(conflictResult.rows.every(r => r.status === 'pending')).toBe(true);
+      const result = await resolverEngine({
+        identifier_type: 'nfc_uid',
+        identifier_value: 'C3D4E5F6',
+        identifiers: { name: 'marcus webb', dob: '1990-04-15' },
+        org_id: orgId,
+        schema_version: '1.0',
+        idempotency_key: crypto.randomUUID(),
+        source_system: 'csv_import',
+      }, client);
+
+      expect(result.conflict_id).toMatch(UUID_RE);
+      expect(result.is_new_record).toBe(true);
+      const conflictResult = await client.query(
+        `SELECT fan_id_a, fan_id_b, status FROM conflict_queue WHERE id = $1 AND org_id = $2`,
+        [result.conflict_id, orgId]
+      );
+      expect(conflictResult.rows).toHaveLength(1);
+      expect(conflictResult.rows[0].status).toBe('pending');
+      expect(conflictResult.rows[0].fan_id_a).toBe(fanId);
+      expect(conflictResult.rows[0].fan_id_b).toBe(result.fan_id);
+    } finally {
+      await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [orgId]);
+      await client.query('DELETE FROM conflict_queue WHERE org_id = $1', [orgId]).catch(() => {});
+      await client.query('DELETE FROM identifier_link WHERE org_id = $1', [orgId]).catch(() => {});
+    }
   });
 
   // 7 — Scenario 5: merge_history active, loser soft-deleted
@@ -280,23 +322,60 @@ describe('seedDemoOrg — permanent demo org', () => {
   // scorer_version, which came from its trace and records what actually
   // produced that resolution, not the current constant.
   test("the backfill does not alter the promoted row's scorer_version", async () => {
-    const promotedRows = corpusRows.filter(r => r.source === 'promoted_trace');
-    expect(promotedRows.length).toBeGreaterThanOrEqual(1);
-    const beforeVersion = promotedRows[0].scorer_version;
+    const orgId = crypto.randomUUID();
+    const traceId = crypto.randomUUID();
+    const promotedId = crypto.randomUUID();
+    const syntheticId = crypto.randomUUID();
+    const traceVersion = 'v-from-trace';
+    const hash = crypto.randomBytes(32).toString('hex');
+    const snapshot = { id: crypto.randomUUID(), org_id: orgId };
+    try {
+      await client.query(
+        `INSERT INTO org (id, name, org_api_key_hash, is_active) VALUES ($1, $2, $3, true)`,
+        [orgId, '_backfill_promoted', hash]
+      );
+      await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [orgId]);
+      await client.query(
+        `INSERT INTO resolution_trace
+           (id, org_id, resolution_path, scoring_status, skip_reason,
+            inbound_identifiers, best_score, threshold_path_c, threshold_path_d,
+            scorer_version, normalization_version, scoring_clock, is_new_record)
+         VALUES ($1, $2, 'D', 'performed', NULL, $3, 0.700, 0.85, 0.60, $4, 'v1', NOW(), true)`,
+        [traceId, orgId, JSON.stringify({ name: 'jane doe' }), traceVersion]
+      );
+      await client.query(
+        `INSERT INTO evaluation_corpus
+           (id, org_id, source, trace_id, inbound_identifiers, candidate_snapshot,
+            expected_verdict, scorer_version, created_by)
+         VALUES ($1, $2, 'promoted_trace', $3, $4, $5, 'not_match', $6, 'test')`,
+        [promotedId, orgId, traceId, JSON.stringify({ name: 'jane doe' }), JSON.stringify(snapshot), traceVersion]
+      );
+      await client.query(
+        `INSERT INTO evaluation_corpus
+           (id, org_id, source, inbound_identifiers, candidate_snapshot,
+            expected_verdict, scorer_version, created_by)
+         VALUES ($1, $2, 'synthetic', $3, $4, 'not_match', NULL, 'test')`,
+        [syntheticId, orgId, JSON.stringify({ name: 'jane doe' }), JSON.stringify(snapshot)]
+      );
 
-    // Re-run the backfill directly (idempotent — WHERE scorer_version IS NULL
-    // means a second run is a no-op) and confirm the promoted row is untouched.
-    await client.query(
-      `UPDATE evaluation_corpus SET scorer_version = $1
-        WHERE org_id = $2 AND source = 'synthetic' AND scorer_version IS NULL`,
-      [SCORER_VERSION, DEMO_ORG_ID]
-    );
+      await client.query(
+        `UPDATE evaluation_corpus SET scorer_version = $1
+          WHERE org_id = $2 AND source = 'synthetic' AND scorer_version IS NULL`,
+        [SCORER_VERSION, orgId]
+      );
 
-    const afterResult = await client.query(
-      `SELECT scorer_version FROM evaluation_corpus WHERE org_id = $1 AND source = 'promoted_trace'`,
-      [DEMO_ORG_ID]
-    );
-    expect(afterResult.rows[0].scorer_version).toBe(beforeVersion);
+      const after = await client.query(
+        `SELECT source, scorer_version FROM evaluation_corpus WHERE org_id = $1 ORDER BY source`,
+        [orgId]
+      );
+      const promoted = after.rows.find((row) => row.source === 'promoted_trace');
+      const synthetic = after.rows.find((row) => row.source === 'synthetic');
+      expect(promoted.scorer_version).toBe(traceVersion);
+      expect(synthetic.scorer_version).toBe(SCORER_VERSION);
+    } finally {
+      await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [orgId]);
+      await client.query('DELETE FROM evaluation_corpus WHERE org_id = $1', [orgId]).catch(() => {});
+    }
   });
 
   // 8c — eval/runCorpus.js's buildRun must report zero unknown-scorer-version
