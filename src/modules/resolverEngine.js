@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto    = require('crypto');
+const fs        = require('fs');
+const path      = require('path');
 const { Firestore } = require('@google-cloud/firestore');
 const { scoreMatch, SCORER_VERSION } = require('./probabilisticMatcher');
 const { NORMALIZATION_VERSION }      = require('./normalizer');
@@ -9,10 +11,37 @@ const THRESHOLD_PATH_C = 0.85;
 const THRESHOLD_PATH_D = 0.60;
 const BLOCK_SIZE_CAP   = 50;
 
+function hasNameAndDobAgreement(signals) {
+  return Array.isArray(signals) && signals.some((s) => s && s.signal === 'name_plus_dob');
+}
+
+// Path for one scored pair. The stored score is not changed.
+// Name + same birthday is review even when a penalty leaves the score under 0.60.
+// A score already at or above 0.85 stays PATH C. No name_plus_dob signal uses the
+// two thresholds exactly. A birthday veto returns no signals, so it stays PATH B.
+function pathForMatch(score, signals) {
+  if (score >= THRESHOLD_PATH_C) return 'C';
+  if (score >= THRESHOLD_PATH_D) return 'D';
+  if (hasNameAndDobAgreement(signals)) return 'D';
+  return 'B';
+}
+
 const firestore = new Firestore({
   projectId:  process.env.FIRESTORE_PROJECT_ID,
   databaseId: 'golden-record',
 });
+
+// The wallet write is optional. Render has no Google credentials, and the
+// client library rejects a second promise that try/catch cannot see. Calling
+// set() there restarts the process in the middle of an import.
+function firestoreSyncEnabled() {
+  if (process.env.FIRESTORE_SYNC === 'off') return false;
+  if (process.env.FIRESTORE_SYNC === 'on') return true;
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE) return true;
+  const home = process.env.HOME || '';
+  if (home === '') return false;
+  return fs.existsSync(path.join(home, '.config', 'gcloud', 'application_default_credentials.json'));
+}
 
 const logger = require('../lib/logger');
 
@@ -277,7 +306,32 @@ async function resolverEngine(input, db) {
       [identifier_type, identifier_value, org_id]
     );
 
-    if (linkResult.rows.length > 0) {
+    let takeHardMatch = linkResult.rows.length > 0;
+    let emailDobVetoFanId = null;
+    let nameDobVetoFanId = null;
+    if (takeHardMatch && (identifier_type === 'email' || identifier_type === 'name')) {
+      const inboundDob = input.identifiers && typeof input.identifiers.dob === 'string'
+        ? input.identifiers.dob
+        : null;
+      if (inboundDob) {
+        const storedDob = await db.query(
+          `SELECT identifier_value
+             FROM identifier_link
+            WHERE fan_id = $1 AND org_id = $2 AND identifier_type = 'dob'`,
+          [linkResult.rows[0].fan_id, org_id]
+        );
+        const storedValues = storedDob.rows.map((row) => row.identifier_value);
+        const birthdayConflicts = storedValues.length > 0
+          && storedValues.every((value) => value !== inboundDob);
+        if (birthdayConflicts) {
+          takeHardMatch = false;
+          if (identifier_type === 'email') emailDobVetoFanId = linkResult.rows[0].fan_id;
+          else nameDobVetoFanId = linkResult.rows[0].fan_id;
+        }
+      }
+    }
+
+    if (takeHardMatch) {
       // PATH A — hard match
       fan_id           = linkResult.rows[0].fan_id;
       match_type       = 'hard';
@@ -369,9 +423,12 @@ async function resolverEngine(input, db) {
       }
 
       // STEP 2 — score each candidate, track best
-      let bestMatch   = null;
-      let bestScore   = 0.0;
-      let bestSignals = [];
+      let bestMatch    = null;
+      let bestScore    = 0.0;
+      let bestSignals  = [];
+      let floorMatch   = null;
+      let floorScore   = -1;
+      let floorSignals = [];
 
       // Deduped, post-block set that reached the join — not a raw table scan.
       trace.candidates_considered = candidateRows.rows.length;
@@ -388,6 +445,21 @@ async function resolverEngine(input, db) {
           bestMatch   = candidate;
           bestSignals = result.signals_matched;
         }
+        // Score 0 still counts. Penalties can clamp a real name_plus_dob hit to 0,
+        // and `score > bestScore` would otherwise never record it.
+        if (hasNameAndDobAgreement(result.signals_matched) && result.score > floorScore) {
+          floorScore   = result.score;
+          floorMatch   = candidate;
+          floorSignals = result.signals_matched;
+        }
+      }
+
+      // A name-and-birthday agreement under 0.60 is still the pair a person
+      // should see, unless some other candidate already clears 0.60.
+      if (pathForMatch(bestScore, bestSignals) === 'B' && floorMatch !== null) {
+        bestScore   = floorScore;
+        bestMatch   = floorMatch;
+        bestSignals = floorSignals;
       }
 
       if (trace.candidates_considered === 0) {
@@ -410,9 +482,30 @@ async function resolverEngine(input, db) {
         trace.best_candidate_id = bestMatch ? bestMatch.id : null;
       }
 
-      // Soft link detection — guardian_email signal triggers staging write
+      // An exact email or exact name was found, and both birthdays exist and
+      // differ. Review that fan. The name-and-birthday block cannot retrieve
+      // them, because it requires the same birthday, so record the lookup here.
+      const dobVetoFanId = emailDobVetoFanId || nameDobVetoFanId;
+      if (dobVetoFanId) {
+        bestScore = 0;
+        bestSignals = [{ signal: 'dob_veto' }];
+        bestMatch = { id: dobVetoFanId };
+        trace.scoring_status = 'performed';
+        trace.skip_reason = null;
+        trace.best_score = 0;
+        trace.best_signals = bestSignals;
+        trace.best_candidate_id = dobVetoFanId;
+        if (!trace.candidate_ids.includes(dobVetoFanId)) {
+          trace.candidate_ids.push(dobVetoFanId);
+        }
+      }
+
+      // Soft link detection — guardian_email signal triggers staging write.
+      // child_name is NOT NULL. A null incoming name would abort the transaction
+      // and discard the review, so skip the side write and keep the resolution.
       const guardianEmailSignal = bestSignals.find(s => s.signal === 'guardian_email');
-      if (guardianEmailSignal !== undefined) {
+      if (guardianEmailSignal !== undefined && inbound.name != null) {
+        await db.query('SAVEPOINT staging_household');
         try {
           await db.query(
             `INSERT INTO staging_household_data
@@ -431,7 +524,9 @@ async function resolverEngine(input, db) {
               guardianEmailSignal.adjusted_score,
             ]
           );
+          await db.query('RELEASE SAVEPOINT staging_household');
         } catch (stagingErr) {
+          await db.query('ROLLBACK TO SAVEPOINT staging_household');
           logger.warn('soft link staging failed', {
             event:  'soft_link_staging_failure',
             error:  stagingErr.message,
@@ -440,7 +535,11 @@ async function resolverEngine(input, db) {
         }
       }
 
-      if (bestScore >= THRESHOLD_PATH_C) {
+      const resolutionPath = (emailDobVetoFanId || nameDobVetoFanId)
+        ? 'D'
+        : pathForMatch(bestScore, bestSignals);
+
+      if (resolutionPath === 'C') {
         // PATH C — high confidence soft match, hold for staff review (priority 1)
         trace.resolution_path = 'C';
         const new_fan_id = crypto.randomUUID();
@@ -472,8 +571,9 @@ async function resolverEngine(input, db) {
            bestScore, JSON.stringify(bestSignals)]
         );
 
-      } else if (bestScore >= THRESHOLD_PATH_D) {
-        // PATH D — lower confidence possible match, hold for staff review (priority 2)
+      } else if (resolutionPath === 'D') {
+        // PATH D — review. Score is in [0.60, 0.85), or name_plus_dob fired below 0.60.
+        // The queue stores bestScore, which may be under 0.60. Nothing auto-merges.
         trace.resolution_path = 'D';
         const new_fan_id = crypto.randomUUID();
         fan_id           = new_fan_id;
@@ -486,14 +586,16 @@ async function resolverEngine(input, db) {
            VALUES ($1, $2, 'platform', 1, NOW(), NOW())`,
           [new_fan_id, org_id]
         );
-        await db.query(
-          `INSERT INTO identifier_link
-             (fan_id, identifier_type, identifier_value, org_id, source_system,
-              schema_version, confidence_score, first_seen_at, last_seen_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-          [new_fan_id, identifier_type, identifier_value, org_id,
-           source_system, schema_version, bestScore]
-        );
+        if (!(emailDobVetoFanId && identifier_type === 'email')) {
+          await db.query(
+            `INSERT INTO identifier_link
+               (fan_id, identifier_type, identifier_value, org_id, source_system,
+                schema_version, confidence_score, first_seen_at, last_seen_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+            [new_fan_id, identifier_type, identifier_value, org_id,
+             source_system, schema_version, bestScore]
+          );
+        }
 
         conflict_id = crypto.randomUUID();
         await db.query(
@@ -505,7 +607,7 @@ async function resolverEngine(input, db) {
         );
 
       } else {
-        // PATH B — no match, new record (score below THRESHOLD_PATH_D or no candidates)
+        // PATH B — no name-and-birthday agreement and score below 0.60, or no candidates
         trace.resolution_path = 'B';
         const new_fan_id = crypto.randomUUID();
 
@@ -543,7 +645,7 @@ async function resolverEngine(input, db) {
     await db.query('COMMIT');
 
     // STEP 4B — Firestore sync — after COMMIT, outside transaction, new records only
-    if (is_new_record === true) {
+    if (is_new_record === true && firestoreSyncEnabled()) {
       try {
         await firestore.collection('golden-record').doc(fan_id).set({
           fan_id:         fan_id,
@@ -701,4 +803,6 @@ module.exports = {
   THRESHOLD_PATH_C,
   THRESHOLD_PATH_D,
   BLOCK_SIZE_CAP,
+  pathForMatch,
+  firestoreSyncEnabled,
 };

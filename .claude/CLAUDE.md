@@ -53,7 +53,8 @@
 2. Read CLAUDE.md (project knowledge — architecture, invariants, status)
 3. Read .claude/CLAUDE.md (this file — agent rules)
 4. Load only the file being worked on
-5. Begin
+5. Before any frontend planning or implementation, read `docs/engineering/frontend-engineering-framework.md` and follow it. Do not copy it into this file.
+6. Begin
 
 ---
 

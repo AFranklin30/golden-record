@@ -22,7 +22,8 @@ const { scoreMatch } = require('../../src/modules/probabilisticMatcher');
 const { resolverEngine } = require('../../src/modules/resolverEngine');
 
 const ORG_ID       = 'aaaaaaaa-0000-0000-0000-000000000001';
-const CANDIDATE_ID = 'bbbbbbbb-0000-0000-0000-000000000002';
+const CANDIDATE_ID       = 'bbbbbbbb-0000-0000-0000-000000000002';
+const FLOOR_CANDIDATE_ID = 'eeeeeeee-0000-0000-0000-000000000005';
 const FAN_ID       = 'cccccccc-0000-0000-0000-000000000003';
 const AUDIT_ID     = 'dddddddd-0000-0000-0000-000000000004';
 
@@ -113,7 +114,7 @@ function buildMockDb(overrides = {}) {
     const text    = typeof sql === 'string' ? sql : String(sql);
     const trimmed = text.trim();
 
-    if (trimmed === 'BEGIN' || trimmed === 'COMMIT' || trimmed === 'ROLLBACK') {
+    if (/^(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT)\b/i.test(trimmed)) {
       return Promise.resolve({ rows: [] });
     }
     if (/FROM org WHERE id/i.test(text)) {
@@ -531,14 +532,9 @@ describe('resolverEngine — inbound object construction', () => {
   // 'email': block key available, candidate retrievable, gate passes on
   // email_similarity — this is the one variant expected to reach scoreMatch.
   //
-  // 'guardian_email' / 'nfc_uid': deliberately NO override (all defaults —
-  // empty block probes). These reproduce the suite's 2 pre-existing
-  // failures (confirmed via a git-stash round-trip against pre-blocking
-  // resolverEngine.js: both already failed with "0 calls" before blocking
-  // landed — candidateRow carries no guardian_email, and nfc_uid's inbound
-  // has no signal fields at all, so passesSignalEligibilityGate always
-  // rejected the one candidate the old unnarrowed scan handed it). Left
-  // exactly as failing, per the DO NOT list.
+  // 'guardian_email' / 'nfc_uid': the block probes are empty. Blocking does
+  // not hand those calls a candidate, so scoreMatch is not called and the
+  // resolution is a new person.
   function setupOneCandidatePath(kind = 'email') {
     if (kind === 'email') {
       mockDb = buildMockDb({
@@ -571,39 +567,34 @@ describe('resolverEngine — inbound object construction', () => {
     );
   });
 
-  test('identifier_type guardian_email: inbound.guardian_email set, email null', async () => {
+  test('identifier_type guardian_email: no candidate, so scoreMatch is not called', async () => {
     setupOneCandidatePath('guardian_email');
     scoreMatch.mockReturnValue({ score: 0.0, signals_matched: [] });
 
-    await resolverEngine({ ...baseInput, identifier_type: 'guardian_email', identifier_value: 'parent@example.com' }, mockDb);
-
-    expect(scoreMatch).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        email:          null,
-        guardian_email: 'parent@example.com',
-        name:           null,
-      })
+    const result = await resolverEngine(
+      { ...baseInput, identifier_type: 'guardian_email', identifier_value: 'parent@example.com' },
+      mockDb
     );
+
+    expect(scoreMatch).not.toHaveBeenCalled();
+    expect(result.is_new_record).toBe(true);
+    expect(result.match_type).toBe('hard');
+    expect(result.conflict_id).toBeNull();
   });
 
-  test('identifier_type nfc_uid: all probabilistic signal fields null', async () => {
+  test('identifier_type nfc_uid: no block key, so scoreMatch is not called', async () => {
     setupOneCandidatePath('nfc_uid');
     scoreMatch.mockReturnValue({ score: 0.0, signals_matched: [] });
 
-    await resolverEngine({ ...baseInput, identifier_type: 'nfc_uid', identifier_value: 'AB:CD:EF:01' }, mockDb);
-
-    expect(scoreMatch).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        email:          null,
-        name:           null,
-        dob:            null,
-        zip:            null,
-        device_id:      null,
-        guardian_email: null,
-      })
+    const result = await resolverEngine(
+      { ...baseInput, identifier_type: 'nfc_uid', identifier_value: 'AB:CD:EF:01' },
+      mockDb
     );
+
+    expect(scoreMatch).not.toHaveBeenCalled();
+    expect(result.is_new_record).toBe(true);
+    expect(result.match_type).toBe('hard');
+    expect(result.conflict_id).toBeNull();
   });
 
   test('inbound.org_id is always set', async () => {
@@ -661,11 +652,16 @@ describe('resolverEngine — soft link detection', () => {
     adjusted_score:     0.65,
   };
 
+  const namedInput = {
+    ...baseInput,
+    identifiers: { name: 'sam smith', guardian_email: 'parent@example.com' },
+  };
+
   test('staging INSERT called when guardian_email signal is in bestSignals (Path D)', async () => {
     setupPathDWithGuardianEmail();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
-    await resolverEngine(baseInput, mockDb);
+    await resolverEngine(namedInput, mockDb);
 
     const stagingInsert = mockDb.query.mock.calls.find(
       c => typeof c[0] === 'string' && c[0].includes('staging_household_data')
@@ -679,7 +675,7 @@ describe('resolverEngine — soft link detection', () => {
     setupPathDWithGuardianEmail();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
-    await resolverEngine(baseInput, mockDb);
+    await resolverEngine(namedInput, mockDb);
 
     const stagingInsert = mockDb.query.mock.calls.find(
       c => typeof c[0] === 'string' && c[0].includes('staging_household_data')
@@ -692,7 +688,7 @@ describe('resolverEngine — soft link detection', () => {
     setupPathDWithGuardianEmail();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
-    await resolverEngine(baseInput, mockDb);
+    await resolverEngine(namedInput, mockDb);
 
     const stagingInsert = mockDb.query.mock.calls.find(
       c => typeof c[0] === 'string' && c[0].includes('staging_household_data')
@@ -717,7 +713,7 @@ describe('resolverEngine — soft link detection', () => {
     setupPathDWithGuardianEmailStagingFailure();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
-    const result = await resolverEngine(baseInput, mockDb);
+    const result = await resolverEngine(namedInput, mockDb);
 
     expect(result.match_type).toBe('conflict');
     expect(result.fan_id).toMatch(UUID_RE);
@@ -728,14 +724,28 @@ describe('resolverEngine — soft link detection', () => {
     setupPathDWithGuardianEmailStagingFailure();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
-    await expect(resolverEngine(baseInput, mockDb)).resolves.not.toThrow();
+    await expect(resolverEngine(namedInput, mockDb)).resolves.not.toThrow();
+  });
+
+  test('staging INSERT is skipped when the incoming name is null, and Path D still completes', async () => {
+    setupPathDWithGuardianEmail();
+    scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
+
+    const result = await resolverEngine(baseInput, mockDb);
+
+    const stagingInsert = mockDb.query.mock.calls.find(
+      c => typeof c[0] === 'string' && c[0].includes('staging_household_data')
+    );
+    expect(stagingInsert).toBeUndefined();
+    expect(result.match_type).toBe('conflict');
+    expect(result.conflict_id).toMatch(UUID_RE);
   });
 
   test('staging INSERT fires before Path D fan record creation', async () => {
     setupPathDWithGuardianEmail();
     scoreMatch.mockReturnValue({ score: 0.65, signals_matched: [guardianEmailSignal] });
 
-    await resolverEngine(baseInput, mockDb);
+    await resolverEngine(namedInput, mockDb);
 
     const sqlCalls = mockDb.query.mock.calls.map(c => c[0]);
     const stagingIdx = sqlCalls.findIndex(
@@ -791,6 +801,134 @@ describe('resolverEngine — resolution_path per setup helper (guards the fixtur
 
     expect(result.match_type).toBe('conflict');
     expect(tracePathOf(db)).toBe('D');
+  });
+
+});
+
+describe('resolverEngine — name-and-birthday review floor', () => {
+
+  function conflictInsertOf(db) {
+    return db.query.mock.calls.find(
+      c => typeof c[0] === 'string' && c[0].includes('INSERT INTO conflict_queue')
+    );
+  }
+
+  function setupTwoCandidates() {
+    return buildMockDb({
+      blockEmail: { rows: [{ fan_id: CANDIDATE_ID }, { fan_id: FLOOR_CANDIDATE_ID }] },
+      candidateJoin: {
+        rows: [
+          candidateRow,
+          { ...candidateRow, id: FLOOR_CANDIDATE_ID },
+        ],
+      },
+    });
+  }
+
+  test('name_plus_dob at 0.40 opens review and stores the real score', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({
+      score: 0.40,
+      signals_matched: [{ signal: 'name_plus_dob' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.40);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert).toBeDefined();
+    expect(conflictInsert[1][1]).toBe(CANDIDATE_ID);
+    expect(conflictInsert[1][4]).toBe(0.40);
+  });
+
+  test('a 0.40 score with no name_plus_dob signal stays a new fan and writes no queue row', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({
+      score: 0.40,
+      signals_matched: [{ signal: 'name_alone' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('hard');
+    expect(result.confidence_score).toBe(1.0);
+    expect(tracePathOf(db)).toBe('B');
+    expect(conflictInsertOf(db)).toBeUndefined();
+  });
+
+  test('name_plus_dob at 0.90 stays path C', async () => {
+    const db = setupPathC();
+    scoreMatch.mockReturnValue({
+      score: 0.90,
+      signals_matched: [{ signal: 'name_plus_dob' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('soft');
+    expect(result.confidence_score).toBe(0.90);
+    expect(tracePathOf(db)).toBe('C');
+  });
+
+  test('a 0.70 score with no name_plus_dob signal stays path D', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({ score: 0.70, signals_matched: [] });
+
+    const result = await resolverEngine(baseInput, db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.70);
+    expect(tracePathOf(db)).toBe('D');
+  });
+
+  test('a name-and-birthday candidate under 0.60 is reviewed ahead of a higher score that is still under 0.60', async () => {
+    const db = setupTwoCandidates();
+    scoreMatch
+      .mockReturnValueOnce({ score: 0.50, signals_matched: [{ signal: 'device_id' }] })
+      .mockReturnValueOnce({ score: 0.40, signals_matched: [{ signal: 'name_plus_dob' }] });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.40);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert[1][1]).toBe(FLOOR_CANDIDATE_ID);
+    expect(conflictInsert[1][4]).toBe(0.40);
+  });
+
+  test('a candidate that already clears 0.60 stays the winner over a lower name-and-birthday score', async () => {
+    const db = setupTwoCandidates();
+    scoreMatch
+      .mockReturnValueOnce({ score: 0.70, signals_matched: [{ signal: 'email_similarity' }] })
+      .mockReturnValueOnce({ score: 0.40, signals_matched: [{ signal: 'name_plus_dob' }] });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0.70);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert[1][1]).toBe(CANDIDATE_ID);
+    expect(conflictInsert[1][4]).toBe(0.70);
+  });
+
+  test('name_plus_dob clamped to 0 still opens review and stores 0', async () => {
+    const db = setupPathD();
+    scoreMatch.mockReturnValue({
+      score: 0,
+      signals_matched: [{ signal: 'name_plus_dob' }],
+    });
+
+    const result = await resolverEngine(baseInput, db);
+    const conflictInsert = conflictInsertOf(db);
+
+    expect(result.match_type).toBe('conflict');
+    expect(result.confidence_score).toBe(0);
+    expect(tracePathOf(db)).toBe('D');
+    expect(conflictInsert[1][4]).toBe(0);
   });
 
 });

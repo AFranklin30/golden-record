@@ -1,0 +1,23 @@
+# Free Ohio web service. Secret values are set in the Render dashboard, not here.
+services:
+  - type: web
+    name: golden-record
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: ohio
+    plan: free
+    branch: productization/remove-thunder
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: FIRESTORE_PROJECT_ID
+        sync: false
+      - key: JWT_PRIVATE_KEY
+        sync: false
+      - key: JWT_PUBLIC_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

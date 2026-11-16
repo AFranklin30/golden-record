@@ -1,0 +1,117 @@
+[
+  {
+    "id": "exact-email",
+    "expected_verdict": "match",
+    "source": "promoted_trace",
+    "inbound": { "email": "ada@example.com" },
+    "candidate": null,
+    "trace": {
+      "scoring_status": "skipped",
+      "skip_reason": "deterministic_match",
+      "resolution_path": "A"
+    }
+  },
+  {
+    "id": "nickname-same-birthday",
+    "expected_verdict": "match",
+    "inbound": { "name": "bob smith", "dob": "1990-04-02", "email": "bob.smith@example.com" },
+    "candidate": { "name": "robert smith", "dob": "1990-04-02", "email": "robert.smith@example.com" }
+  },
+  {
+    "id": "close-spelling",
+    "expected_verdict": "match",
+    "inbound": { "name": "jon smith", "dob": "1988-01-15", "email": "jon.smith@example.com" },
+    "candidate": { "name": "john smith", "dob": "1988-01-15", "email": "john.smith@example.com" }
+  },
+  {
+    "id": "missing-email",
+    "expected_verdict": "match",
+    "inbound": { "name": "grace hopper", "dob": "1990-12-09" },
+    "candidate": { "name": "grace hopper", "dob": "1990-12-09" }
+  },
+  {
+    "id": "different-email-same-name-birthday",
+    "expected_verdict": "match",
+    "inbound": { "name": "jane doe", "dob": "1992-06-01", "email": "jane.doe.2@example.com" },
+    "candidate": { "name": "jane doe", "dob": "1992-06-01", "email": "jane.doe.1@example.com" }
+  },
+  {
+    "id": "same-last-name-different-birthday",
+    "expected_verdict": "not_match",
+    "inbound": { "name": "john doe", "dob": "1991-05-06", "email": "john.doe@example.com" },
+    "candidate": { "name": "jane doe", "dob": "1990-04-02", "email": "jane.doe@example.com" }
+  },
+  {
+    "id": "messy-casing-and-date",
+    "expected_verdict": "match",
+    "inbound": { "name": "  Ada   Lovelace ", "dob": "4/2/1990", "email": "  ADA@Example.com " },
+    "candidate": { "name": "ada lovelace", "dob": "1990-04-02", "email": "ada@example.com" }
+  },
+  {
+    "id": "missing-birthday",
+    "expected_verdict": "match",
+    "inbound": { "name": "ada lovelace", "email": "ada.other@example.com" },
+    "candidate": { "name": "ada lovelace", "email": "ada@example.com" },
+    "trace": {
+      "scoring_status": "performed",
+      "skip_reason": null,
+      "block_results": [{ "key": "email", "block_size": 1, "dropped": false }]
+    }
+  },
+  {
+    "id": "conflicting-birthdays",
+    "expected_verdict": "not_match",
+    "inbound": { "name": "ada lovelace", "dob": "1991-04-02", "email": "ada@example.com" },
+    "candidate": { "name": "ada lovelace", "dob": "1990-04-02", "email": "ada@example.com" }
+  },
+  {
+    "id": "shared-zip-only",
+    "expected_verdict": "not_match",
+    "inbound": { "name": "bob smith", "email": "bob.zip@example.com", "zip": "73101" },
+    "candidate": { "name": "jane doe", "email": "jane.zip@example.com", "zip": "73101" }
+  },
+  {
+    "id": "same-phone",
+    "expected_verdict": "not_match",
+    "known_non_signal": "phone",
+    "phone": "4055550100",
+    "inbound": { "name": "bob smith" },
+    "candidate": { "name": "jane doe", "phone": "4055550100" }
+  },
+  {
+    "id": "shared-family-email",
+    "expected_verdict": "not_match",
+    "known_non_signal": "family_email",
+    "family_email": "family@example.com",
+    "inbound": { "name": "bob smith", "email": "bob.family@example.com" },
+    "candidate": { "name": "jane doe", "email": "jane.family@example.com" }
+  },
+  {
+    "id": "blocking-no-key",
+    "expected_verdict": "match",
+    "source": "promoted_trace",
+    "inbound": { "name": "ada lovelace", "dob": "1990-04-02" },
+    "candidate": null,
+    "trace": { "scoring_status": "skipped", "skip_reason": "no_block_key" }
+  },
+  {
+    "id": "blocking-empty",
+    "expected_verdict": "match",
+    "source": "promoted_trace",
+    "inbound": { "name": "ada lovelace", "dob": "1990-04-02" },
+    "candidate": null,
+    "trace": { "scoring_status": "skipped", "skip_reason": "empty_block" }
+  },
+  {
+    "id": "blocking-oversize",
+    "expected_verdict": "match",
+    "source": "promoted_trace",
+    "inbound": { "name": "ada lovelace", "dob": "1990-04-02" },
+    "candidate": null,
+    "trace": {
+      "scoring_status": "skipped",
+      "skip_reason": null,
+      "block_results": [{ "key": "guardian_email", "block_size": 51, "dropped": true }]
+    }
+  }
+]

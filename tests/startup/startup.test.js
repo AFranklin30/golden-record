@@ -17,8 +17,15 @@ describe('pool limits (FIX 2)', () => {
     expect(pool.options.idleTimeoutMillis).toBe(30000);
   });
 
-  test('connectionTimeoutMillis is 2000', () => {
-    expect(pool.options.connectionTimeoutMillis).toBe(2000);
+  test('connectionTimeoutMillis is 15000', () => {
+    expect(pool.options.connectionTimeoutMillis).toBe(15000);
+  });
+
+  test('an idle client error is logged and does not escape', () => {
+    expect(pool.listenerCount('error')).toBe(1);
+    expect(() => {
+      pool.emit('error', new Error('connection terminated unexpectedly'));
+    }).not.toThrow();
   });
 });
 

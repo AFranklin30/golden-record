@@ -5,6 +5,7 @@ Stack: Node.js / Express · Postgres (Cloud SQL) with RLS · Firestore (named DB
 Last updated: 2026-08-02.
 
 **This file = PROJECT KNOWLEDGE ONLY.** Agent behavior rules live in `.claude/CLAUDE.md`.
+Before planning or implementing frontend work, read and follow `docs/engineering/frontend-engineering-framework.md`. Product-specific UI decisions live in `docs/engineering/golden-record-dashboard.md`, not in that framework.
 Do not duplicate agent rules here — duplication causes drift. This file replaces the
 April v1.0 root CLAUDE.md and the project-knowledge tail that was appended to
 `.claude/CLAUDE.md`. Those were stale and contradicted the code (see Firestore section).
@@ -88,6 +89,21 @@ are hard to debug.
 
 `/health` is mounted OUTSIDE this stack entirely: its own stricter rate limiter (60s
 window / 10 req), no auth, no RLS, no JWT.
+
+The dashboard is a second stack, not a step inserted into the one above. Sign-in is
+outside it and uses `pool` directly. Every other dashboard route is:
+
+```
+rate limiter
+ → dashboardSessionMiddleware // httpOnly operator cookie, not the org API key
+ → rlsContextMiddleware
+ → correlationIdMiddleware
+ → handler
+```
+
+`operator` and `operator_session` are auth tables, like `org`: no RLS, because the
+session lookup happens before `app.current_org_id` is set. The organization API key
+never goes to the browser. See `docs/engineering/golden-record-dashboard.md`.
 
 ---
 
@@ -271,10 +287,10 @@ change.
 
 ## The four resolution paths (resolverEngine.js)
 
-- **PATH A** — exact identifier_link match (hard match). `match_type: 'hard'`, `is_new_record: false`, confidence 1.0. Updates `last_seen_at`. JOINs `fan` and checks `deleted_at IS NULL` (a deleted fan's tap falls through to PATH B).
+- **PATH A** — exact identifier_link match (hard match). `match_type: 'hard'`, `is_new_record: false`, confidence 1.0. Updates `last_seen_at`. JOINs `fan` and checks `deleted_at IS NULL` (a deleted fan's tap falls through to PATH B). Email and exact name are the exception: both birthdays present and different opens a review instead of this hard match. The current policy for every identifier is `docs/engineering/matching-policy.md`.
 - **PATH B** — no match. New fan created. `match_type: 'hard'`, `is_new_record: true`, confidence 1.0. (`'hard'` here means "this link is certain," not "fan existed before" — `is_new_record` answers that.)
 - **PATH C** — soft match, score ≥ 0.85. `match_type: 'soft'`. Mints a NEW fan and creates a pending `conflict_queue` row for staff review.
-- **PATH D** — soft match, 0.60 ≤ score < 0.85. `match_type: 'conflict'`. Also mints a new fan + pending conflict_queue row.
+- **PATH D** — review. Either 0.60 ≤ score < 0.85, or `name_plus_dob` fired and the score is under 0.60. `match_type: 'conflict'`. Mints a new fan + pending conflict_queue row. The queue stores the real score, which may be under 0.60.
 
 **Nothing auto-merges.** PATH C and PATH D both create a pending conflict_queue row and
 wait for a human. The difference is confidence and review priority, not automation.
@@ -338,6 +354,8 @@ a bug), then conflict penalties subtract once, then `Math.max(0.0, Math.min(1.0,
 Penalties are NOT recency-adjusted — a conflict is a conflict regardless of staleness.
 `signals_matched` holds only the best candidate's signals; only matters for PATH C/D.
 
+**Name-and-birthday review floor.** `pathForMatch` in resolverEngine. A candidate whose signals include `name_plus_dob` is PATH D even when penalties or recency leave the score under 0.60. The stored score stays the real score: Bob/Robert with the same birthday and different emails remains about 0.4 (0.7 minus the 0.3 email penalty) and still opens a conflict_queue row. The 0.3 email penalty stays. `name_alone` and every other signal still need 0.60. A score already at or above 0.85 stays PATH C. A stronger candidate that already clears 0.60 stays the winner. A DOB veto never reaches this floor: it returns no signals.
+
 **DOB veto — safety invariant, NOT a config dial.** Conflicting DOB (present on both,
 different) → hard block: `scoreMatch` returns
 `{score: 0.0, signals_matched: [], conflicts_detected: [dob], dob_veto: true}`
@@ -361,8 +379,10 @@ name and one birthday. Now 0.7. `name_plus_zip` does NOT suppress `name_alone`.
 - **name → FUZZY**, `levenshteinSimilarity >= SIGNAL_CONFIG.comparison.name_similarity_threshold`
   (0.85). 'jon smith'/'john smith' = 0.9 passes. Threshold is tighter than it looks: 'jon'
   vs 'john' ALONE is 0.75 and would fail — it only passes on full-name strings.
-  **Does NOT handle nicknames** ('bob smith'/'robert smith' ≈ 0.67) — Levenshtein measures
-  typos, not synonyms. Nickname matching remains unimplemented (own body of work).
+  Nicknames are a given-name list in `GIVEN_NAME_GROUPS` (`bob`/`robert`, and the
+  William, Elizabeth, James, and John groups). The first token must share a group
+  and the last token must pass the same 0.85 spelling check. `bob smith`/`robert smith`
+  matches. `bob smith`/`robert jones` does not. The 0.85 cutoff is unchanged.
 - `normalizedNameMatch` is called in four places (name_plus_dob, name_plus_zip, name_alone,
   detectConflicts). Changing the body re-aims all four consistently — that is intentional.
   A name that fuzzy-matches must not also be flagged as a name conflict.
@@ -389,7 +409,7 @@ least once.
 
 **Exports (Stage 7 added three):** `scoreMatch, detectConflicts, SIGNAL_CONFIG,
 getRecencyMultiplier, SCORER_VERSION, computeScorerFingerprint`. `SCORER_VERSION` is a
-composite string `'v1+<8-hex>'` — the `v1` prefix is hand-bumped when scoring LOGIC changes,
+composite string `'v2+<8-hex>'` — the version prefix is hand-bumped when scoring LOGIC changes (`v2` is the given-name list),
 the 8-hex suffix is an auto sha256 fingerprint over `SIGNAL_CONFIG` + `SIGNAL_WEIGHTS`
 (order-independent) that changes whenever CONFIG changes. Both are stamped onto every
 `resolution_trace` row (see Status — Stage 7) so a trace can be tied back to the exact
@@ -491,7 +511,8 @@ the SAME change. This has broken production THREE times (migrations 007, 009, 01
 event_type ×2, match_type ×1). Currently allowed: resolution, session_issued,
 conflict_confirmed, conflict_rejected, merge_reversed, household_created,
 household_member_added, household_member_updated, household_member_severed,
-household_member_aged_up, child_session_issued, profile_claimed, ingest_failure.
+household_member_aged_up, child_session_issued, profile_claimed, ingest_failure,
+import_identifiers_attached (migration_018), dashboard_session_issued (migration_019).
 Verify against the latest migration before any INSERT with a new event_type.
 
 ---
@@ -513,7 +534,7 @@ Key tables:
 - `resolved_by`/`merged_by`/`severed_by`/`aged_up_initiated_by` are TEXT = org_name, NOT individual staff identity (no staff auth layer exists).
 
 **Uniqueness indexes on identifier_link — two, scoped to disjoint row sets, they never conflict:**
-- `uq_identifier_per_org` on (identifier_type, identifier_value, org_id) **WHERE source_system != 'fan_pass'** — migration_013, revised 2026-06-28. The `WHERE` clause is load-bearing: siblings legitimately share `guardian_email`/`guardian_phone`, and an unfiltered index blocked adding a second child to any household. **Do NOT remove the WHERE clause to "simplify."**
+- `uq_identifier_per_org` on (identifier_type, identifier_value, org_id) **WHERE source_system != 'fan_pass' AND identifier_type is a hard type** — migration_013, narrowed by migration_018. Hard types: email, phone, nfc_uid, nba_id, ticketmaster_id, guardian_email, guardian_phone. name, dob, and zip may repeat across fans in one org; a shared birthday is not a unique person. The `source_system != 'fan_pass'` clause stays: siblings legitimately share `guardian_email`/`guardian_phone`. **Do NOT remove that clause, and do NOT put name, dob, or zip back into the unique set.**
 - `uq_identifier_link_managed` on (fan_id, identifier_type, org_id) WHERE source_system = 'fan_pass' — "one identifier per child," allows different children to share a guardian.
 
 ---

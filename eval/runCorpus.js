@@ -109,6 +109,7 @@ async function buildRun(client, org_id) {
     scorer_version_unknown:  0,
   };
 
+  const started = Date.now();
   const rows = corpusRows.map((corpusRow) => {
     const traceRow = corpusRow.trace_id != null ? (traceMap.get(corpusRow.trace_id) ?? null) : null;
     const labels   = corpusRow.trace_id != null ? (labelMap.get(corpusRow.trace_id) ?? []) : [];
@@ -125,6 +126,7 @@ async function buildRun(client, org_id) {
 
     return row;
   });
+  const duration_ms = Date.now() - started;
 
   // RETURN
   return {
@@ -135,6 +137,8 @@ async function buildRun(client, org_id) {
     thresholds:              { c: THRESHOLD_PATH_C, d: THRESHOLD_PATH_D },
     counts,
     scorecard:               harness.summarizeScorecard(rows),
+    blocking:                harness.summarizeBlocking(rows),
+    duration_ms,
     rows,
   };
 }

@@ -502,4 +502,48 @@ describe('resolverEngine — blocking wiring', () => {
     }
   });
 
+  // 16 — nickname plus same birthday and a different email still opens review.
+  // name_dob retrieves Robert. name_plus_dob scores 0.7, the email penalty
+  // subtracts 0.3, and the review floor keeps the real 0.4 score on path D.
+  test('16 — nickname, same birthday, different email opens review at 0.4', async () => {
+    const orgId = uuid();
+    const fanA  = uuid();
+    try {
+      await seedOrg(orgId, 't16');
+      await seedFan(fanA, orgId);
+      await seedIdentifier(fanA, 'name', 'robert smith', orgId);
+      await seedIdentifier(fanA, 'dob', '1990-01-15', orgId);
+      await seedIdentifier(fanA, 'email', 'robert@example.com', orgId);
+
+      const result = await resolverEngine(
+        baseInput(orgId, {
+          identifiers: {
+            name: 'bob smith',
+            dob: '1990-01-15',
+            email: 'bob@example.com',
+          },
+        }),
+        client
+      );
+      const trace = await getTrace(result.audit_event_id);
+
+      expect(result.match_type).toBe('conflict');
+      expect(result.confidence_score).toBeCloseTo(0.4, 5);
+      expect(trace.resolution_path).toBe('D');
+      expect(trace.candidates_considered).toBe(1);
+      expect(trace.candidate_ids).toEqual([fanA]);
+
+      const conflict = await client.query(
+        `SELECT fan_id_a, status, confidence_score FROM conflict_queue WHERE id = $1`,
+        [result.conflict_id]
+      );
+      expect(conflict.rows.length).toBe(1);
+      expect(conflict.rows[0].fan_id_a).toBe(fanA);
+      expect(conflict.rows[0].status).toBe('pending');
+      expect(parseFloat(conflict.rows[0].confidence_score)).toBeCloseTo(0.4, 5);
+    } finally {
+      await cleanupOrg(orgId);
+    }
+  });
+
 });

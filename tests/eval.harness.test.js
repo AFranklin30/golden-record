@@ -306,6 +306,13 @@ describe('eval/harness + eval/runCorpus — Stage 7 evaluation replay', () => {
     expect(row.expected_verdict).toBe('match');
   });
 
+  it('fixture (e): name and birthday under 0.60 replays as path D and keeps the real score', () => {
+    const row = findRow(corpusIdE);
+    expect(row.replayed_score).toBeLessThan(0.60);
+    expect(row.signals_matched.some((s) => s.signal === 'name_plus_dob')).toBe(true);
+    expect(row.replayed_path).toBe('D');
+  });
+
   it('7. fixture (f): score_source replayed, trace_score null, gate_status passed', () => {
     const row = findRow(corpusIdF);
     expect(row.score_source).toBe('replayed');
@@ -391,6 +398,8 @@ describe('eval/harness + eval/runCorpus — Stage 7 evaluation replay', () => {
 
   it('5. buildRun still returns counts.total and a scorecard with the same keys', () => {
     expect(typeof runResult.counts.total).toBe('number');
+    expect(typeof runResult.duration_ms).toBe('number');
+    expect(runResult.blocking).toEqual({ blocking_miss: 0, scoring_miss: 0 });
     expect(Object.keys(runResult.scorecard).sort()).toEqual(SCORECARD_KEYS);
   });
 });

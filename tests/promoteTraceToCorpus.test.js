@@ -12,12 +12,9 @@
 //   A — guards + shape, against an isolated fresh test org (own fan +
 //       fixture traces so 'skipped' and 'cross-org' states can be produced
 //       deliberately).
-//   B — the real thing: promotes (or finds already-promoted)
-//       DEMO_ORG_ID's Scenario 3 trace, then runs eval/runCorpus.js's
-//       buildRun against DEMO_ORG_ID and inspects the real output. This
-//       describe is idempotent — safe to run in a suite multiple times
-//       against the permanent demo org, matching tests/seedDemoOrg.test.js's
-//       "query fresh state, don't assume" convention.
+//   B — a fresh org with one performed trace and eight synthetic corpus
+//       rows. The permanent demo org is not read, so a second Scenario 3
+//       trace left there cannot change the result.
 //
 // Cleanup: describe A cleans up in FK order in afterAll; resolution_trace and
 // fan (FK-pinned by best_candidate_id) are left in place — inert, exactly as
@@ -39,10 +36,9 @@ const {
   DEFAULT_RATIONALE,
 } = require('../scripts/promoteTraceToCorpus');
 const { buildRun } = require('../eval/runCorpus');
-const { SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
+const { scoreMatch, SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
+const { FROZEN_CLOCK } = require('../eval/harness');
 const { NORMALIZATION_VERSION } = require('../src/modules/normalizer');
-
-const DEMO_ORG_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 const CANDIDATE_SNAPSHOT_KEYS = [
   'id', 'org_id', 'email', 'email_last_seen_at', 'name', 'name_last_seen_at',
@@ -257,8 +253,9 @@ describe('scripts/promoteTraceToCorpus — guards + shape (isolated test org)', 
   });
 });
 
-describe('scripts/promoteTraceToCorpus — real demo trace (decisions 2 & 3 observable)', () => {
+describe('scripts/promoteTraceToCorpus — fresh org trace (decisions 2 & 3 observable)', () => {
   let client;
+  let orgId;
   let corpusRow;
   let runResult;
   let SCENARIO_3_TRACE_ID;
@@ -266,55 +263,94 @@ describe('scripts/promoteTraceToCorpus — real demo trace (decisions 2 & 3 obse
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [DEMO_ORG_ID]);
 
-    // resolution_trace ids are generated per seed run (crypto.randomUUID() in
-    // resolverEngine.js) — never hardcode one. Scenario 3's trace is the only
-    // resolution_path='D' trace in the demo org with 2 candidate_ids: fan A is
-    // retrieved via the `email` block key and fan B via `name_dob` (see
-    // scripts/seedDemoOrg.js's seedScenario3). Every other PATH D trace in the
-    // demo org (Scenario 2, Scenario 5) retrieves exactly 1 candidate, so this
-    // predicate is unique without depending on this run's generated ids.
-    const traceLookup = await client.query(
-      `SELECT id FROM resolution_trace
-         WHERE org_id = $1 AND resolution_path = 'D'
-           AND array_length(candidate_ids, 1) = 2`,
-      [DEMO_ORG_ID]
+    orgId = crypto.randomUUID();
+    const fanId = crypto.randomUUID();
+    SCENARIO_3_TRACE_ID = crypto.randomUUID();
+    const hash = orgKeyHash('promote-fresh-' + orgId);
+    await client.query(
+      `INSERT INTO org (id, name, org_api_key_hash, is_active) VALUES ($1, $2, $3, true)`,
+      [orgId, '_promote_fresh', hash]
     );
-    if (traceLookup.rows.length !== 1) {
-      throw new Error(
-        `Expected exactly one Scenario 3 resolution_trace row for demo org ` +
-        `${DEMO_ORG_ID} (org_id + resolution_path='D' + 2 candidate_ids), found ` +
-        `${traceLookup.rows.length}. The demo org needs seeding — run ` +
-        `\`node scripts/seedDemoOrg.js\` (after \`bash scripts/resetLocalDb.sh\` ` +
-        `if the schema is stale) before running this test file.`
+    await client.query(`SELECT set_config('app.current_org_id', $1, false)`, [orgId]);
+    await client.query(
+      `INSERT INTO fan (id, org_id, stewardship_tier, record_version, created_at, updated_at)
+       VALUES ($1, $2, 'platform', 1, NOW(), NOW())`,
+      [fanId, orgId]
+    );
+    const seenAt = new Date(FROZEN_CLOCK);
+    for (const [type, value] of [['name', 'jane doe'], ['dob', '1990-04-02']]) {
+      await client.query(
+        `INSERT INTO identifier_link
+           (fan_id, org_id, identifier_type, identifier_value, source_system,
+            schema_version, confidence_score, first_seen_at, last_seen_at)
+         VALUES ($1, $2, $3, $4, 'csv_import', '1.0', 1.0, $5, $5)`,
+        [fanId, orgId, type, value, seenAt]
       );
     }
-    SCENARIO_3_TRACE_ID = traceLookup.rows[0].id;
 
-    // Idempotent: this test file may run more than once against the
-    // permanent demo org (tests/seedDemoOrg.test.js sets the precedent —
-    // query fresh state, don't assume a prior run happened).
-    const existing = await client.query(
-      `SELECT * FROM evaluation_corpus WHERE trace_id = $1`,
-      [SCENARIO_3_TRACE_ID]
+    const stored = await client.query(
+      `SELECT f.id, f.org_id,
+              NULL::text AS email, NULL::timestamptz AS email_last_seen_at,
+              il_name.identifier_value AS name, il_name.last_seen_at AS name_last_seen_at,
+              il_dob.identifier_value AS dob, il_dob.last_seen_at AS dob_last_seen_at,
+              NULL::text AS zip, NULL::timestamptz AS zip_last_seen_at,
+              NULL::text AS device_id, NULL::timestamptz AS device_last_seen_at,
+              NULL::text AS guardian_email, NULL::timestamptz AS guardian_email_last_seen_at
+         FROM fan f
+         JOIN identifier_link il_name
+           ON il_name.fan_id = f.id AND il_name.identifier_type = 'name' AND il_name.org_id = f.org_id
+         JOIN identifier_link il_dob
+           ON il_dob.fan_id = f.id AND il_dob.identifier_type = 'dob' AND il_dob.org_id = f.org_id
+        WHERE f.id = $1`,
+      [fanId]
     );
+    const inbound = {
+      org_id: orgId,
+      email: null,
+      name: 'jane doe',
+      dob: '1990-04-02',
+      zip: null,
+      device_id: null,
+      guardian_email: null,
+    };
+    const snapshot = JSON.parse(JSON.stringify(stored.rows[0]));
+    const scored = scoreMatch(snapshot, inbound, FROZEN_CLOCK);
 
-    if (existing.rows.length > 0) {
-      corpusRow = existing.rows[0];
-    } else {
-      const result = await promoteTraceToCorpus(client, DEMO_ORG_ID, SCENARIO_3_TRACE_ID, {
-        expected_verdict: 'not_match',
-        rationale: DEFAULT_RATIONALE,
-      });
-      const fresh = await client.query(
-        `SELECT * FROM evaluation_corpus WHERE id = $1`,
-        [result.corpus_id]
+    await insertTrace(client, {
+      id: SCENARIO_3_TRACE_ID,
+      org_id: orgId,
+      resolution_path: 'D',
+      scoring_status: 'performed',
+      skip_reason: null,
+      inbound_identifiers: inbound,
+      best_candidate_id: fanId,
+      best_score: scored.score,
+      scorer_version: 'v-from-trace',
+      normalization_version: NORMALIZATION_VERSION,
+      is_new_record: true,
+    });
+
+    for (let i = 0; i < 8; i += 1) {
+      await client.query(
+        `INSERT INTO evaluation_corpus
+           (id, org_id, source, inbound_identifiers, candidate_snapshot,
+            expected_verdict, scorer_version, created_by)
+         VALUES ($1, $2, 'synthetic', $3, $4, 'not_match', $5, 'test')`,
+        [crypto.randomUUID(), orgId, JSON.stringify(inbound), JSON.stringify(snapshot), SCORER_VERSION]
       );
-      corpusRow = fresh.rows[0];
     }
 
-    runResult = await buildRun(client, DEMO_ORG_ID);
+    const result = await promoteTraceToCorpus(client, orgId, SCENARIO_3_TRACE_ID, {
+      expected_verdict: 'not_match',
+      rationale: DEFAULT_RATIONALE,
+    });
+    const fresh = await client.query(
+      `SELECT * FROM evaluation_corpus WHERE id = $1`,
+      [result.corpus_id]
+    );
+    corpusRow = fresh.rows[0];
+    runResult = await buildRun(client, orgId);
   });
 
   afterAll(async () => {
@@ -374,6 +410,7 @@ describe('scripts/promoteTraceToCorpus — real demo trace (decisions 2 & 3 obse
     );
     const traceScorerVersion = traceResult.rows[0].scorer_version;
     expect(corpusRow.scorer_version).toBe(traceScorerVersion);
+    expect(traceScorerVersion).not.toBe(SCORER_VERSION);
 
     // Distinct-source proof: the script never imports probabilisticMatcher,
     // so it has no access to the SCORER_VERSION constant at all — the
