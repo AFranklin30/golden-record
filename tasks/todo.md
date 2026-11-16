@@ -204,7 +204,7 @@ Do not change the resolver, merge rules, households, navigation, or hosting.
 # Hosted Neon database and Render service are created
 
 ## Context
-Neon project `golden_record` is in AWS US East (Ohio). The production branch has migrations 001–019, role `golden_record_app`, and one organization. Render web service `golden-record` is live in Ohio on the free plan at `https://golden-record.onrender.com`. It builds `productization/remove-thunder` from the Dockerfile. The platform health check path is empty, so a sleeping database cannot fail a deploy. Cloud Run was not changed.
+Neon project `golden_record` is in AWS US East (Ohio). The production branch has migrations 001–019, role `golden_record_app`, and one organization. Render web service `golden-record` is live in Ohio on the free plan at `https://golden-record.onrender.com`. It builds `main` from the Dockerfile. The platform health check path is empty, so a sleeping database cannot fail a deploy. Cloud Run was not changed.
 
 ## Result
 - Production host is the direct Ohio endpoint. Pooling is off.

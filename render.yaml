@@ -7,7 +7,7 @@ services:
     dockerContext: .
     region: ohio
     plan: free
-    branch: productization/remove-thunder
+    branch: main
     envVars:
       - key: NODE_ENV
         value: production
