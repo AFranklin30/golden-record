@@ -4,9 +4,11 @@ Corrected 2026-11-16.
 
 ## Current sprint
 
-Sprint 0 — scope freeze and technical audit. IN PROGRESS.
+Sprint 0 is COMPLETED as of Nov 16, 2026. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-The audit was first written against `main` at `7fa878d092d027c89db4e2020558934b7e03e8aa`. Aaron challenged it. The engineering tip is `productization/remove-thunder` at `cc83b1b97867d70257b2445afd07221d817c996b`. This tracker now uses that commit. Sprint 1 has not been started.
+Sprint 1 is IN PROGRESS, started Nov 16, 2026. This entry is the plan only. The 200-row file has not been generated, and no new benchmark has been run.
+
+Source of truth is `main` at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` on that commit sets `branch: main` (D-020).
 
 ## What changed in the correction
 
@@ -25,7 +27,7 @@ The audit was first written against `main` at `7fa878d092d027c89db4e2020558934b7
 | `b388ad419c85e03c5c384590c4403a27b049dc51` | Import stays up when Firestore has no credentials. |
 | `cc83b1b97867d70257b2445afd07221d817c996b` | Exact email and exact name are held for review when every stored birthday differs. |
 
-Merging these into `main` was not done.
+Those commits are on `main` now, through pull request #9 (`15c807618e1d4640816ea8b3bae1c760cd484a78`) and `f867e62921e6332e6e02aeebeacba86351844699`.
 
 ## Tasks
 
@@ -37,7 +39,7 @@ Merging these into `main` was not done.
 | S0-04 Customer-data check | COMPLETED |
 | S0-05 First docs | COMPLETED, then corrected |
 | S0-07 Re-audit `cc83b1b` | COMPLETED |
-| S0-06 Aaron approves the corrected scope and the merge into `main` | NOT STARTED |
+| S0-06 Aaron approves the MVP scope as written | COMPLETED Nov 16, 2026 |
 
 ## Tip verification
 
@@ -66,6 +68,36 @@ The 46 failures on `main` were:
 
 On the tip, `firestoreSyncEnabled()` returns false when `FIRESTORE_SYNC` is not `on` and no credential file and no `K_SERVICE` are present. This machine has no ADC file. The tip run did not need an emulator.
 
+## Sprint 1 plan
+
+Goal: keep the 60-scenario benchmark intact, then measure a 200-record synthetic file with ground truth. No Sprint 2 work.
+
+What already exists on `main`:
+
+- `eval/benchmark.js` classifies a resolver trace. Automatic decisions are hard matches and path B. Reviews stay out of precision and recall. Policy mismatches are counted apart from those rates.
+- `tests/eval.benchmark.test.js` runs the 60 cases and rewrites `eval/reports/benchmark-report.md` and `.json`. The committed summary is 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews.
+- `scripts/buildSyntheticDemoCsv.js` builds 200 synthetic rows and writes `demo/synthetic-customers-200.csv`. The mix is 80 originals, 5 same-email copies, 10 nicknames, 10 spellings, 20 same name with a different email, 15 name+birthday+zip with no email, and 60 different first name and birthday. It checks lookalikes with `scoreMatch` only, prints the counts, and does not save labels. It does not call `importCustomers`.
+- `*.csv` is gitignored, so the CSV itself will not be committed.
+
+What is new:
+
+- A committed ground-truth file for those 200 rows.
+- An import of that file through the existing resolver.
+- A second report, `eval/reports/synthetic-200-report.md`, so the 60-scenario files are not overwritten.
+- Four demo examples taken from that run.
+
+| ID | Title | Status | Size |
+|---|---|---|---|
+| S1-01 | Re-run the 60-scenario benchmark and confirm it did not move | NOT STARTED | S |
+| S1-02 | Save ground truth for the existing 200-row mix | NOT STARTED | M |
+| S1-03 | Generate the CSV with `scripts/buildSyntheticDemoCsv.js` | NOT STARTED | S |
+| S1-04 | Import the 200 rows through `importCustomers` | NOT STARTED | M |
+| S1-05 | Measure precision, recall, false matches, missed matches, and review volume | NOT STARTED | M |
+| S1-06 | Write `eval/reports/synthetic-200-report.md` | NOT STARTED | S |
+| S1-07 | Pick four demo examples from the import | NOT STARTED | S |
+
+Firestore: on this `main`, `firestoreSyncEnabled()` skips the wallet write when no credential file exists, and `index.js` ignores a "Could not load the default credentials" rejection. `node scripts/seedDemoOrg.js` should not need a flag. The `--unhandled-rejections=warn` workaround belongs to `main` at `7fa878d`, before `b388ad4`. If a seed or import still dies on that rejection, rerun the process with `node --unhandled-rejections=warn`. That is an environment workaround, not a matcher change.
+
 ## Remaining
 
-S0-06 only. Do not start Sprint 1 from these docs until Aaron says the corrected scope is the one he wants, and until he decides whether `main` should receive `productization/remove-thunder`.
+S1-01 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it.

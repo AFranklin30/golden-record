@@ -1,23 +1,25 @@
 # Golden Record — Project Status
 
-Corrected 2026-11-16. The first audit measured `main` at `7fa878d092d027c89db4e2020558934b7e03e8aa`. That commit is stale.
+Updated Nov 16, 2026. Sprint 0 is COMPLETED. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-The engineering tip is `productization/remove-thunder` at `cc83b1b97867d70257b2445afd07221d817c996b`. It is 8 commits ahead of the merge-base with `main` (`762e469ac069c926de37ae064d18beebf932f2a4`). Those 8 commits are not on `main` and were not in the first audit. Merging this branch into `main` is Aaron's decision. It has not been done.
+Sprint 1 is IN PROGRESS as a plan. No new benchmark has been run and the 200-row file has not been generated.
+
+`main` is the source of truth at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` sets `branch: main` (D-020). The first audit's claim that `main` was still `7fa878d` and that the tip was unmerged is historical only.
 
 ## Dashboard
 
 | | |
 |---|---|
-| Health | Yellow for the commercial release process, because `main` does not contain the demo work. The tip itself has a passing root suite and a 60-scenario benchmark. |
+| Health | Green for Sprint 0. Sprint 1 is planned and not yet measured. |
 | Current milestone | Commercial demo on the existing engine. |
-| Current sprint | Sprint 0. IN PROGRESS until Aaron accepts this corrected scope. |
-| Code under review | `cc83b1b97867d70257b2445afd07221d817c996b` on `productization/remove-thunder`. |
-| `main` | `7fa878d092d027c89db4e2020558934b7e03e8aa`. Lags the tip. |
-| MVP tasks complete | 5 of 6 Sprint 0 tasks, plus the correction S0-07. Later sprint tasks below are re-scoped, not started as new work. |
-| Current task | S0-06. Aaron approves the corrected scope, including whether `productization/remove-thunder` becomes `main`. |
-| Blockers | The tip is not merged to `main`. No GitHub Actions workflow exists. The hosted service's git SHA is UNVERIFIED. |
-| Next action | Read the correction table in this file and approve or cut the remaining gaps. |
-| Next three priorities | 1. Decide whether to merge `productization/remove-thunder` into `main`. 2. Keep the 60-scenario benchmark as the regression baseline. 3. Do not rebuild the dashboard or the matcher. |
+| Current sprint | Sprint 1. IN PROGRESS since Nov 16, 2026. Sprint 0 is COMPLETED. |
+| `main` | `f867e62921e6332e6e02aeebeacba86351844699`. Render deploys this branch. |
+| Sprint 0 tasks | 7 of 7 COMPLETED. |
+| Sprint 1 tasks | 0 of 7 COMPLETED. Next is S1-01. |
+| Current task | S1-01. Re-run the 60-scenario benchmark and confirm it did not move. |
+| Blockers | The 200-row script does not save ground truth and does not run the resolver. `*.csv` is gitignored, so the CSV stays local. The 60-scenario test overwrites `eval/reports/benchmark-report.md`, so the new report needs its own file. |
+| Next action | S1-01, then S1-02. Do not generate the 200-row file until S1-02 defines the labels. |
+| Next three priorities | 1. Confirm the 60-scenario report is unchanged. 2. Persist ground truth for the existing 200-row mix. 3. Import that file through `importCustomers` and write a separate report. |
 
 ## Corrected test run
 

@@ -2,7 +2,7 @@
 
 Corrected 2026-11-16.
 
-The first version of this plan audited `main` at `7fa878d092d027c89db4e2020558934b7e03e8aa` and treated the dashboard, the 60-scenario benchmark, and CSV import as work still to build. Those three are already on `productization/remove-thunder` at `cc83b1b97867d70257b2445afd07221d817c996b`. This plan judges the demo against that commit. It does not merge the branch into `main`.
+`main` at `f867e62921e6332e6e02aeebeacba86351844699` is the source of truth. Render deploys `main`. Sprint 0 is COMPLETED. Sprint 1 is the 200-row measurement planned in `SPRINT-TRACKER.md` and `TASK-BOARD.md`. This file is not the sprint task list.
 
 Planning windows below are the envelopes Aaron set. They are not a new forecast. Most of Sprint 1 and Sprint 2, as first written, is already implemented on the tip. The remaining work is verification and the merge decision, not a second build.
 
@@ -12,7 +12,7 @@ A prospect can see the current engine: a measured benchmark, a review queue, a h
 
 ## Sprint 0 — scope freeze
 
-**Status:** IN PROGRESS. The re-audit is written. Aaron has not approved it.
+**Status:** COMPLETED Nov 16, 2026. Aaron approved `SCOPE-AND-BACKLOG.md` as written.
 
 **Deliverable:** this folder.
 
@@ -22,7 +22,7 @@ A prospect can see the current engine: a measured benchmark, a review queue, a h
 
 ## Sprint 1 — benchmark
 
-**Status:** The 60-scenario benchmark is already on the tip. Do not rebuild it.
+**Status:** IN PROGRESS since Nov 16, 2026. Plan only. The task list is S1-01 through S1-07.
 
 **What was verified:** `tests/eval.benchmark.test.js` during `npx jest --forceExit` rewrote the report and the summary was 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. The report files were restored afterward.
 

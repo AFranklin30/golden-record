@@ -1,17 +1,17 @@
 # Golden Record — Decision Log
 
 Corrected 2026-11-16 against `cc83b1b97867d70257b2445afd07221d817c996b`.
-Items stay **PROPOSED** until Aaron accepts them. Nothing here merges a branch.
+D-019 records Aaron's approval of the MVP scope. D-020 records that `main` is the source of truth. Earlier D-numbers stay as the audit history.
 
 ## D-012 — The audit target is the unmerged tip, not `main`
 
-**Status:** PROPOSED
+**Status:** SUPERSEDED by D-020 on Nov 16, 2026
 
 **Decision.** Treat `productization/remove-thunder` at `cc83b1b97867d70257b2445afd07221d817c996b` as the code the commercial demo is judged against. `main` at `7fa878d092d027c89db4e2020558934b7e03e8aa` is behind that tip. Merging the tip into `main` is a separate decision and was not done in this correction.
 
 **Why.** `git fetch --all --prune` left `origin/main` at `7fa878d`. The 8 commits that contain the benchmark, the dashboard, the CSV import, and the policy fixes are reachable only from `origin/productization/remove-thunder`. The first audit never checked out that ref.
 
-**Alternative.** Keep planning from `main` and rebuild the demo there. Rejected. It would duplicate work that already exists on the tip.
+**Superseded Nov 16, 2026 by D-020.** Pull request #9 merged this tip into `main`. `main` is no longer behind.
 
 ## D-013 — The regression baseline is the 60-scenario benchmark
 
@@ -68,6 +68,24 @@ Measured again on 2026-11-16 during `npx jest --forceExit`: 60 scenarios, 0 poli
 **Decision.** Keep `tests/routes/tenantIsolation.test.js` as the check. It creates `golden_record_app` with `NOSUPERUSER NOBYPASSRLS`. That file passed inside the 691-test run. Do not start a separate RLS project before the demo.
 
 **Limit.** The Jest process itself still connected as the local `postgres` superuser. `operator` and `operator_session` have no RLS, by the comment in `migration_019.sql`, because sign-in happens before the tenant setting exists.
+
+## D-019 — Aaron approved the full MVP scope
+
+**Status:** APPROVED
+
+**Decision.** Aaron approved the full MVP scope in `SCOPE-AND-BACKLOG.md` as written, Nov 16, 2026.
+
+**Why.** That file is the scope freeze from Sprint 0. Approval closes S0-06. Sprint 1 can start. Sprint 2 and later stay out of this board until their own sprint.
+
+## D-020 — `main` is the source of truth, and Render deploys `main`
+
+**Status:** APPROVED
+
+**Decision.** `main` is the source of truth. Render deploys from `main`. At `f867e62921e6332e6e02aeebeacba86351844699`, `render.yaml` sets `branch: main`.
+
+**Why.** Commit `f867e62921e6332e6e02aeebeacba86351844699` ("Deploy main so production follows the branch the work now lands on") changed that line after pull request #9 merged `productization/remove-thunder`. Sprint 1 plans against this `main`, not against a side branch.
+
+**Alternative.** Keep treating `cc83b1b` as an unmerged tip. That was true during the correction earlier on Nov 16. It is not true after `f867e62`.
 
 ## D-004 — Do not restore the deleted client evaluation
 
