@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "seed": "synthetic-set-b-v1",
+  "import_order": "Set A rows 1-200 in the original builder order, then Set B anchors in scenario order (rows 201-280), then Set B probes in that same case order (rows 281-360).",
+  "source_commit": "0a56806f59a69fe2114891893918887d55c85ce5",
+  "stamp_note": "source_commit is the commit that contains the dataset generator and the 360-row labels. This manifest names that commit from a later edit. A commit cannot contain its own hash. Check out source_commit and run node scripts/buildSyntheticDemoCsv.js --labels to rebuild the same label file and the same Set A CSV. That rebuild names this same commit.",
+  "label_file": "demo/synthetic-ground-truth-v2.json",
+  "label_sha256": "0db2aa4810cd02583749830190f8877ca66b0d681882641099c57ac1a92af8b4",
+  "set_a_csv_sha256": "3fb01339fa4144d63a566c97a39fe3869cd96a1c9d4df86fb288a3a783bf2bc7",
+  "set_b_csv_sha256": "9c010f0ee4fa88ecc4b6e57f7cae4f8766a42475640e0ba40a02ec9862f062f8",
+  "row_count": 360,
+  "set_a_rows": 200,
+  "set_b_rows": 160,
+  "disagreement_count": 32
+}
