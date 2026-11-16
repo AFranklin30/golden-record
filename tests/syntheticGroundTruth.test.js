@@ -146,6 +146,7 @@ describe('synthetic ground truth v2', () => {
     expect(manifest.label_sha256).toBe(hash);
     expect(manifest.row_count).toBe(360);
     expect(manifest.disagreement_count).toBe(32);
-    expect(manifest.source_commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(manifest.source_commit).toBe('0a56806f59a69fe2114891893918887d55c85ce5');
+    expect(manifest.stamp_note).toMatch(/cannot contain its own hash/);
   });
 });

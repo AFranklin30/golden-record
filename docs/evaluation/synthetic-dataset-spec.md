@@ -145,6 +145,8 @@ Small buckets are behavior checks, not rates. With zero errors in n rows, the ru
 
 `demo/synthetic-ground-truth-v2.json` is hashed in `demo/synthetic-dataset-manifest.json` before S1-04. The manifest records the seed, the source commit, and that label hash. Do not edit the labels after seeing import results. A correction is a new version with a changelog line.
 
+`source_commit` is `0a56806f59a69fe2114891893918887d55c85ce5`. That commit contains `scripts/syntheticDataset.js` and the 360-row label file. The manifest names it from a later edit. A commit cannot contain its own hash, so the stamp is not the commit that wrote the stamp. Check out `source_commit` and run the rebuild command below. The label file and the Set A CSV come back with the hashes in the manifest, and the rebuilt manifest names that same commit.
+
 Rebuild:
 
 ```

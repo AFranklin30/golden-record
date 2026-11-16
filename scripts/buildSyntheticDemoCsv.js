@@ -14,7 +14,6 @@
 // the scorer. demo/synthetic-200-ground-truth.json is left as it was.
 
 const crypto = require('crypto');
-const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -33,12 +32,13 @@ function writeText(fileName, text) {
   fs.writeFileSync(path.join(DEMO, fileName), text);
 }
 
+// The commit that contains scripts/syntheticDataset.js and the 360-row label
+// file. A later commit records this value. This file cannot name the commit
+// that adds the constant, because that commit's hash depends on this text.
+const SOURCE_COMMIT = '0a56806f59a69fe2114891893918887d55c85ce5';
+
 function sourceCommit() {
-  try {
-    return execSync('git rev-parse HEAD', { cwd: path.join(__dirname, '..'), encoding: 'utf8' }).trim();
-  } catch (err) {
-    return 'unknown';
-  }
+  return SOURCE_COMMIT;
 }
 
 function writeLabels() {
@@ -54,6 +54,7 @@ function writeLabels() {
     seed: SEED,
     import_order: 'Set A rows 1-200 in the original builder order, then Set B anchors in scenario order (rows 201-280), then Set B probes in that same case order (rows 281-360).',
     source_commit: sourceCommit(),
+    stamp_note: 'source_commit is the commit that contains the dataset generator and the 360-row labels. This manifest names that commit from a later edit. A commit cannot contain its own hash. Check out source_commit and run node scripts/buildSyntheticDemoCsv.js --labels to rebuild the same label file and the same Set A CSV. That rebuild names this same commit.',
     label_file: 'demo/synthetic-ground-truth-v2.json',
     label_sha256: crypto.createHash('sha256').update(labelText).digest('hex'),
     set_a_csv_sha256: crypto.createHash('sha256').update(csvText(dataset.rows)).digest('hex'),
