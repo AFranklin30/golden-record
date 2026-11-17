@@ -96,8 +96,8 @@
     },
     "found_rate": {
       "numerator": 77,
-      "denominator": 90,
-      "value": 0.8556
+      "denominator": 99,
+      "value": 0.7778
     },
     "review_percentage_of_eligible": {
       "numerator": 65,
@@ -187,8 +187,8 @@
       },
       "found_rate": {
         "numerator": 55,
-        "denominator": 55,
-        "value": 1
+        "denominator": 60,
+        "value": 0.9167
       },
       "review_percentage_of_eligible": {
         "numerator": 40,
@@ -267,8 +267,8 @@
       },
       "found_rate": {
         "numerator": 22,
-        "denominator": 35,
-        "value": 0.6286
+        "denominator": 39,
+        "value": 0.5641
       },
       "review_percentage_of_eligible": {
         "numerator": 25,
@@ -431,8 +431,8 @@
       },
       "found_rate": {
         "numerator": 0,
-        "denominator": 0,
-        "value": null
+        "denominator": 5,
+        "value": 0
       },
       "review_percentage_of_eligible": {
         "numerator": 0,
@@ -846,8 +846,8 @@
       },
       "found_rate": {
         "numerator": 0,
-        "denominator": 0,
-        "value": null
+        "denominator": 4,
+        "value": 0
       },
       "review_percentage_of_eligible": {
         "numerator": 0,
@@ -1259,8 +1259,8 @@
       },
       "found_rate": {
         "numerator": 0,
-        "denominator": 0,
-        "value": null
+        "denominator": 5,
+        "value": 0
       },
       "review_percentage_of_eligible": {
         "numerator": 0,
@@ -2089,8 +2089,8 @@
       },
       "found_rate": {
         "numerator": 0,
-        "denominator": 0,
-        "value": null
+        "denominator": 4,
+        "value": 0
       },
       "review_percentage_of_eligible": {
         "numerator": 0,

@@ -26,24 +26,26 @@ The rates below are pairwise: one probe, one anchor, one decision. Record counts
 
 Set A and Set B are the figures to read. The pooled line adds the same counts. It is not one population.
 
-- Set A precision: 15 / 15 = 1; zero errors in 15, rule-of-three upper bound 3 / 15 = 0.2.
-- Set A recall: 15 / 15 = 1; zero errors in 15, rule-of-three upper bound 3 / 15 = 0.2.
-- Set A found rate: 55 / 55 = 1.
+- Set A precision: 15 / 15 = 1; zero errors across these 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance, and it does not mean the true rate is necessarily below 20%.
+- Set A recall: 15 / 15 = 1; zero errors across these 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance, and it does not mean the true rate is necessarily below 20%.
+- Set A found rate: 55 / 60 = 0.9167.
 - Set A counts: TP 15, FP 0, FN 0, TN 60, reviews 40, replays 5, import errors 0.
+The 3/15 bound covers only Set A's 15 automatic decisions. It does not cover Set A's 40 reviews or Set A's 5 replays.
 - Set B precision: 13 / 32 = 0.4063.
 - Set B recall: 13 / 26 = 0.5.
-- Set B found rate: 22 / 35 = 0.6286.
+- Set B found rate: 22 / 39 = 0.5641.
 - Set B counts: TP 13, FP 19, FN 13, TN 0, reviews 25, replays 0, import errors 10.
+Set B was designed to produce the 32 observed identity errors: 19 distinct-person probes expected to auto-merge and 13 same-person probes expected to be stored as new. Those 32 rows are the entire error count, and Set B has 0 true negatives. Its purpose is to expose policy weaknesses under adversarial conditions. It does not represent a real-world data distribution and must not be presented as a real-world accuracy estimate.
 - Pooled precision: 28 / 47 = 0.5957.
 - Pooled recall: 28 / 41 = 0.6829.
-- Pooled found rate: 77 / 90 = 0.8556.
+- Pooled found rate: 77 / 99 = 0.7778.
 - Pooled counts: TP 28, FP 19, FN 13, TN 60, reviews 65, replays 5, import errors 10.
 
 False matches: 19. Distinct-person auto-merges: 19 (19 linked to the anchor, 0 linked elsewhere). Same-person auto-merges onto another fan: 0.
 
 Missed matches: 13. These are same-person probes stored as new people. Same-person reviews held out of recall: 49.
 
-Found rate counts a same-person probe the engine auto-merged to the anchor or held against the anchor. It is not recall.
+Found rate follows the dataset spec: true positives plus same-person reviews, divided by all same-person probes. It is not recall. Set A and Set B use that same denominator. The earlier pooled denominator was 77 / 90. It left out 5 same-person import replays and 4 RP-2 import errors. Neither group is a review. Replay rows in the review count: 0. Import-error rows in the review count: 0.
 
 Recall leaves out same-person reviews, replays, and import errors. Set A recall can be 1 while many same-person probes are reviews or replays. Those exclusions are the counts above.
 
@@ -109,7 +111,7 @@ A replay returns the earlier row. It is not a new person and it is not a duplica
 | first_seen | 80 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) | n/a (denominator 0) |
 | idempotency | 5 | 5 | 0 | 0 | 0 | 0 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) | n/a (denominator 0) |
 | floor_review | 40 | 40 | 40 | 0 | 0 | 0 | 0 | 40 | n/a (denominator 0) | n/a (denominator 0) | 40 / 40 = 1 |
-| exact_name | 15 | 15 | 15 | 15 | 0 | 0 | 0 | 0 | 15 / 15 = 1; zero errors in 15, rule-of-three upper bound 3 / 15 = 0.2 | 15 / 15 = 1; zero errors in 15, rule-of-three upper bound 3 / 15 = 0.2 | 0 / 15 = 0 |
+| exact_name | 15 | 15 | 15 | 15 | 0 | 0 | 0 | 0 | 15 / 15 = 1; zero errors across these 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance, and it does not mean the true rate is necessarily below 20% | 15 / 15 = 1; zero errors across these 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance, and it does not mean the true rate is necessarily below 20% | 0 / 15 = 0 |
 | easy_negative | 60 | 60 | 60 | 0 | 0 | 0 | 60 | 0 | n/a (denominator 0) | n/a (denominator 0) | 0 / 60 = 0 |
 | shared_family_email | 34 | 17 | 17 | 0 | 9 | 0 | 0 | 8 | 0 / 9 = 0 | n/a (denominator 0) | 8 / 17 = 0.4706 |
 | recycled_phone | 20 | 10 | 0 | 0 | 0 | 0 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) | n/a (denominator 0) |
@@ -128,7 +130,7 @@ Probe decisions only. Anchor rows in the same scenario are introductions and sta
 | A-NICKNAME | 10 | 0 | 0 | 0 | 0 | 0 | 10 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) |
 | A-SPELLING | 10 | 0 | 0 | 0 | 0 | 0 | 10 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) |
 | A-SAME-NAME | 20 | 0 | 0 | 0 | 0 | 0 | 20 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) |
-| A-NO-EMAIL | 15 | 0 | 15 | 0 | 0 | 0 | 0 | 0 | 0 | 15 / 15 = 1; zero errors in 15, rule-of-three upper bound 3 / 15 = 0.2 | 15 / 15 = 1; zero errors in 15, rule-of-three upper bound 3 / 15 = 0.2 |
+| A-NO-EMAIL | 15 | 0 | 15 | 0 | 0 | 0 | 0 | 0 | 0 | 15 / 15 = 1; zero errors across these 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance, and it does not mean the true rate is necessarily below 20% | 15 / 15 = 1; zero errors across these 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance, and it does not mean the true rate is necessarily below 20% |
 | A-DIFF-DOB | 60 | 0 | 0 | 0 | 0 | 60 | 0 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) |
 | SFE-1 | 8 | 8 | 0 | 0 | 0 | 0 | 8 | 0 | 0 | n/a (denominator 0) | n/a (denominator 0) |
 | SFE-2 | 6 | 6 | 0 | 6 | 0 | 0 | 0 | 0 | 0 | 0 / 6 = 0 | n/a (denominator 0) |
@@ -320,7 +322,9 @@ The rows are a designed synthetic set. A rate here is not a rate for a live fan 
 
 Small scenarios are behavior checks. The ratio is the count over the denominator in that row.
 
-Reviews were not confirmed or rejected. Precision and recall describe automatic associations only. Found rate is the wider count, and it is named separately.
+Reviews were not confirmed or rejected. Precision and recall describe automatic associations only. Found rate divides true positives plus same-person reviews by all same-person probes.
+
+Set B was designed to produce the 32 observed identity errors: 19 distinct-person probes expected to auto-merge and 13 same-person probes expected to be stored as new. Those 32 rows are the entire error count, and Set B has 0 true negatives. Its purpose is to expose policy weaknesses under adversarial conditions. It does not represent a real-world data distribution and must not be presented as a real-world accuracy estimate.
 
 The 60-scenario benchmark is a different population. Its precision is not a baseline for this file.
 

@@ -239,10 +239,7 @@ function slice(rows) {
   const eligible = countOf(counts, ELIGIBLE_CLASSES);
   const probes = rows.filter((row) => row.role === 'probe').length;
   const foundNumerator = truePositives + counts.review_same_person;
-  const foundDenominator = foundNumerator
-    + falseNegatives
-    + counts.review_wrong_target_same_person
-    + counts.false_positive_wrong_fan;
+  const foundDenominator = rows.filter((row) => row.role === 'probe' && row.identity_truth === 'same_person').length;
 
   return {
     rows: rows.length,
@@ -593,9 +590,12 @@ function evaluate(rows, attestation) {
 
 function showFraction(item) {
   if (!item || item.denominator === 0) return 'n/a (denominator 0)';
-  const bound = item.rule_of_three
-    ? `; zero errors in ${item.denominator}, rule-of-three upper bound 3 / ${item.denominator} = ${item.rule_of_three.value}`
-    : '';
+  let bound = '';
+  if (item.rule_of_three && item.denominator === 15) {
+    bound = '; zero errors across these 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance, and it does not mean the true rate is necessarily below 20%';
+  } else if (item.rule_of_three) {
+    bound = `; zero errors in ${item.denominator}, rule-of-three upper bound 3 / ${item.denominator} = ${item.rule_of_three.value}`;
+  }
   return `${item.numerator} / ${item.denominator} = ${item.value}${bound}`;
 }
 
@@ -649,10 +649,14 @@ function formatReport(metrics) {
   lines.push(`- Set A recall: ${showFraction(setA.recall)}.`);
   lines.push(`- Set A found rate: ${showFraction(setA.found_rate)}.`);
   lines.push(`- Set A counts: ${countLine(setA)}.`);
+  if (setA.precision.rule_of_three && setA.precision.denominator === 15) {
+    lines.push(`The 3/15 bound covers only Set A's ${setA.precision.denominator} automatic decisions. It does not cover Set A's ${setA.reviews} reviews or Set A's ${setA.replays} replays.`);
+  }
   lines.push(`- Set B precision: ${showFraction(setB.precision)}.`);
   lines.push(`- Set B recall: ${showFraction(setB.recall)}.`);
   lines.push(`- Set B found rate: ${showFraction(setB.found_rate)}.`);
   lines.push(`- Set B counts: ${countLine(setB)}.`);
+  lines.push(`Set B was designed to produce the ${setB.false_matches + setB.missed_matches} observed identity errors: ${setB.false_matches} distinct-person probes expected to auto-merge and ${setB.missed_matches} same-person probes expected to be stored as new. Those ${setB.false_matches + setB.missed_matches} rows are the entire error count, and Set B has ${setB.true_negatives} true negatives. Its purpose is to expose policy weaknesses under adversarial conditions. It does not represent a real-world data distribution and must not be presented as a real-world accuracy estimate.`);
   lines.push(`- Pooled precision: ${showFraction(overall.precision)}.`);
   lines.push(`- Pooled recall: ${showFraction(overall.recall)}.`);
   lines.push(`- Pooled found rate: ${showFraction(overall.found_rate)}.`);
@@ -662,7 +666,14 @@ function formatReport(metrics) {
   lines.push('');
   lines.push(`Missed matches: ${overall.missed_matches}. These are same-person probes stored as new people. Same-person reviews held out of recall: ${overall.review_same_person}.`);
   lines.push('');
-  lines.push('Found rate counts a same-person probe the engine auto-merged to the anchor or held against the anchor. It is not recall.');
+  const samePersonReplays = metrics.rows.filter((row) => row.identity_class === 'replay' && row.identity_truth === 'same_person').length;
+  const samePersonImportErrors = metrics.rows.filter((row) => row.identity_class === 'import_error' && row.identity_truth === 'same_person').length;
+  const rp2 = metrics.import_errors.groups.find((group) => group.scenario_id === 'RP-2');
+  const rp2Same = rp2 && rp2.identity_truth.same_person ? rp2.identity_truth.same_person : 0;
+  const replayReviews = metrics.rows.filter((row) => row.identity_class === 'replay' && row.in_review_volume).length;
+  const importErrorReviews = metrics.rows.filter((row) => row.identity_class === 'import_error' && row.in_review_volume).length;
+  const earlierFoundDenominator = overall.found_rate.denominator - samePersonReplays - samePersonImportErrors;
+  lines.push(`Found rate follows the dataset spec: true positives plus same-person reviews, divided by all same-person probes. It is not recall. Set A and Set B use that same denominator. The earlier pooled denominator was ${overall.found_rate.numerator} / ${earlierFoundDenominator}. It left out ${samePersonReplays} same-person import replays and ${rp2Same} RP-2 import errors. Neither group is a review. Replay rows in the review count: ${replayReviews}. Import-error rows in the review count: ${importErrorReviews}.`);
   lines.push('');
   lines.push('Recall leaves out same-person reviews, replays, and import errors. Set A recall can be 1 while many same-person probes are reviews or replays. Those exclusions are the counts above.');
   lines.push('');
@@ -787,7 +798,9 @@ function formatReport(metrics) {
   lines.push('');
   lines.push('Small scenarios are behavior checks. The ratio is the count over the denominator in that row.');
   lines.push('');
-  lines.push('Reviews were not confirmed or rejected. Precision and recall describe automatic associations only. Found rate is the wider count, and it is named separately.');
+  lines.push('Reviews were not confirmed or rejected. Precision and recall describe automatic associations only. Found rate divides true positives plus same-person reviews by all same-person probes.');
+  lines.push('');
+  lines.push(`Set B was designed to produce the ${setB.false_matches + setB.missed_matches} observed identity errors: ${setB.false_matches} distinct-person probes expected to auto-merge and ${setB.missed_matches} same-person probes expected to be stored as new. Those ${setB.false_matches + setB.missed_matches} rows are the entire error count, and Set B has ${setB.true_negatives} true negatives. Its purpose is to expose policy weaknesses under adversarial conditions. It does not represent a real-world data distribution and must not be presented as a real-world accuracy estimate.`);
   lines.push('');
   lines.push('The 60-scenario benchmark is a different population. Its precision is not a baseline for this file.');
   lines.push('');

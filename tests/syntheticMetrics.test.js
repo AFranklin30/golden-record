@@ -235,7 +235,7 @@ describe('synthetic identity metrics', () => {
     expect(metrics.overall.reviews).toBe(1);
     expect(metrics.overall.replays).toBe(1);
     expect(metrics.overall.import_errors).toBe(1);
-    expect(metrics.overall.found_rate).toMatchObject({ numerator: 2, denominator: 3 });
+    expect(metrics.overall.found_rate).toMatchObject({ numerator: 2, denominator: 5 });
     expect(metrics.reviews.total).toBe(1);
     expect(metrics.reviews.eligible).toBe(5);
     expect(metrics.new_records.engine_outcome_new).toBe(3);

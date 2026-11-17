@@ -104,12 +104,14 @@ This is the same automatic-versus-review split the 60-scenario report uses. The 
 
 ## Found rate
 
-Found rate is not recall. It counts a duplicate the engine either auto-merged to the anchor or held against the anchor.
+Found rate is not recall. The dataset spec defines it as true positives plus same-person reviews, divided by all same-person probes.
 
 - Numerator: `true_positive` + `review_same_person`.
-- Denominator: that numerator, plus `false_negative`, plus `review_wrong_target_same_person`, plus `false_positive_wrong_fan`.
+- Denominator: every probe with `identity_truth` `same_person`.
 
-Replays and import errors stay outside.
+A same-person replay is in the denominator. It is not a review, so it is not in the numerator. A same-person import error is in the denominator. It is not a review, so it is not in the numerator. A missed match is in the denominator and not in the numerator. A same-person review linked to the anchor is in both.
+
+Set A and Set B use this same denominator. An earlier denominator left out same-person replays and same-person import errors. The spec's denominator keeps them in.
 
 ## False matches and missed matches
 
@@ -171,9 +173,13 @@ This comparison does not change a class and it is not an identity result.
 
 Set A and Set B are scored with the same rules and printed separately. A pooled line adds the counts and prints the pooled denominators. That line is a sum of two designs. It is not one population. The summary leads with the two sets.
 
+Set B was designed to produce the 32 observed identity errors: 19 distinct-person probes expected to auto-merge and 13 same-person probes expected to be stored as new. Those 32 rows are the entire error count, and Set B has 0 true negatives. Its purpose is to expose policy weaknesses under adversarial conditions. It does not represent a real-world data distribution and must not be presented as a real-world accuracy estimate.
+
 Scenario groups and scenario ids use the same rules. A small scenario is a behavior check. The ratio is the count over the denominator in that row.
 
-When a precision or recall denominator is greater than zero and the error count in that ratio is zero, the report prints the rule-of-three bound from the dataset spec: 3 divided by that denominator. The bound is a caveat on a zero. It is not a measured error rate.
+Zero errors across Set A's 15 automatic decisions gives an approximate 95% upper bound on the error rate of 3/15 = 0.2 (20%). This is an approximate statistical bound, not a guarantee of real-world performance. It does not mean the true rate is necessarily below 20%. The bound covers only those 15 automatic decisions. It does not cover Set A's 40 reviews or Set A's 5 replays.
+
+When some other precision or recall denominator is greater than zero and the error count in that ratio is zero, the report still prints 3 divided by that denominator. That print is the same kind of caveat. It is not a measured error rate.
 
 ## Rounding
 
