@@ -6,7 +6,7 @@ Corrected 2026-11-16.
 
 Sprint 0 is COMPLETED as of Nov 16, 2026. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-Sprint 1 is IN PROGRESS, started Nov 16, 2026. S1-01 through S1-04 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). On Nov 16, about 3:09 PM CT, Aaron approved the import (S1-04). The raw results are recorded. S1-05 has not measured them.
+Sprint 1 is IN PROGRESS, started Nov 16, 2026. S1-01 through S1-05 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). On Nov 16, about 3:09 PM CT, Aaron approved the import (S1-04). The raw results are recorded. S1-05 measured them against identity truth. S1-06 has not been started.
 
 Source of truth is `main` at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` on that commit sets `branch: main` (D-020).
 
@@ -90,7 +90,7 @@ What is still new:
 | S1-02 | Save ground truth for the existing 200-row mix | COMPLETED | M |
 | S1-03 | Generate the CSV with `scripts/buildSyntheticDemoCsv.js` | COMPLETED | S |
 | S1-04 | Import the 360 rows through `importCustomers` | COMPLETED | M |
-| S1-05 | Measure precision, recall, false matches, missed matches, and review volume | NOT STARTED | M |
+| S1-05 | Measure precision, recall, false matches, missed matches, and review volume | COMPLETED | M |
 | S1-06 | Write `eval/reports/synthetic-200-report.md` | NOT STARTED | S |
 | S1-07 | Pick four demo examples from the import | NOT STARTED | S |
 
@@ -183,6 +183,37 @@ env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIA
 
 That printed 40 suites, 695 passed, 1 skipped, 696 total. `tests/eval.benchmark.test.js` rewrote the benchmark report. The summary was 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. The report files and `scripts/demo-org-summary.txt` were restored with `git checkout`.
 
+## S1-05 result
+
+Started from `cursor/s1-04-synthetic-360-import-b942`. The measurement reads the committed S1-04 file. It does not call `importCustomers`, the resolver, or the matcher, and it does not rewrite `eval/reports/synthetic-360-import-results.json`.
+
+```
+node scripts/buildSyntheticDemoCsv.js --labels
+node eval/syntheticMetrics.js
+```
+
+The label sha256, both CSV sha256 values, and the import-results sha256 `33afd385694b08a6edfbbaddf015be4b3b605cf727e07c46728a166daf6820ba` matched the constants in `eval/syntheticMetrics.js`. A second run wrote the same JSON and the same markdown.
+
+The rates are pairwise. One probe is one decision about its anchor. Set A and Set B are printed separately. The pooled line adds those counts. Reviews, replays, and import errors stay out of precision and recall. Definitions: `docs/evaluation/s1-05-metric-definitions.md`. Report: `eval/reports/synthetic-360-metrics-report.md`.
+
+- Set A precision 15 / 15 = 1. Set A recall 15 / 15 = 1. False matches 0. Missed matches 0. Reviews 40. Replays 5.
+- Set B precision 13 / 32 = 0.4063. Set B recall 13 / 26 = 0.5. False matches 19. Missed matches 13. Reviews 25. Import errors 10.
+- Pooled precision 28 / 47 = 0.5957. Pooled recall 28 / 41 = 0.6829. False matches 19. Missed matches 13.
+- Reviews 65 of 185 eligible probes (0.3514). Eligible means a probe whose outcome is auto-merge, review, or new. Same-person reviews 49. Distinct-person reviews 16.
+- New records 233: 160 introductions, 60 true negatives, 13 missed matches.
+- Import errors 10 and replays 5 are outside those rates. Policy-expected matched the engine outcome on 360 of 360 rows. That match is not an identity result.
+
+No matching logic, threshold, policy, resolver, importer, label, or 60-scenario fixture file was edited.
+
+The database `postgresql://postgres:postgres@localhost:5432/golden_record` was rebuilt with `scripts/resetLocalDb.sh` so the suite could run. `node --unhandled-rejections=warn scripts/seedDemoOrg.js` seeded the demo org. `web/` was built so `web/dist/index.html` exists. Then:
+
+```
+env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIALS \
+  npx jest --forceExit
+```
+
+That printed 41 suites, 698 passed, 1 skipped, 699 total. The three new passes are `tests/syntheticMetrics.test.js`. `tests/eval.benchmark.test.js` rewrote the benchmark report. The summary was 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. The report files and `scripts/demo-org-summary.txt` were restored with `git checkout`.
+
 ## Remaining
 
-S1-05 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it. Do not treat the raw outcome comparison above as the measurement.
+S1-06 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it. Do not treat the S1-04 policy comparison as the identity measurement. The identity measurement is the S1-05 report.
