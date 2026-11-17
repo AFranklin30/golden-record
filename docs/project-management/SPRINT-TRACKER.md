@@ -6,7 +6,7 @@ Corrected 2026-11-16.
 
 Sprint 0 is COMPLETED as of Nov 16, 2026. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-Sprint 1 is IN PROGRESS, started Nov 16, 2026. S1-01 and S1-02 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). That is about one extra day. Nothing else in the sprint moves. The 360 rows have not been imported.
+Sprint 1 is IN PROGRESS, started Nov 16, 2026. S1-01 through S1-04 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). On Nov 16, about 3:09 PM CT, Aaron approved the import (S1-04). The raw results are recorded. S1-05 has not measured them.
 
 Source of truth is `main` at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` on that commit sets `branch: main` (D-020).
 
@@ -81,7 +81,6 @@ What already exists on `main`:
 
 What is still new:
 
-- An import of that file through the existing resolver.
 - A second report, `eval/reports/synthetic-200-report.md`, so the 60-scenario files are not overwritten.
 - Four demo examples taken from that run.
 
@@ -89,8 +88,8 @@ What is still new:
 |---|---|---|---|
 | S1-01 | Re-run the 60-scenario benchmark and confirm it did not move | COMPLETED | S |
 | S1-02 | Save ground truth for the existing 200-row mix | COMPLETED | M |
-| S1-03 | Generate the CSV with `scripts/buildSyntheticDemoCsv.js` | NOT STARTED | S |
-| S1-04 | Import the 200 rows through `importCustomers` | NOT STARTED | M |
+| S1-03 | Generate the CSV with `scripts/buildSyntheticDemoCsv.js` | COMPLETED | S |
+| S1-04 | Import the 360 rows through `importCustomers` | COMPLETED | M |
 | S1-05 | Measure precision, recall, false matches, missed matches, and review volume | NOT STARTED | M |
 | S1-06 | Write `eval/reports/synthetic-200-report.md` | NOT STARTED | S |
 | S1-07 | Pick four demo examples from the import | NOT STARTED | S |
@@ -121,10 +120,69 @@ After `tests/syntheticGroundTruth.test.js` was added, the same command printed 4
 
 `node scripts/buildSyntheticDemoCsv.js --labels` first wrote `demo/synthetic-200-ground-truth.json`. The CSV rows matched the previous script. The 200 rows were not imported.
 
-That first file used one outcome field. Aaron then approved the evaluation-design change (D-021). The same command now writes `demo/synthetic-ground-truth-v2.json`: 360 labels, identity truth and policy-expected outcome kept separate, scenario id and case group on every row. The 200-row file is unchanged. Set A CSV bytes are unchanged. Set B does not go through the `scoreMatch` filter. The rows have not been imported.
+That first file used one outcome field. Aaron then approved the evaluation-design change (D-021). The same command now writes `demo/synthetic-ground-truth-v2.json`: 360 labels, identity truth and policy-expected outcome kept separate, scenario id and case group on every row. The 200-row file is unchanged. Set A CSV bytes are unchanged. Set B does not go through the `scoreMatch` filter. S1-02 did not import the rows.
 
 After that revision, `npx jest --forceExit` printed 40 suites, 695 passed, 1 skipped, 696 total. The extra passes are the four tests in `tests/syntheticGroundTruth.test.js`. The benchmark summary was again 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. The report files were restored.
 
+## S1-03 result
+
+`node scripts/buildSyntheticDemoCsv.js --labels` wrote the Set A CSV, the Set B CSV, and the label file. The label hash was `0db2aa4810cd02583749830190f8877ca66b0d681882641099c57ac1a92af8b4`. The Set A hash was `3fb01339fa4144d63a566c97a39fe3869cd96a1c9d4df86fb288a3a783bf2bc7`. Both match `demo/synthetic-dataset-manifest.json`. The Set B hash `9c010f0ee4fa88ecc4b6e57f7cae4f8766a42475640e0ba40a02ec9862f062f8` matched as well. The tracked label file and manifest did not change. The default builder's `scoreMatch` check was not run.
+
+## S1-04 result
+
+Started from `main` at `526e4aa`. The database `postgresql://postgres:postgres@localhost:5432/golden_record` was rebuilt with `scripts/resetLocalDb.sh`. The import created its own org, `synthetic-360-import`. It did not use the demo org.
+
+```
+env -u FIRESTORE_EMULATOR_HOST -u GOOGLE_APPLICATION_CREDENTIALS -u FIRESTORE_SYNC -u K_SERVICE \
+  node --unhandled-rejections=warn eval/syntheticImport.js
+```
+
+That command rebuilds the dataset, stops if a hash differs, then calls `importCustomers` with the rows from `readCustomerCsv` in manifest order: Set A rows 1–200, Set B anchors 201–280, Set B probes 281–360. It does not call `scoreMatch`. A second run on a new org matched every field except `org_id`, `batch_id`, `fan_id`, `matched_fan_id`, and `conflict_id`.
+
+All 360 rows were attempted. No row crashed the process. Engine outcomes: `new` 233, `review` 65, `auto_merge` 47, `import_error` 10, `replay` 5. A readable trace explanation was produced for 355 rows. The other 5 are the same-email replays. Those rows return the stored result and do not call the resolver, so they do not write a new trace.
+
+The ten `import_error` rows are RP-1 probes 298–303 (path B) and RP-2 probes 304–307 (path D). The recorded error on each is `row could not be stored`. The process log for those rows named `uq_identifier_per_org`. That text is not returned by the importer, and the importer was not changed to surface it.
+
+Policy-expected mapped to an engine outcome as `hard_match` → `auto_merge`, `review` → `review`, `separate` → `new`, `import_replay` → `replay`, and `import_error` → `import_error`. Compared that way, every scenario had zero mismatch rows. This comparison is not a precision or accuracy claim. Identity disagreements that were already in the labels are unchanged.
+
+| Scenario | Rows | Policy expected → engine outcome | Mismatch rows |
+|---|---|---|---|
+| A-ORIGINAL | 80 | separate → new (80) | none |
+| A-SAME-EMAIL | 5 | import_replay → replay (5) | none |
+| A-NICKNAME | 10 | review → review (10) | none |
+| A-SPELLING | 10 | review → review (10) | none |
+| A-SAME-NAME | 20 | review → review (20) | none |
+| A-NO-EMAIL | 15 | hard_match → auto_merge (15) | none |
+| A-DIFF-DOB | 60 | separate → new (60) | none |
+| SFE-1 | 16 | separate → new (8); review → review (8) | none |
+| SFE-2 | 12 | separate → new (6); hard_match → auto_merge (6) | none |
+| SFE-3 | 6 | separate → new (3); hard_match → auto_merge (3) | none |
+| RP-1 | 12 | separate → new (6); import_error → import_error (6) | none |
+| RP-2 | 8 | separate → new (4); import_error → import_error (4) | none |
+| MB-1 | 8 | separate → new (4); hard_match → auto_merge (4) | none |
+| MB-2 | 10 | separate → new (10) | none |
+| MB-3 | 10 | separate → new (5); hard_match → auto_merge (5) | none |
+| MB-4 | 10 | separate → new (5); hard_match → auto_merge (5) | none |
+| CA-1 | 10 | separate → new (5); review → review (5) | none |
+| CA-2 | 8 | separate → new (4); hard_match → auto_merge (4) | none |
+| CA-3 | 10 | separate → new (5); review → review (5) | none |
+| CA-4 | 10 | separate → new (5); hard_match → auto_merge (5) | none |
+| CA-5 | 6 | separate → new (3); review → review (3) | none |
+| CO-1 | 8 | separate → new (8) | none |
+| CO-2 | 8 | separate → new (8) | none |
+| CO-3 | 8 | separate → new (4); review → review (4) | none |
+
+No matching logic, threshold, policy, resolver, importer, label, or 60-scenario fixture file was edited.
+
+After the results file was written, the database was reset again and `node --unhandled-rejections=warn scripts/seedDemoOrg.js` seeded the demo org. `web/` was built so `web/dist/index.html` exists. Then:
+
+```
+env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIALS \
+  npx jest --forceExit
+```
+
+That printed 40 suites, 695 passed, 1 skipped, 696 total. `tests/eval.benchmark.test.js` rewrote the benchmark report. The summary was 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. The report files and `scripts/demo-org-summary.txt` were restored with `git checkout`.
+
 ## Remaining
 
-S1-03 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it. Do not import the 360 rows until Aaron says to start S1-04.
+S1-05 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it. Do not treat the raw outcome comparison above as the measurement.
