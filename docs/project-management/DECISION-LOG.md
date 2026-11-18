@@ -97,6 +97,16 @@ Measured again on 2026-11-16 during `npx jest --forceExit`: 60 scenarios, 0 poli
 
 **Alternative.** Relabel the same 200 rows and stop. That keeps the file small and leaves the missing scenarios untested.
 
+## D-022 — Sprint 1.5, Matching Quality Fixes, is inserted before Sprint 2
+
+**Status:** APPROVED
+
+**Decision.** Aaron approved Sprint 1.5, Matching Quality Fixes, on Nov 18, 2026. It is inserted before Sprint 2. The estimate is 3–5 days and is unverified. Sprints 2, 3, and 4 move back by that sprint. Sprint 1.5 has no task list yet.
+
+**Why.** S1-05 measured 19 false merges and 13 missed matches on the 360-row synthetic set, plus 10 recycled-phone import errors. All of those rows are in Set B. The engine followed the written policy on 360 of 360 rows. The identity labels disagree on the 32 merge and miss rows. S1-06 records the weaknesses. S1-06 and S1-07 do not change the matcher.
+
+**What this decision does not do.** It does not change thresholds, signals, the resolver, or the importer. It does not set the Sprint 1.5 tasks. The 3–5 day figure is the estimate attached to the approval. It was not measured. `PROJECT-PLAN.md` is not edited here. That file still describes Sprint 2 as the next planned block. The order change is this decision.
+
 ## D-004 — Do not restore the deleted client evaluation
 
 **Status:** PROPOSED. Unchanged.
