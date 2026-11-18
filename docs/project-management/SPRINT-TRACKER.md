@@ -6,7 +6,7 @@ Corrected 2026-11-16.
 
 Sprint 0 is COMPLETED as of Nov 16, 2026. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-Sprint 1 is IN PROGRESS, started Nov 16, 2026. S1-01 through S1-05 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). On Nov 16, about 3:09 PM CT, Aaron approved the import (S1-04). The raw results are recorded. S1-05 measured them against identity truth. S1-06 has not been started.
+Sprint 1 is COMPLETED as of Nov 18, 2026. It started Nov 16, 2026. S1-01 through S1-07 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). On Nov 16, about 3:09 PM CT, Aaron approved the import (S1-04). The raw results are recorded. S1-05 measured them against identity truth. S1-06 is the written report. S1-07 is the four demo picks. On Nov 18, 2026, Aaron approved Sprint 1.5, Matching Quality Fixes, inserted before Sprint 2 (D-022). The estimate is 3–5 days and is unverified. Sprints 2, 3, and 4 move back. Sprint 1.5 has no task list in this tracker yet.
 
 Source of truth is `main` at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` on that commit sets `branch: main` (D-020).
 
@@ -79,10 +79,10 @@ What already exists on `main`:
 - `scripts/buildSyntheticDemoCsv.js` builds the original 200 synthetic rows and writes `demo/synthetic-customers-200.csv`. The mix is 80 originals, 5 same-email copies, 10 nicknames, 10 spellings, 20 same name with a different email, 15 name+birthday+zip with no email, and 60 different first name and birthday. The default command still checks those lookalikes with `scoreMatch`. `node scripts/buildSyntheticDemoCsv.js --labels` writes `demo/synthetic-ground-truth-v2.json` from the recipe and does not call `importCustomers` or the scorer. Set B is 160 rows. The spec is `docs/evaluation/synthetic-dataset-spec.md`.
 - `*.csv` is gitignored, so the CSV itself will not be committed. The ground-truth file is JSON and is committed.
 
-What is still new:
+Written in S1-06 and S1-07:
 
-- A second report, `eval/reports/synthetic-200-report.md`, so the 60-scenario files are not overwritten.
-- Four demo examples taken from that run.
+- `eval/reports/synthetic-200-report.md`, so the 60-scenario files are not overwritten.
+- Four demo examples in `docs/demo/demo-examples.md`, taken from that run.
 
 | ID | Title | Status | Size |
 |---|---|---|---|
@@ -91,8 +91,8 @@ What is still new:
 | S1-03 | Generate the CSV with `scripts/buildSyntheticDemoCsv.js` | COMPLETED | S |
 | S1-04 | Import the 360 rows through `importCustomers` | COMPLETED | M |
 | S1-05 | Measure precision, recall, false matches, missed matches, and review volume | COMPLETED | M |
-| S1-06 | Write `eval/reports/synthetic-200-report.md` | NOT STARTED | S |
-| S1-07 | Pick four demo examples from the import | NOT STARTED | S |
+| S1-06 | Write `eval/reports/synthetic-200-report.md` | COMPLETED | S |
+| S1-07 | Pick four demo examples from the import | COMPLETED | S |
 
 Firestore: `firestoreSyncEnabled()` skips the wallet write in the resolver when no credential file exists, and `index.js` ignores a "Could not load the default credentials" rejection. The Jest suite did not need a flag. `node scripts/seedDemoOrg.js` still exited during Scenario 4, because `household.js` writes the child wallet outside that handler. `node --unhandled-rejections=warn scripts/seedDemoOrg.js` finished the seed. That is an environment workaround, not a matcher change.
 
@@ -214,6 +214,44 @@ env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIA
 
 That printed 41 suites, 698 passed, 1 skipped, 699 total. The three new passes are `tests/syntheticMetrics.test.js`. `tests/eval.benchmark.test.js` rewrote the benchmark report. The summary was 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. The report files and `scripts/demo-org-summary.txt` were restored with `git checkout`.
 
+## S1-06 result
+
+Started from `main` at `433071ef13bba9bb637bc7ff5295f6035c3bb72e`. No matching logic, threshold, policy, resolver, importer, label, 360-row result file, or 60-scenario fixture was edited.
+
+The report is `eval/reports/synthetic-200-report.md`. The task board names that path. The measured set is the 360-row file. `eval/reports/benchmark-report.md` is still the 60-scenario report.
+
+The figures are copied from `eval/reports/synthetic-360-metrics.json`, `eval/reports/synthetic-360-metrics-report.md`, `eval/reports/synthetic-360-import-results.json`, and `eval/reports/benchmark-report.json`. They were not recomputed with a different method. The failure-scenario probe rows in the results file match the table: false merges SFE-2 (289–294), SFE-3 (295–297), MB-3 (317–321), and CA-4 (341–345); missed matches MB-2 (312–316), CO-1 (349–352), and CO-2 (353–356); import errors RP-1 (298–303) and RP-2 (304–307).
+
+Set A precision 15 / 15, recall 15 / 15. Set B precision 13 / 32, recall 13 / 26. Pooled precision 28 / 47, recall 28 / 41. False merges 19. Missed matches 13. Reviews 65 / 185. Found rate 77 / 99. The 60-scenario summary cited in the report is 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews.
+
+`node scripts/buildSyntheticDemoCsv.js --labels` rewrote the label file in place. The label sha256 stayed `0db2aa4810cd02583749830190f8877ca66b0d681882641099c57ac1a92af8b4`. The tracked label file and manifest were unchanged. The CSVs stayed gitignored.
+
+The reproduction commands are in the report. `node eval/syntheticMetrics.js` regenerates the S1-05 metrics files. It does not emit the S1-06 report. A second person compares the two.
+
+The database `postgresql://postgres:postgres@localhost:5432/golden_record` was rebuilt with `scripts/resetLocalDb.sh`. `node --unhandled-rejections=warn scripts/seedDemoOrg.js` seeded the demo org. The household child write logged the expected missing-credentials rejection and the seed finished. `web/` was built so `web/dist/index.html` exists. Then:
+
+```
+env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIALS -u K_SERVICE \
+  npx jest --forceExit
+```
+
+That printed 41 suites, 698 passed, 1 skipped, 699 total. `tests/eval.benchmark.test.js` rewrote the benchmark report. The summary was 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. True positives 19, false positives 2, true negatives 7, false negatives 5. The report files and `scripts/demo-org-summary.txt` were restored with `git checkout`. The 360-row result files were not rewritten. No matcher or fixture file was edited.
+
+## S1-07 result
+
+The four picks are in `docs/demo/demo-examples.md`. The task board's list is the one used: an exact duplicate, a clear non-match, a review, and an ambiguous case.
+
+| Pick | Row | Case | Ground truth | Path | Score |
+|---|---|---|---|---|---|
+| Exact duplicate | 81, anchor 1 | A-SAME-EMAIL-01 | `same_person`, policy `import_replay` | B | 1, source `stored_row` |
+| Clear non-match | 141, anchor 1 | A-DIFF-DOB-01 | `distinct_person`, policy `separate` | B | 1, source `audit_log.confidence_score` |
+| Review | 86, anchor 1 | A-NICKNAME-01 | `same_person`, policy `review` | D | 0.3, source `resolution_trace.best_score` |
+| Ambiguous case | 341, anchor 261 | CA-4-01 | `distinct_person`, policy `hard_match`, `indistinguishable` true | A | 1, source `audit_log.confidence_score` |
+
+Row 81 stores no explanation. `explanation_produced` is false and `explanation` is null, because the resolver was not called. The other three store `scoring skipped: empty_block`, `scoring performed: name_plus_dob`, and `scoring skipped: deterministic_match`. The CSV field values are quoted from the rebuilt gitignored CSVs. The results file does not store them.
+
+Row 341 is a false merge. The demo labels it as a known weakness covered by Sprint 1.5. Row 126, the earliest correct automatic join, is in the S1-06 report and is not one of the four picks. The kickoff asked for a correct automatic join in the four. The task board does not. The board's list is the one in the demo file.
+
 ## Remaining
 
-S1-06 is the next task. Do not edit the 60-scenario fixture or the matcher while doing it. Do not treat the S1-04 policy comparison as the identity measurement. The identity measurement is the S1-05 report.
+Sprint 1's task list is complete. Sprint 1.5 is approved and has no tasks here yet. Do not treat the S1-04 policy comparison as the identity measurement. The identity measurement is the S1-05 report. The buyer write-up of that measurement is the S1-06 report.
