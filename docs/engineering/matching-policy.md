@@ -1,6 +1,6 @@
 # Matching policy
 
-Baseline as of 2026-11-15, after the email and name birthday reviews. Decision 5B, on 2026-11-20, added the one-edit surname search below. Decision 6, the same day, is approved and is not yet what the resolver does. Except for that Decision 6 section, this document describes the resolver in `src/modules/resolverEngine.js` and `src/modules/probabilisticMatcher.js`. It is the reference for later matching changes.
+Baseline as of 2026-11-15, after the email and name birthday reviews. Decision 5B, on 2026-11-20, added the one-edit surname search below. Decision 3 and Decision 6 are approved exact-name rules and are not yet what the resolver does. Except for that section, this document describes the resolver in `src/modules/resolverEngine.js` and `src/modules/probabilisticMatcher.js`. It is the reference for later matching changes.
 
 Nothing here is a proposal. The system does not merge two people on its own. A review waits for a person. The merge happens only when someone confirms it.
 
@@ -28,7 +28,7 @@ flowchart TD
   emailName -->|no row| block --> score
 ```
 
-The diagram is the resolver as it runs. An exact name with either birthday missing still takes the hard-match branch. Decision 6, below, says that shape becomes a review once it is implemented.
+The diagram is the resolver as it runs. An exact name with either birthday missing still takes the hard-match branch. An exact name with both birthdays equal and no incoming email does too. The combined rule below sends both of those shapes to review once it is implemented. An exact name with both birthdays equal and an incoming email present stays a hard match.
 
 ## One-edit surname
 
@@ -66,7 +66,7 @@ What this search does not do:
 
 Example: `ada@example.com`, born 1990-04-02, then the same email born 1991-04-02. Review. Ada keeps the email.
 
-**Name.** Evidence, and many people may share it. A review opens only when every stored birthday differs from the inbound birthday. Both people keep the name. One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs. A missing birthday on either side keeps the hard match. That missing-birthday sentence is current resolver behavior. Decision 6 replaces it for an exact name, and the code does not do that yet. The lookup uses the exact normalized name. A nickname or a close spelling is scored only when a search key already found that person. The one-edit surname search above is one of those keys. It does not change how the name is scored.
+**Name.** Evidence, and many people may share it. In the resolver today, a review opens only when every stored birthday differs from the inbound birthday. Both people keep the name. One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs. A missing birthday on either side keeps the hard match. An exact name with both birthdays equal also keeps the hard match when the incoming row has no email. Those two hard matches are current resolver behavior. The combined rule below replaces both, and the code does not do that yet. The lookup uses the exact normalized name. A nickname or a close spelling is scored only when a search key already found that person. The one-edit surname search above is one of those keys. It does not change how the name is scored.
 
 Example: Jane Doe, born 1990-04-02, then Jane Doe, born 1991-05-06, and neither row has an email. Review. Both records keep the name Jane Doe. The search by last name plus birthday does not find her, because the birthdays differ. The review still names her, because the exact-name lookup did.
 
@@ -92,23 +92,24 @@ An email birthday review, or a name birthday review, replaces that winner. The p
 
 Inside one scored pair, a birthday conflict is decided before email, name, ZIP, guardian email, or device evidence. Those agreements cannot override it. A disagreement is counted only when both records have that field. Phone, guardian phone, and device id are not disagreement fields.
 
-## Decision 6 — exact name and a missing birthday
+## Exact name — Decision 3 and Decision 6
 
-Approved 2026-11-20. Not implemented. The name section above is what the resolver does today: an exact name hard-matches when either birthday is missing.
+Approved, and not implemented. Decision 3 is the more specific exception. Decision 6 governs an exact name when either birthday is missing. The name section above is what the resolver does today. It hard-matches all four shapes below except the birthday conflict, which is already a review.
 
-Approved policy. An exact-name candidate stays eligible for retrieval when either record has no birthday. A missing birthday never authorizes a hard match for that name.
+An exact-name candidate stays eligible in every shape. A missing birthday is not a birthday conflict. A conflict exists only when both birthdays are present and they differ.
 
 When an exact-name candidate is found:
 
-- Both birthdays present and equal: the existing exact-name hard match stays.
-- Both birthdays present and different: the existing birthday-conflict review stays.
-- Either birthday missing: open a human review. Do not link the records automatically.
+1. Both birthdays present and equal, and an incoming email is present: the existing exact-name hard match stays.
+2. Both birthdays present and equal, and the incoming email is missing: open a human review. This is Decision 3.
+3. Both birthdays present and different: open a human review under the existing birthday-conflict policy.
+4. Either birthday missing: open a human review, whichever record is missing the birthday. This is Decision 6. Do not link the records automatically.
 
-The rule is the same whichever record is missing the birthday. A missing birthday is still not a birthday conflict. A conflict exists only when both birthdays are present and they differ.
+Required future behavior. Keep the exact-name lookup. For shapes 2 and 4, create a pending review instead of returning that person as a hard match. Do not drop the candidate. Do not change the score thresholds to produce the review. Do not change an exact-email hard match. A missing birthday still keeps that email hard match, including MB-1, where the email and the name both match and the probe birthday is missing.
 
-Required future behavior. Keep the exact-name lookup. If it finds a live person and either birthday is absent, create a pending review instead of returning that person as a hard match. Do not drop the candidate. Do not change the score thresholds to produce the review. Do not change the email rule: a missing birthday still keeps an exact-email hard match, including when the name also matches.
+MB-3 and MB-4 are shape 4. They are one observationally indistinguishable class. In both, the stored person has an email and no birthday, and the incoming row has the same name, no email, and a birthday. The synthetic labels say MB-3 is a different person and MB-4 is the same person. Those labels stay. The fields cannot tell the two groups apart, and this policy does not claim the matcher can. Both groups get a human review under Decision 6. The measured import hard-matched both. That measurement is the historical result. It is not this policy.
 
-MB-3 and MB-4 are one observationally indistinguishable class. In both, the stored person has an email and no birthday, and the incoming row has the same name, no email, and a birthday. The synthetic labels say MB-3 is a different person and MB-4 is the same person. Those labels stay. The fields cannot tell the two groups apart, and this policy does not claim the matcher can. Both groups get a human review. The measured import hard-matched both. That measurement is the historical result. It is not this policy.
+CA-4 and A-NO-EMAIL are shape 2. Both birthdays match and the incoming email is missing. Both get a human review under Decision 3. The measured import hard-matched both. CA-4 is labeled a different person. A-NO-EMAIL is labeled the same person. Those labels stay. The columns of one row do not say which label it is.
 
 ## Still a hard match
 
@@ -116,9 +117,10 @@ These lookups still return the existing person before a contradictory birthday i
 
 - Phone, guardian email, guardian phone, NFC id, NBA id, Ticketmaster id, birthday, or ZIP, when that value is the singular identifier.
 - The same email when either birthday is missing.
-- The same exact name when either birthday is missing. This is current resolver behavior. Decision 6 replaces it once implemented.
+- The same exact name when either birthday is missing. This is current resolver behavior. Decision 6 replaces it with a review once implemented.
 - The same email, or the same exact name, when one stored birthday matches the inbound birthday, even if another stored birthday differs.
-- The same exact name and the same birthday.
+- The same exact name and the same birthday when an incoming email is present.
+- The same exact name and the same birthday when the incoming email is missing. This is current resolver behavior. Decision 3 replaces it with a review once implemented. CA-4 and A-NO-EMAIL are that shape.
 
 A shared guardian email with different birthdays stays two people, and does not open a review, when the guardian email is not the singular identifier.
 

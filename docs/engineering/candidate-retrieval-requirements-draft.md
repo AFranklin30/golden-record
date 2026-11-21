@@ -2,7 +2,7 @@
 
 Draft as of 2026-11-17. This document states what a candidate-retrieval layer must accomplish. It does not implement that layer, and it does not amend `docs/engineering/matching-policy.md`.
 
-Decision 6, approved 2026-11-20, is an identity decision recorded in that policy and in `docs/engineering/sprint-1.5-failure-analysis.md`. It is not implemented. It does not change the retrieval evidence below. An exact normalized full name remains a candidate when either birthday is missing. The later decision for that candidate is a human review, not a hard match. A missing birthday is still not a birthday conflict.
+Decision 3 and Decision 6 are identity decisions recorded in that policy and in `docs/engineering/sprint-1.5-failure-analysis.md`. They are not implemented. They do not change the retrieval evidence below. An exact normalized full name remains a candidate when either birthday is missing, and when both birthdays match and the incoming email is missing. A missing birthday leads to a human review. Both birthdays equal and an incoming email missing also leads to a human review. A missing birthday is still not a birthday conflict. Both birthdays equal, with an incoming email present, stays the existing exact-name hard match.
 
 Experiment 6 is evidence. The agreed direction in the review is the source of the requirements marked **agreed**. Anything this file does not have agreement for is marked **proposed** or **unresolved**. None of these statements are production policy until the canonical policy is explicitly changed.
 
@@ -336,11 +336,11 @@ CR-N2 requires corroborating first-name evidence and corroborating birthday evid
 
 The conflicts in section 10 are recorded. This draft does not apply them. A later approval has to accept or reject each conflict before `docs/engineering/matching-policy.md` or the resolver changes. Workload control, including what happens to a block larger than 50, is part of that approval. This draft requires that a qualifying candidate not vanish silently. It does not choose the replacement.
 
-### Later approval — Decision 6, exact name and a missing birthday
+### Later approval — Decision 3 and Decision 6, read together
 
-**Status:** approved 2026-11-20. Not implemented. This does not close UR-1, UR-2, or UR-3.
+**Status:** approved. Not implemented. Decision 3 is the more specific exception. Decision 6 governs a missing birthday. This does not close UR-1, UR-2, or UR-3.
 
-Question 2 in the failure analysis asked whether MB-3 and MB-4 both go to review. Decision 6 says yes. Retrieval of the exact name stays, which is CR-R1. The identity outcome is a human review whichever side is missing the birthday. The synthetic labels stay opposite, and the fields still cannot tell the groups apart. The tables in this draft are the Experiment 6 evidence. They are not relabeled.
+Question 2 in the failure analysis asked whether MB-3 and MB-4 both go to review. Decision 6 says yes, whichever side is missing the birthday. Question 3 asked whether CA-4 and A-NO-EMAIL both go to review. Decision 3 says yes: both birthdays are present and equal, and the incoming email is missing. Retrieval of the exact name stays, which is CR-R1. The synthetic labels stay as written, and the fields still cannot tell MB-3 from MB-4, or CA-4 from A-NO-EMAIL. The tables in this draft are the Experiment 6 evidence. They are not relabeled. An exact-email hard match, including MB-1, is outside this pair of decisions.
 
 Decision 5B later chose the surname boundary this draft left open: exact first name, exact birthday, and raw Levenshtein distance at most 1. That retrieval key is implemented. The UR-1 and UR-2 text above is the unresolved wording from this draft. It is not a description of the resolver after that key.
 

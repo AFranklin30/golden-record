@@ -1,6 +1,6 @@
 # Sprint 1.5 failure analysis
 
-Read-only trace of the 19 false merges and 13 missed matches in the 360-row synthetic import. Written November 18, 2026. Case evidence in sections 3 through 7 is observed fact or a labeled reconstruction. Section 11 records approved policy direction from the review of this analysis. That direction is not implemented behavior. Section 13 records Decision 6, approved November 20, 2026. Decision 6 resolves question 2. It is not implemented, and it does not change sections 3 through 7. Reproducibility verification is outstanding.
+Read-only trace of the 19 false merges and 13 missed matches in the 360-row synthetic import. Written November 18, 2026. Case evidence in sections 3 through 7 is observed fact or a labeled reconstruction. Section 11 records approved policy direction from the review of this analysis. That direction is not implemented behavior. Section 13 records the combined reading of Decision 3 and Decision 6. Decision 6 resolves question 2. The later clarification resolves question 3. Neither is implemented, and section 13 does not change sections 3 through 7. Reproducibility verification is outstanding.
 
 The 60-scenario benchmark is a different population. Its precision 0.9048, recall 0.7917, 0 policy mismatches, and 27 reviews are not part of these 32 rows, and this analysis does not change that baseline.
 
@@ -270,7 +270,7 @@ No opportunity in this list is "lower 0.85" or "lower 0.60." Those comparisons d
 4. For a same person with a new email and no birthday (MB-2), is a name-only retrieval key acceptable, or is that miss an accepted limit of the three block keys?
 5. For a swapped birthday (CO-1) or a last-name typo (CO-2), should either comparison exist inside retrieval, or should those misses stay outside the search?
 
-Approved direction for these questions is recorded in section 11. That direction was not implemented on November 18. Question 2 is resolved by Decision 6 in section 13. The other ambiguities in section 11 stay open, except the Decision 2 and Decision 4 reading that section 13 closes.
+Approved direction for these questions is recorded in section 11. That direction was not implemented on November 18. Question 2 is resolved by Decision 6. Question 3 is resolved by Decision 3, which stays the more specific exception: both shapes go to review. Section 13 states the combined rule. The other ambiguities in section 11 stay open, except the Decision 2 and Decision 4 reading that section 13 closes.
 
 ## 10. Retrieval, evaluation, and decision
 
@@ -370,7 +370,7 @@ These are gaps between the approved wording and the case evidence. This file doe
 
 - Decision 1 does not define "conflicting first name." The SFE-2 and SFE-3 first names are different given names, not nicknames. The decision does not say whether a nickname pair counts as a conflict, or what happens when the email matches and the first names agree, or when one first name is absent.
 - Decision 2 says "missing DOB" and does not say which side. On MB-3 the anchor birthday is blank and the probe birthday is present. MB-4 has the same columns and is a true positive under today's rule. The decision does not name MB-4. Whether both shapes go to review is the consequence already described in section 7, and it is not restated here as an extra decision. Decision 6, in section 13, closes this gap. Both shapes go to review. The November 18 wording above is the gap as it stood.
-- Decision 3, read as written, also covers A-NO-EMAIL probes 126–140: exact name, same birthday, no incoming email. Those 15 are true positives today. The decision does not name Set A. Section 7 already records that the columns do not separate that shape from CA-4.
+- Decision 3, read as written, also covers A-NO-EMAIL probes 126–140: exact name, same birthday, no incoming email. Those 15 are true positives today. The decision does not name Set A. Section 7 already records that the columns do not separate that shape from CA-4. The later clarification closes this gap. CA-4 and A-NO-EMAIL both go to review. The November 18 wording above is the gap as it stood.
 - Decision 4 says existing downstream matching safeguards remain applicable. Today's exact-name path auto-merges when a birthday is missing. Decision 2 says that automatic match must not happen. If "existing" means the current hard-match rule, Decision 4 and Decision 2 disagree. If "existing" means the safeguards that remain after Decisions 1 through 3, they agree: retrieve, then review. Decision 6 chooses the second reading for an exact name with either birthday missing: retrieve the candidate, then review. It does not choose a reading for any other Decision 4 case.
 - Decision 5A requires exact normalized first and last names. The CO-1 probes do not have exact first names. They are Robert/Bob, William/Bill, Elizabeth/Liz, and James/Jim, and the birthdays are swapped. Decision 5A as written does not retrieve those four rows. The decision does not say that a nickname counts as an exact first name.
 - Decision 5B gives matching first name and matching DOB as examples of corroboration. CO-1 has neither an exact first name nor an agreeing birthday, so it is not that example. CO-2 does match the example. The decision does not set the similarity measure, the threshold, or which other fields count as corroboration. Surname similarity alone stays disallowed.
@@ -390,27 +390,23 @@ These are gaps between the approved wording and the case evidence. This file doe
 
 The approved direction in section 11 is not matcher behavior as of this section. No threshold, retrieval rule, or decision rule had been changed to carry it out when this status was written. The experimental check named in Decision 4 has not been run. Reproducibility of the original trace has not been established: the import was not rerun, individual `block_results` were not preserved, and the miss-side key analysis was reconstructed from code and CSV data.
 
-## 13. Decision 6 — exact name with a missing birthday
+## 13. Decision 3 and Decision 6, read together
 
-Approved November 20, 2026. This resolves question 2. It is not implemented. Sections 3 through 7 stay the observation of the November 18 import.
+Decision 6 was approved November 20, 2026, and left a conflict with Decision 3. A later clarification resolves that conflict. Decision 3 remains the more specific exception. Decision 6 governs an exact name when either birthday is missing. This section is not implemented. Sections 3 through 7 stay the observation of the November 18 import.
 
-Observed behavior, unchanged by this section: on MB-3 and MB-4 the singular identifier is the exact name. The anchor birthday is blank and the probe birthday is present. The birthday exception does not run, because there is no stored birthday to differ. The engine hard-matches the anchor, path A, skip reason `deterministic_match`. MB-3 is a false merge. MB-4 is a true positive. The two groups use the same columns.
+Observed behavior, unchanged by this section: on MB-3 and MB-4 the singular identifier is the exact name. The anchor birthday is blank and the probe birthday is present. The birthday exception does not run, because there is no stored birthday to differ. The engine hard-matches the anchor, path A, skip reason `deterministic_match`. MB-3 is a false merge. MB-4 is a true positive. The two groups use the same columns. On CA-4 and on A-NO-EMAIL the exact name and the birthday match, and the probe email is blank. The engine hard-matches those rows on the same path. CA-4 is a false merge. A-NO-EMAIL is a true positive. The columns of one row do not say which.
 
-Approved policy:
+Approved policy. An exact-name candidate stays eligible in every shape below. A missing birthday is not a birthday conflict. A conflict exists only when both birthdays are present and they differ.
 
-- An exact-name candidate stays eligible for retrieval when the stored birthday is missing, the incoming birthday is missing, or both are missing.
-- A missing birthday does not authorize a hard match on that exact name.
-- Both birthdays present and equal: the existing exact-name hard match stays.
-- Both birthdays present and different: the existing birthday-conflict review stays.
-- Either birthday missing: open a human review. Do not link the records automatically, and do not drop the candidate.
-- The rule is the same whichever record is missing the birthday.
+1. Both birthdays present and equal, and an incoming email is present: the existing exact-name hard match stays.
+2. Both birthdays present and equal, and the incoming email is missing: open a human review. This is Decision 3. Question 3 is resolved. CA-4 and A-NO-EMAIL both take this review.
+3. Both birthdays present and different: open a human review under the existing birthday-conflict policy.
+4. Either birthday missing: open a human review, whichever record is missing the birthday. This is Decision 6. Question 2 is resolved. Do not link the records automatically, and do not drop the candidate.
 
-Required future behavior: find the exact-name candidate, then create a pending review instead of path A. Do not change scoring thresholds to produce that review. Do not treat a missing birthday as a birthday conflict. A conflict still requires both birthdays, and those birthdays must differ.
+Required future behavior: find the exact-name candidate. For shapes 2 and 4, create a pending review instead of path A. Do not change scoring thresholds to produce that review.
 
-MB-3 and MB-4 are one observationally indistinguishable class. The available fields cannot tell a different person from the same person. Both groups get the same treatment, a human review. The synthetic ground-truth labels stay as written: MB-3 `distinct_person`, MB-4 `same_person`. This decision does not claim the matcher can determine the true identity from those fields.
+MB-3 and MB-4 are shape 4. They are one observationally indistinguishable class. The available fields cannot tell a different person from the same person. Both groups get a human review under Decision 6. The synthetic ground-truth labels stay as written: MB-3 `distinct_person`, MB-4 `same_person`. This policy does not claim the matcher can determine the true identity from those fields.
 
-This decision does not change an exact-email hard match. A missing birthday still keeps that email hard match under the current policy, including MB-1, where the email and the name both match and the probe birthday is missing.
-
-Decision 6 does not adopt Decision 3. Decision 3 says an exact name and an equal birthday go to review when the incoming email is missing. Decision 6 says that equal-birthday exact-name hard match stays. CA-4 and A-NO-EMAIL remain the conflict between those two approvals. Question 3 is not resolved here.
+This reading does not change an exact-email hard match. A missing birthday still keeps that email hard match under the current policy, including MB-1, where the email and the name both match and the probe birthday is missing.
 
 Decision 5B's later implementation is a different change. On November 20 the resolver gained a `similar_surname` retrieval key: exact first name, exact birthday, and raw Levenshtein distance at most 1 between surnames. That key does not establish identity. The Decision 5B paragraph above describes the engine this analysis traced, which used the exact last word. It is not a description of the resolver after that key.
