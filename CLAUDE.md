@@ -201,19 +201,36 @@ pre-blocking candidate query took 100 arbitrary fans per org with no `ORDER BY` 
 narrowing. At multi-million-record scale the true match was
 essentially never among those 100 — real duplicates silently became PATH B while the system
 returned a clean `200`. No error, no signal anything was wrong. `findBlockCandidates`
-(resolverEngine.js) replaces it: narrow to fans sharing an exact key with the inbound tap,
+(resolverEngine.js) replaces it: narrow to fans a retrieval key can reach,
 then score only within that set.
 
-**Three keys, unioned:**
+**Four keys, unioned:**
 - `email` — exact `identifier_link` probe
 - `guardian_email` — exact `identifier_link` probe
 - `name_dob` — self-join on `name_last_word` + exact `dob`
+- `similar_surname` — exact first word, exact `dob`, raw Levenshtein surname distance ≤ 1
 
 `name_dob` keys on the **last word of the name**, not the full name. Exact-string blocking
 on a fuzzy-compared field would drop the jon/john case Sprint 5 fixed to preserve. Last-word
 keying retrieves 'bob smith' and 'robert smith' under the same key ('smith') — `dob` carries
 the selectivity, and the fuzzy name comparison still runs downstream, inside scoring, on
 whatever this key retrieves.
+
+`similar_surname` is Decision 5B. It is retrieval permission only. It runs
+only after the exact singular lookup misses. A person it returns is scored
+with every other candidate.
+The distance is the existing `levenshteinDistance` in `probabilisticMatcher.js`.
+Distance 0 is included and deduped with `name_dob`. A one-word name has no
+separate surname, so the key stays unavailable. The first word is
+`split_part(identifier_value, ' ', 1)` on the stored normalized name. There is
+no new column and no migration. The SQL reads every live person with that first
+word and birthday, then the distance filter runs in process, then the cap of 50
+applies to that filtered set. A common first name and birthday therefore has no
+`LIMIT` before the filter. That is deliberate: a limit before the filter could
+drop the one-edit surname. A short full name can be retrieved and still stored
+as a new person, because scoring is unchanged. `bo xu` / `bo yu` is the measured
+example. Tests: `tests/modules/decision5b.surnameRetrieval.test.js`. Policy:
+`docs/engineering/matching-policy.md`.
 
 **UNION, not intersect — deduped on `fan_id`.** Intersecting would shrink the reachable set
 to the weakest key; adding a key would make recall *worse* instead of better. Union means
@@ -225,13 +242,15 @@ truth; scoring them risks manufacturing a false conflict, which is worse than mi
 duplicate. A hard drop is also deterministic with no `ORDER BY` — a truncated LIMIT would
 silently return an arbitrary 50 of the block.
 
-**Oversized blocks are only reachable via `guardian_email`.** `uq_identifier_per_org`
+**Oversized blocks.** `uq_identifier_per_org`
 (migration_013) makes a duplicate identifier value structurally impossible within an org
 outside `source_system = 'fan_pass'` rows — so the `email` key can never produce a block
-bigger than 1 live fan. The cap only ever fires on `guardian_email`, because household
+bigger than 1 live fan. The cap fires on `guardian_email`, because household
 sibling rows are deliberately written with `source_system = 'fan_pass'` to bypass that same
 index. Non-obvious — currently visible only as a side effect of how the oversized-block test
-fixture had to be built (Lesson 25).
+fixture had to be built (Lesson 25). `similar_surname` can also exceed 50, after
+the distance filter. Names are not unique. The cap drops that filtered set whole
+and does not drop a sibling `name_dob` block.
 
 **REPLACE, not wrap.** No fallback to an unnarrowed scan when a block comes back empty or
 gets dropped. A fallback would write `candidates_considered: 100, candidates_scored: 100, no
@@ -241,9 +260,8 @@ of millions. See the recall-ceiling invariant, above (Architecture invariants).
 **Self-join at query time; a materialized `blocking_key` table is the deferred production
 answer.** `findBlockCandidates` self-joins `identifier_link` per request. A materialized
 `blocking_key (fan_id, key_type, key_value, org_id)` table is the intended production
-shape — same retrieval, no per-request self-join. Not built. A fourth block key is a
-separate, equally deferred extension — new keys are additive (see UNION, above), not a
-redesign.
+shape — same retrieval, no per-request self-join. Not built. `similar_surname` is
+the fourth key. Further keys stay additive (see UNION, above), not a redesign.
 
 **migration_016** adds `identifier_link.name_last_word` (generated column:
 `substring(identifier_value from '[^[:space:]]+$')`, `CASE`-guarded to
@@ -268,16 +286,16 @@ that legitimately came up empty.
 **What blocking retired as *retrieval* paths (not as scoring signals).** `name_plus_zip`,
 `name_alone`, and `device_id` can still fire inside `scoreMatch` — but only as tiebreakers
 among candidates another key already surfaced. None of the three can *originate* a match
-anymore; only `email`, `guardian_email`, and `name_dob` can retrieve a candidate in the
+anymore; only `email`, `guardian_email`, `name_dob`, and `similar_surname` can retrieve a candidate in the
 first place. (`device_id` was already excluded from ever backing an `identifier_link` row —
 see Scoring — so this changes nothing new for it.)
 
-**PATH B fans minted by a bare NFC tap are structurally unreachable by all three keys.**
+**PATH B fans minted by a bare NFC tap are structurally unreachable by these keys.**
 PATH B/C/D write exactly one `identifier_link` row — the singular
 `identifier_type`/`identifier_value` from the tap (see The four resolution paths, below);
 everything in the `identifiers` object is scored and discarded, never persisted. A fan
 minted from a bare `nfc_uid` tap therefore holds only an `nfc_uid` row — no `email`, no
-`guardian_email`, no `name`+`dob` pair — so none of the three block keys can ever retrieve
+`guardian_email`, no `name`+`dob` pair — so none of these block keys can ever retrieve
 it on a later tap. Measured on the demo org (`scripts/seedDemoOrg.js`): 2 of 10 fans are
 unreachable this way (the fans minted by Scenario 2's and Scenario 3's NFC taps). Closing
 this is a product decision about persisting advisory identifiers from a tap, not a code

@@ -1,6 +1,6 @@
 # Matching policy
 
-Baseline as of 2026-11-15, after the email and name birthday reviews. This describes the resolver in `src/modules/resolverEngine.js` and `src/modules/probabilisticMatcher.js`. It is the reference for later matching changes.
+Baseline as of 2026-11-15, after the email and name birthday reviews. Decision 5B, on 2026-11-20, added the one-edit surname search below. This describes the resolver in `src/modules/resolverEngine.js` and `src/modules/probabilisticMatcher.js`. It is the reference for later matching changes.
 
 Nothing here is a proposal. The system does not merge two people on its own. A review waits for a person. The merge happens only when someone confirms it.
 
@@ -12,7 +12,7 @@ A call has one singular identifier, plus any extra fields sent with it.
 
 The first step is an exact lookup for a live person who already holds that same identifier. A hit is a hard match: the existing person is returned, and their identifier is marked as seen again. Email and name are the exceptions below. Every other identifier type returns on that hit before the birthday is read.
 
-If the lookup misses, the system searches only people who share an exact email, an exact guardian email, or the same last name and the same birthday. Those people are scored. A birthday conflict on a scored person rejects that person before any other agreement is counted. An email disagreement, a name disagreement, or a ZIP disagreement lowers the score. It does not reject the person by itself.
+If the lookup misses, the system searches people who share an exact email, an exact guardian email, the same last name and the same birthday, or the same first name, the same birthday, and a surname within one edit. Those people are scored. A birthday conflict on a scored person rejects that person before any other agreement is counted. An email disagreement, a name disagreement, or a ZIP disagreement lowers the score. It does not reject the person by itself. Finding a person with the one-edit surname search does not make them the same person.
 
 ```mermaid
 flowchart TD
@@ -20,7 +20,7 @@ flowchart TD
   emailName{Email or name and both birthdays differ}
   review[Pending review]
   hard[PATH A hard match]
-  block[Email or guardian email or same name and birthday]
+  block[Email, guardian email, same last name and birthday, or one-edit surname]
   score[Score remaining candidates]
   lookup --> emailName
   emailName -->|yes| review
@@ -28,13 +28,43 @@ flowchart TD
   emailName -->|no row| block --> score
 ```
 
+## One-edit surname
+
+Decision 5B. This is a search rule. It does not decide that two records are the same person.
+
+The search runs only after the exact identifier lookup misses. It returns a live person when all three are true:
+
+- The first word of the normalized name is the same.
+- The birthday is present on both records and is the same.
+- The raw Levenshtein distance between the normalized surnames is 0 or 1.
+
+The surname is the last word. The distance is the Levenshtein function the scorer already uses. A distance of 0 is the exact surname. That person is also returned by the last-name-and-birthday search, and the two results are one candidate.
+
+A person found this way is scored with the existing rules. The result can be a review or a new person. It is not a hard match from this search. An exact email, or an exact full name, is still decided before this search runs.
+
+The bound of 1 comes from the four CO-2 surname typos: Bramley/Bramly, Ostler/Ostlar, Quinlan/Quinlen, and Sutcliffe/Sutclife. Each is one edit. A replaced surname is several edits and is not returned by this key. An exact email can still find a person whose surname was replaced.
+
+The same first name and birthday can belong to many people. The distance is applied before the cap of 50. Only people who already pass the three conditions count toward that cap. If more than 50 do, that whole group is dropped and none of them are scored. People who share the first name and birthday but fail the surname distance are not part of that count, and they do not cause the group to be dropped.
+
+Tests live in `tests/modules/decision5b.surnameRetrieval.test.js`.
+
+What this search does not do:
+
+- It does not match a different first name. The last-name-and-birthday search still can, when the surname and birthday are exact.
+- It does not match a different birthday, or a missing birthday.
+- It does not match a one-word name. There is no separate surname.
+- It does not match a transposition. Smith and Smtih are two edits.
+- It does not match a replaced surname.
+- It does not change scores, thresholds, nickname groups, or the hard-match rules.
+- A short full name can be found and still stored as a new person. Bo Xu and Bo Yu are one surname edit, and the existing full-name comparison does not call that spelling close enough to open a review.
+
 ## What each identifier does
 
 **Email.** Evidence of a person, and one email belongs to one person in an organization (household rows are the exception). A review opens only when every stored birthday differs from the inbound birthday. The original person keeps the email. The incoming record does not receive a second copy. One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs. A missing birthday on either side keeps the hard match. A different email lowers a score only after some other key already found the person.
 
 Example: `ada@example.com`, born 1990-04-02, then the same email born 1991-04-02. Review. Ada keeps the email.
 
-**Name.** Evidence, and many people may share it. A review opens only when every stored birthday differs from the inbound birthday. Both people keep the name. One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs. A missing birthday on either side keeps the hard match. The lookup uses the exact normalized name. A nickname or a close spelling is scored only when a search key already found that person.
+**Name.** Evidence, and many people may share it. A review opens only when every stored birthday differs from the inbound birthday. Both people keep the name. One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs. A missing birthday on either side keeps the hard match. The lookup uses the exact normalized name. A nickname or a close spelling is scored only when a search key already found that person. The one-edit surname search above is one of those keys. It does not change how the name is scored.
 
 Example: Jane Doe, born 1990-04-02, then Jane Doe, born 1991-05-06, and neither row has an email. Review. Both records keep the name Jane Doe. The search by last name plus birthday does not find her, because the birthdays differ. The review still names her, because the exact-name lookup did.
 

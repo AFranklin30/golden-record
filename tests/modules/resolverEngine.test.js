@@ -13,10 +13,14 @@ jest.mock('@google-cloud/firestore', () => ({
   })),
 }));
 
-jest.mock('../../src/modules/probabilisticMatcher', () => ({
-  scoreMatch:     jest.fn(),
-  SCORER_VERSION: 'v1+testmock',
-}));
+jest.mock('../../src/modules/probabilisticMatcher', () => {
+  const actual = jest.requireActual('../../src/modules/probabilisticMatcher');
+  return {
+    scoreMatch:            jest.fn(),
+    SCORER_VERSION:        'v1+testmock',
+    levenshteinDistance:   actual.levenshteinDistance,
+  };
+});
 
 const { scoreMatch } = require('../../src/modules/probabilisticMatcher');
 const { resolverEngine } = require('../../src/modules/resolverEngine');
@@ -90,6 +94,7 @@ function buildMockDb(overrides = {}) {
     blockEmail:           { rows: [] },
     blockGuardianEmail:   { rows: [] },
     blockNameDob:         { rows: [] },
+    blockSimilarSurname:  { rows: [] },
     candidateJoin:        { rows: [] },
     staging:              { rows: [] },
     insertFan:            { rows: [] },
@@ -140,6 +145,10 @@ function buildMockDb(overrides = {}) {
     if (/SELECT il\.fan_id/i.test(text) && /identifier_type = 'guardian_email'/i.test(text)) {
       return respond('blockGuardianEmail');
     }
+    // similar_surname also selects name_last_word. Match it first.
+    if (/split_part\(il_n\.identifier_value/i.test(text)) {
+      return respond('blockSimilarSurname');
+    }
     if (/il_n\.name_last_word/i.test(text)) {
       return respond('blockNameDob');
     }
@@ -186,7 +195,7 @@ function tracePathOf(db) {
   return call ? call[1][3] : undefined;
 }
 
-// Any call shaped like one of findBlockCandidates' three probes. Must check
+// Any call shaped like one of findBlockCandidates' probes. Must check
 // for the literal identifier_type — a bare `SELECT il.fan_id` prefix also
 // matches the (differently-shaped) hard-match link check.
 function blockProbeCalls(db) {
@@ -195,6 +204,7 @@ function blockProbeCalls(db) {
     return (
       (/SELECT il\.fan_id/i.test(sql) && /identifier_type = 'email'/i.test(sql)) ||
       (/SELECT il\.fan_id/i.test(sql) && /identifier_type = 'guardian_email'/i.test(sql)) ||
+      /split_part\(il_n\.identifier_value/i.test(sql) ||
       /il_n\.name_last_word/i.test(sql)
     );
   });

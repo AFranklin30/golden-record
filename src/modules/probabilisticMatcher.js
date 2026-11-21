@@ -407,4 +407,12 @@ function scoreMatch(candidateRecord, inboundIdentifiers, now = Date.now()) {
   return { score, signals_matched, conflicts_detected, penalties_applied };
 }
 
-module.exports = { scoreMatch, detectConflicts, SIGNAL_CONFIG, getRecencyMultiplier, SCORER_VERSION, computeScorerFingerprint };
+module.exports = {
+  scoreMatch,
+  detectConflicts,
+  SIGNAL_CONFIG,
+  getRecencyMultiplier,
+  SCORER_VERSION,
+  computeScorerFingerprint,
+  levenshteinDistance,
+};

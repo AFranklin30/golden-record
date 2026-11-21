@@ -151,8 +151,9 @@ describe('resolverEngine — trace block instrumentation', () => {
     }
   });
 
-  // 2 — all three keys listed when all three are available on the inbound.
-  test('2 — all three keys listed when all three are available', async () => {
+  // 2 — every available key is listed. This inbound has a two-word name and a
+  // birthday, so similar_surname is available beside the three exact keys.
+  test('2 — all available keys listed when name, dob, email, and guardian email are present', async () => {
     const orgId = uuid();
     try {
       await seedOrg(orgId, 't2');
@@ -171,9 +172,9 @@ describe('resolverEngine — trace block instrumentation', () => {
       const trace = await getTrace(result.audit_event_id);
 
       expect(trace.block_keys_available).toEqual(
-        expect.arrayContaining(['email', 'guardian_email', 'name_dob'])
+        expect.arrayContaining(['email', 'guardian_email', 'name_dob', 'similar_surname'])
       );
-      expect(trace.block_keys_available.length).toBe(3);
+      expect(trace.block_keys_available.length).toBe(4);
     } finally {
       await cleanupOrg(orgId);
     }

@@ -4,7 +4,7 @@ const crypto    = require('crypto');
 const fs        = require('fs');
 const path      = require('path');
 const { Firestore } = require('@google-cloud/firestore');
-const { scoreMatch, SCORER_VERSION } = require('./probabilisticMatcher');
+const { scoreMatch, SCORER_VERSION, levenshteinDistance } = require('./probabilisticMatcher');
 const { NORMALIZATION_VERSION }      = require('./normalizer');
 
 const THRESHOLD_PATH_C = 0.85;
@@ -107,18 +107,31 @@ function passesSignalEligibilityGate(candidate, inbound) {
   return strongCount >= 1 || weakCount >= 2;
 }
 
+function nameWords(name) {
+  if (name == null) return [];
+  return String(name).trim().split(/\s+/).filter((word) => word !== '');
+}
+
 /**
  * Retrieval narrowing — finds fan_ids worth scoring instead of scanning.
  *
- * Three exact keys, unioned:
- *   email          — identifier_link exact probe
- *   guardian_email — identifier_link exact probe
- *   name_dob       — self-join on name_last_word + dob (migration_016)
+ * Four keys, unioned and deduped on fan_id:
+ *   email            — identifier_link exact probe
+ *   guardian_email   — identifier_link exact probe
+ *   name_dob         — self-join on name_last_word + dob (migration_016)
+ *   similar_surname  — exact first word, exact dob, surname Levenshtein <= 1
+ *
+ * similar_surname is retrieval permission only. It runs after the exact
+ * singular lookup has already missed, and a hit is scored with every other
+ * candidate. Distance 0 is included and deduped with name_dob. A one-word
+ * name has no separate surname, so that key stays unavailable.
  *
  * A key is "available" when the inbound carries the field(s) to build it.
  * A block larger than BLOCK_SIZE_CAP is DROPPED WHOLE, not truncated: at that
  * size the key failed to discriminate, and scoring near-random members risks a
- * false conflict, which is worse than a missed duplicate.
+ * false conflict, which is worse than a missed duplicate. similar_surname
+ * applies that cap to the distance-filtered fans, not to everyone who shares
+ * the first name and birthday.
  *
  * Each probe joins fan and filters deleted_at IS NULL, so reported block sizes
  * reflect live fans only. Filtering in the downstream join instead would make
@@ -131,10 +144,12 @@ function passesSignalEligibilityGate(candidate, inbound) {
  *   blockResults entries: { key, block_size, dropped }
  */
 async function findBlockCandidates(inbound, org_id, db) {
+  const words = nameWords(inbound.name);
   const keysAvailable = [];
   if (inbound.email != null)          keysAvailable.push('email');
   if (inbound.guardian_email != null) keysAvailable.push('guardian_email');
   if (inbound.name != null && inbound.dob != null) keysAvailable.push('name_dob');
+  if (words.length >= 2 && inbound.dob != null) keysAvailable.push('similar_surname');
 
   if (keysAvailable.length === 0) {
     return { fanIds: [], blockResults: [], keysAvailable: [] };
@@ -175,8 +190,7 @@ async function findBlockCandidates(inbound, org_id, db) {
       );
       rows = result.rows;
 
-    } else {
-      // name_dob
+    } else if (key === 'name_dob') {
       const lastWord = String(inbound.name).trim().split(/\s+/).pop();
       const result = await db.query(
         `SELECT il_n.fan_id
@@ -195,6 +209,37 @@ async function findBlockCandidates(inbound, org_id, db) {
         [org_id, lastWord, inbound.dob, probeLimit]
       );
       rows = result.rows;
+
+    } else if (key === 'similar_surname') {
+      // Exact first word and exact dob, then one surname edit.
+      // No LIMIT here. The cap applies after the distance filter, so a common
+      // first name and birthday cannot drop the one-edit surname before it is seen.
+      const firstName = words[0];
+      const surname = words[words.length - 1];
+      const result = await db.query(
+        `SELECT il_n.fan_id, il_n.name_last_word
+         FROM identifier_link il_n
+         JOIN identifier_link il_d
+           ON il_d.fan_id = il_n.fan_id
+          AND il_d.org_id = il_n.org_id
+          AND il_d.identifier_type = 'dob'
+          AND il_d.identifier_value = $3
+         JOIN fan f ON f.id = il_n.fan_id
+         WHERE il_n.org_id = $1
+           AND il_n.identifier_type = 'name'
+           AND split_part(il_n.identifier_value, ' ', 1) = $2
+           AND f.deleted_at IS NULL`,
+        [org_id, firstName, inbound.dob]
+      );
+      const seen = new Set();
+      rows = [];
+      for (const row of result.rows) {
+        if (seen.has(row.fan_id)) continue;
+        if (typeof row.name_last_word !== 'string' || row.name_last_word === '') continue;
+        if (levenshteinDistance(surname, row.name_last_word) > 1) continue;
+        seen.add(row.fan_id);
+        rows.push(row);
+      }
     }
 
     const block_size = rows.length;
@@ -364,8 +409,8 @@ async function resolverEngine(input, db) {
       trace.inbound = inbound;
 
       // STEP 1 — find candidates for probabilistic scoring (module call before any db write)
-      // Blocking: narrow to fans sharing an exact key with the inbound, then score
-      // within that set. Replaces the LIMIT 100 scan, which took 100 arbitrary fans
+      // Blocking: narrow to fans a retrieval key can reach, then score within
+      // that set. Replaces the LIMIT 100 scan, which took 100 arbitrary fans
       // per org and at production scale essentially never contained the true match.
       const block = await findBlockCandidates(inbound, org_id, db);
 

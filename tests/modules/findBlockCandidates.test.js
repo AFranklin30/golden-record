@@ -149,6 +149,8 @@ describe('findBlockCandidates', () => {
       );
 
       expect(result.fanIds).toEqual([fanId]);
+      expect(result.blockResults).toContainEqual({ key: 'name_dob', block_size: 1, dropped: false });
+      expect(result.blockResults).toContainEqual({ key: 'similar_surname', block_size: 0, dropped: false });
     } finally {
       await client.query(`DELETE FROM identifier_link WHERE fan_id = $1`, [fanId]);
       await client.query(`DELETE FROM fan WHERE id = $1`, [fanId]);
@@ -182,6 +184,7 @@ describe('findBlockCandidates', () => {
       const result = await findBlockCandidates({ name: 'bob smith' }, testOrgId, client);
 
       expect(result.keysAvailable).not.toContain('name_dob');
+      expect(result.keysAvailable).not.toContain('similar_surname');
       const nameDobCall = spy.mock.calls.find(
         c => typeof c[0] === 'string' && c[0].includes('il_n.name_last_word')
       );
@@ -217,8 +220,8 @@ describe('findBlockCandidates', () => {
     }
   });
 
-  // 8 — dedupe.
-  test('dedupe — a fan matching two keys appears once', async () => {
+  // 8 — dedupe. Exact surname also satisfies similar_surname, so three keys hit.
+  test('dedupe — a fan matching email, name_dob, and similar_surname appears once', async () => {
     const fanId = randomUUID();
     try {
       await seedFan(client, fanId, testOrgId);
@@ -233,6 +236,11 @@ describe('findBlockCandidates', () => {
 
       expect(result.fanIds).toEqual([fanId]);
       expect(result.fanIds.length).toBe(1);
+      expect(result.blockResults).toEqual(expect.arrayContaining([
+        { key: 'email', block_size: 1, dropped: false },
+        { key: 'name_dob', block_size: 1, dropped: false },
+        { key: 'similar_surname', block_size: 1, dropped: false },
+      ]));
     } finally {
       await client.query(`DELETE FROM identifier_link WHERE fan_id = $1`, [fanId]);
       await client.query(`DELETE FROM fan WHERE id = $1`, [fanId]);
