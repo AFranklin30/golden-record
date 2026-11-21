@@ -2,6 +2,8 @@
 
 Draft as of 2026-11-17. This document states what a candidate-retrieval layer must accomplish. It does not implement that layer, and it does not amend `docs/engineering/matching-policy.md`.
 
+Decision 6, approved 2026-11-20, is an identity decision recorded in that policy and in `docs/engineering/sprint-1.5-failure-analysis.md`. It is not implemented. It does not change the retrieval evidence below. An exact normalized full name remains a candidate when either birthday is missing. The later decision for that candidate is a human review, not a hard match. A missing birthday is still not a birthday conflict.
+
 Experiment 6 is evidence. The agreed direction in the review is the source of the requirements marked **agreed**. Anything this file does not have agreement for is marked **proposed** or **unresolved**. None of these statements are production policy until the canonical policy is explicitly changed.
 
 Evidence lives in `/tmp/gr-exp-multi-identifier-v1/` (`out/report.md`, `out/per-probe.csv`, `out/configurations.csv`). Set B has 80 probes and 80 anchors. Recall below is out of 39 same-person anchors.
@@ -333,6 +335,14 @@ CR-N2 requires corroborating first-name evidence and corroborating birthday evid
 **Status:** unresolved.
 
 The conflicts in section 10 are recorded. This draft does not apply them. A later approval has to accept or reject each conflict before `docs/engineering/matching-policy.md` or the resolver changes. Workload control, including what happens to a block larger than 50, is part of that approval. This draft requires that a qualifying candidate not vanish silently. It does not choose the replacement.
+
+### Later approval — Decision 6, exact name and a missing birthday
+
+**Status:** approved 2026-11-20. Not implemented. This does not close UR-1, UR-2, or UR-3.
+
+Question 2 in the failure analysis asked whether MB-3 and MB-4 both go to review. Decision 6 says yes. Retrieval of the exact name stays, which is CR-R1. The identity outcome is a human review whichever side is missing the birthday. The synthetic labels stay opposite, and the fields still cannot tell the groups apart. The tables in this draft are the Experiment 6 evidence. They are not relabeled.
+
+Decision 5B later chose the surname boundary this draft left open: exact first name, exact birthday, and raw Levenshtein distance at most 1. That retrieval key is implemented. The UR-1 and UR-2 text above is the unresolved wording from this draft. It is not a description of the resolver after that key.
 
 ### UR-4. Guardian email is not reopened
 
