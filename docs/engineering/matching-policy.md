@@ -12,7 +12,7 @@ A call has one singular identifier, plus any extra fields sent with it.
 
 The first step is an exact lookup for a live person who already holds that same identifier. A hit is a hard match: the existing person is returned, and their identifier is marked as seen again. Email and name are the exceptions below. Every other identifier type returns on that hit before the birthday is read.
 
-If the lookup misses, the system searches people who share an exact email, an exact guardian email, the same last name and the same birthday, or the same first name, the same birthday, and a surname within one edit. Those people are scored. A birthday conflict on a scored person rejects that person before any other agreement is counted. An email disagreement, a name disagreement, or a ZIP disagreement lowers the score. It does not reject the person by itself. Finding a person with the one-edit surname search does not make them the same person.
+If the lookup misses, the resolver searches people who share an exact email, an exact guardian email, the same last name and the same birthday, or the same first name, the same birthday, and a surname within one edit. Those people are scored. An approved rule, not yet in the resolver, also retrieves a listed nickname with that exact surname even when the birthdays differ. That retrieval is not a hard match. A birthday conflict on a scored person rejects that person before any other agreement is counted. An email disagreement, a name disagreement, or a ZIP disagreement lowers the score. It does not reject the person by itself. Finding a person with the one-edit surname search does not make them the same person.
 
 ```mermaid
 flowchart TD
@@ -28,7 +28,7 @@ flowchart TD
   emailName -->|no row| block --> score
 ```
 
-The diagram is the resolver as it runs. An exact name with either birthday missing still takes the hard-match branch. An exact name with both birthdays equal and no incoming email does too. The combined rule below sends both of those shapes to review once it is implemented. An exact name with both birthdays equal and an incoming email present stays a hard match.
+The diagram is the resolver as it runs. An exact name with either birthday missing still takes the hard-match branch. An exact name with both birthdays equal and no incoming email does too. The combined rule below sends both of those shapes to review once it is implemented. An exact name with both birthdays equal and an incoming email present stays a hard match. Present means the incoming email is non-missing. It does not have to equal the stored email.
 
 ## One-edit surname
 
@@ -66,7 +66,7 @@ What this search does not do:
 
 Example: `ada@example.com`, born 1990-04-02, then the same email born 1991-04-02. Review. Ada keeps the email.
 
-**Name.** Evidence, and many people may share it. In the resolver today, a review opens only when every stored birthday differs from the inbound birthday. Both people keep the name. One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs. A missing birthday on either side keeps the hard match. An exact name with both birthdays equal also keeps the hard match when the incoming row has no email. Those two hard matches are current resolver behavior. The combined rule below replaces both, and the code does not do that yet. The lookup uses the exact normalized name. A nickname or a close spelling is scored only when a search key already found that person. The one-edit surname search above is one of those keys. It does not change how the name is scored.
+**Name.** Evidence, and many people may share it. In the resolver today, a review opens only when every stored birthday differs from the inbound birthday. Both people keep the name. One stored birthday that matches keeps the hard match, even if another stored birthday on that person differs. A missing birthday on either side keeps the hard match. An exact name with both birthdays equal also keeps the hard match when the incoming row has no email. Those two hard matches are current resolver behavior. The combined rule below replaces both, and the code does not do that yet. The lookup uses the exact normalized name. In the resolver today, a nickname or a close spelling is scored only when a search key already found that person. The one-edit surname search above is one of those keys. It does not change how the name is scored. The nickname retrieval rule below is approved and is not one of those keys yet.
 
 Example: Jane Doe, born 1990-04-02, then Jane Doe, born 1991-05-06, and neither row has an email. Review. Both records keep the name Jane Doe. The search by last name plus birthday does not find her, because the birthdays differ. The review still names her, because the exact-name lookup did.
 
@@ -100,7 +100,7 @@ An exact-name candidate stays eligible in every shape. A missing birthday is not
 
 When an exact-name candidate is found:
 
-1. Both birthdays present and equal, and an incoming email is present: the existing exact-name hard match stays.
+1. Both birthdays present and equal, and an incoming email is present: the existing exact-name hard match stays. Present means the incoming email is non-missing. The value does not have to equal the email on the stored person.
 2. Both birthdays present and equal, and the incoming email is missing: open a human review. This is Decision 3.
 3. Both birthdays present and different: open a human review under the existing birthday-conflict policy.
 4. Either birthday missing: open a human review, whichever record is missing the birthday. This is Decision 6. Do not link the records automatically.
@@ -109,7 +109,25 @@ Required future behavior. Keep the exact-name lookup. For shapes 2 and 4, create
 
 MB-3 and MB-4 are shape 4. They are one observationally indistinguishable class. In both, the stored person has an email and no birthday, and the incoming row has the same name, no email, and a birthday. The synthetic labels say MB-3 is a different person and MB-4 is the same person. Those labels stay. The fields cannot tell the two groups apart, and this policy does not claim the matcher can. Both groups get a human review under Decision 6. The measured import hard-matched both. That measurement is the historical result. It is not this policy.
 
-CA-4 and A-NO-EMAIL are shape 2. Both birthdays match and the incoming email is missing. Both get a human review under Decision 3. The measured import hard-matched both. CA-4 is labeled a different person. A-NO-EMAIL is labeled the same person. Those labels stay. The columns of one row do not say which label it is.
+CA-4 and A-NO-EMAIL are shape 2. Both birthdays match and the incoming email is missing. Both get a human review under Decision 3. The 15 Set A A-NO-EMAIL probes, rows 126–140, keep that same treatment. They are not a separate rule. The measured import hard-matched both groups. CA-4 is labeled a different person. A-NO-EMAIL is labeled the same person. Those labels stay. The columns of one row do not say which label it is.
+
+## Nickname retrieval
+
+Approved, and not implemented. A recognized nickname pair with the same surname may retrieve a candidate even when the birthdays differ. The recognized pairs are the existing nickname groups in `GIVEN_NAME_GROUPS`. This is retrieval permission only. It does not hard-match and it does not merge. The birthday disagreement stays a conflict for the identity evaluation. It is not treated as agreement. Decision 5A is unchanged: that rule still requires an exact first name and an exact surname. A nickname is not an exact first name.
+
+The resolver does not retrieve on a nickname today. CO-1 was missed for that reason. The birthday swap on those four rows stays a conflict once a candidate is retrieved.
+
+## First-name conflict
+
+Approved, and not implemented. This defines the conflicting first name in Decision 1.
+
+Two populated first names are equivalent only when they match exactly, or when the pair is on an explicit list of approved variants. That list includes the approved nicknames. Fuzzy similarity alone does not establish equivalence. The resolver today still treats a full-name similarity of 0.85 as a name match. That scoring behavior is not this rule.
+
+When both first names are populated, they are not an exact match, and the pair is absent from the approved list, the difference is an identity conflict. Send the candidate for human review. Do not automatically link or merge the records.
+
+SFE-2 and SFE-3 are that conflict. The first names are populated, they differ, and they are not a listed nickname pair. Both the missing-birthday email hit and the agreeing-birthday email hit go to review. The resolver today hard-matches both on the email.
+
+No separate spelling-variant inventory was approved beyond those nickname groups. This policy does not add names to the list. A first name missing on one side is not decided here.
 
 ## Still a hard match
 
@@ -119,7 +137,7 @@ These lookups still return the existing person before a contradictory birthday i
 - The same email when either birthday is missing.
 - The same exact name when either birthday is missing. This is current resolver behavior. Decision 6 replaces it with a review once implemented.
 - The same email, or the same exact name, when one stored birthday matches the inbound birthday, even if another stored birthday differs.
-- The same exact name and the same birthday when an incoming email is present.
+- The same exact name and the same birthday when an incoming email is present. Present means non-missing. The incoming email does not have to equal the stored email.
 - The same exact name and the same birthday when the incoming email is missing. This is current resolver behavior. Decision 3 replaces it with a review once implemented. CA-4 and A-NO-EMAIL are that shape.
 
 A shared guardian email with different birthdays stays two people, and does not open a review, when the guardian email is not the singular identifier.
