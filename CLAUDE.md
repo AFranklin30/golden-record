@@ -204,11 +204,13 @@ returned a clean `200`. No error, no signal anything was wrong. `findBlockCandid
 (resolverEngine.js) replaces it: narrow to fans a retrieval key can reach,
 then score only within that set.
 
-**Four keys, unioned:**
+**Six keys, unioned:**
 - `email` — exact `identifier_link` probe
 - `guardian_email` — exact `identifier_link` probe
 - `name_dob` — self-join on `name_last_word` + exact `dob`
 - `similar_surname` — exact first word, exact `dob`, raw Levenshtein surname distance ≤ 1
+- `exact_name` — exact normalized full name, including when a birthday is missing or the birthdays differ
+- `nickname_surname` — listed given-name group plus the exact surname, including when the birthdays differ
 
 `name_dob` keys on the **last word of the name**, not the full name. Exact-string blocking
 on a fuzzy-compared field would drop the jon/john case Sprint 5 fixed to preserve. Last-word
@@ -286,7 +288,7 @@ that legitimately came up empty.
 **What blocking retired as *retrieval* paths (not as scoring signals).** `name_plus_zip`,
 `name_alone`, and `device_id` can still fire inside `scoreMatch` — but only as tiebreakers
 among candidates another key already surfaced. None of the three can *originate* a match
-anymore; only `email`, `guardian_email`, `name_dob`, and `similar_surname` can retrieve a candidate in the
+anymore; only `email`, `guardian_email`, `name_dob`, `similar_surname`, `exact_name`, and `nickname_surname` can retrieve a candidate in the
 first place. (`device_id` was already excluded from ever backing an `identifier_link` row —
 see Scoring — so this changes nothing new for it.)
 
@@ -305,7 +307,7 @@ change.
 
 ## The four resolution paths (resolverEngine.js)
 
-- **PATH A** — exact identifier_link match (hard match). `match_type: 'hard'`, `is_new_record: false`, confidence 1.0. Updates `last_seen_at`. JOINs `fan` and checks `deleted_at IS NULL` (a deleted fan's tap falls through to PATH B). Email and exact name are the exception: both birthdays present and different opens a review instead of this hard match. In the current code, a missing birthday still keeps the email hard match and the exact-name hard match, and an exact name with both birthdays equal still hard-matches when the incoming email is missing. Decision 3 and Decision 6 are approved and not implemented. Decision 3: both birthdays equal and the incoming email missing, including CA-4 and the 15 A-NO-EMAIL probes, must stay retrievable and open a review. Decision 6: either birthday missing on an exact name must stay retrievable and open a review. Both birthdays equal with an incoming email present stays a hard match. Present means non-missing, and the value does not have to equal the stored email. The email missing-birthday hard match is unchanged, including MB-1. A listed nickname with an exact surname is an approved retrieval permission, not a current block key, including when the birthdays differ. Two populated first names that are not exact and not on the approved variant list are an identity conflict and a review. Fuzzy similarity is not that equivalence. Neither retrieval permission nor the first-name rule is implemented. The policy is `docs/engineering/matching-policy.md`.
+- **PATH A** — exact identifier_link match (hard match). `match_type: 'hard'`, `is_new_record: false`, confidence 1.0. Updates `last_seen_at`. JOINs `fan` and checks `deleted_at IS NULL` (a deleted fan's tap falls through to PATH B). Email and exact name are the exceptions. Both birthdays present and different opens a review. Decision 3 and Decision 6 are implemented. Decision 3: both birthdays equal and the incoming email missing, including CA-4 and the 15 A-NO-EMAIL probes, stays retrievable and opens a review. Decision 6: either birthday missing on an exact name stays retrievable and opens a review. Both birthdays equal with an incoming email present stays a hard match. Present means non-missing, and the value does not have to equal the stored email. The email missing-birthday hard match is unchanged, including MB-1, unless the populated first names conflict. A listed nickname with an exact surname is a block key, including when the birthdays differ. That retrieval is not a hard match. Two populated first names that are not exact and not on the approved variant list are an identity conflict and a review. Fuzzy similarity is not that equivalence. A missing first name on one side is not that conflict. The policy is `docs/engineering/matching-policy.md`.
 - **PATH B** — no match. New fan created. `match_type: 'hard'`, `is_new_record: true`, confidence 1.0. (`'hard'` here means "this link is certain," not "fan existed before" — `is_new_record` answers that.)
 - **PATH C** — soft match, score ≥ 0.85. `match_type: 'soft'`. Mints a NEW fan and creates a pending `conflict_queue` row for staff review.
 - **PATH D** — review. Either 0.60 ≤ score < 0.85, or `name_plus_dob` fired and the score is under 0.60. `match_type: 'conflict'`. Mints a new fan + pending conflict_queue row. The queue stores the real score, which may be under 0.60.

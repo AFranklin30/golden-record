@@ -155,6 +155,29 @@ function givenNamesEquivalent(left, right) {
   return leftGroup != null && leftGroup === rightGroup;
 }
 
+function firstNameToken(name) {
+  if (name == null) return null;
+  const parts = String(name).trim().toLowerCase().split(/\s+/).filter((word) => word !== '');
+  return parts.length > 0 ? parts[0] : null;
+}
+
+function isListedGivenName(token) {
+  if (token == null) return false;
+  return GIVEN_NAME_GROUP.has(String(token).trim().toLowerCase());
+}
+
+// Two populated first names conflict when they are not the same token and
+// not an approved nickname pair. A missing side is not a conflict.
+// Fuzzy similarity is not equivalence.
+function populatedFirstNamesConflict(leftName, rightName) {
+  const left = firstNameToken(leftName);
+  const right = firstNameToken(rightName);
+  if (left == null || right == null) return false;
+  if (left === right) return false;
+  if (givenNamesEquivalent(left, right)) return false;
+  return true;
+}
+
 // First token is a listed nickname and the last token passes the spelling check.
 // Single-word names stay on the full-string spelling check below.
 function nicknameNameMatch(left, right) {
@@ -415,4 +438,7 @@ module.exports = {
   SCORER_VERSION,
   computeScorerFingerprint,
   levenshteinDistance,
+  givenNamesEquivalent,
+  isListedGivenName,
+  populatedFirstNamesConflict,
 };

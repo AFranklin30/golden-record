@@ -4,7 +4,14 @@ const crypto    = require('crypto');
 const fs        = require('fs');
 const path      = require('path');
 const { Firestore } = require('@google-cloud/firestore');
-const { scoreMatch, SCORER_VERSION, levenshteinDistance } = require('./probabilisticMatcher');
+const {
+  scoreMatch,
+  SCORER_VERSION,
+  levenshteinDistance,
+  givenNamesEquivalent,
+  isListedGivenName,
+  populatedFirstNamesConflict,
+} = require('./probabilisticMatcher');
 const { NORMALIZATION_VERSION }      = require('./normalizer');
 
 const THRESHOLD_PATH_C = 0.85;
@@ -115,16 +122,19 @@ function nameWords(name) {
 /**
  * Retrieval narrowing — finds fan_ids worth scoring instead of scanning.
  *
- * Four keys, unioned and deduped on fan_id:
+ * Six keys, unioned and deduped on fan_id:
  *   email            — identifier_link exact probe
  *   guardian_email   — identifier_link exact probe
  *   name_dob         — self-join on name_last_word + dob (migration_016)
  *   similar_surname  — exact first word, exact dob, surname Levenshtein <= 1
+ *   exact_name       — exact normalized full name, including when dob is missing
+ *   nickname_surname — listed given-name group + exact surname, any birthday
  *
- * similar_surname is retrieval permission only. It runs after the exact
- * singular lookup has already missed, and a hit is scored with every other
- * candidate. Distance 0 is included and deduped with name_dob. A one-word
- * name has no separate surname, so that key stays unavailable.
+ * similar_surname, exact_name, and nickname_surname are retrieval permission
+ * only. They run after the exact singular lookup has already missed, and a
+ * hit is scored with every other candidate. similar_surname distance 0 is
+ * included and deduped with name_dob. A one-word name has no separate
+ * surname, so the surname keys stay unavailable.
  *
  * A key is "available" when the inbound carries the field(s) to build it.
  * A block larger than BLOCK_SIZE_CAP is DROPPED WHOLE, not truncated: at that
@@ -150,6 +160,8 @@ async function findBlockCandidates(inbound, org_id, db) {
   if (inbound.guardian_email != null) keysAvailable.push('guardian_email');
   if (inbound.name != null && inbound.dob != null) keysAvailable.push('name_dob');
   if (words.length >= 2 && inbound.dob != null) keysAvailable.push('similar_surname');
+  if (words.length >= 2) keysAvailable.push('exact_name');
+  if (words.length >= 2 && isListedGivenName(words[0])) keysAvailable.push('nickname_surname');
 
   if (keysAvailable.length === 0) {
     return { fanIds: [], blockResults: [], keysAvailable: [] };
@@ -158,6 +170,7 @@ async function findBlockCandidates(inbound, org_id, db) {
   const probeLimit  = BLOCK_SIZE_CAP + 1;
   const blockResults = [];
   const fanIdSet      = new Set();
+  const fansByKey     = {};
 
   for (const key of keysAvailable) {
     let rows;
@@ -240,6 +253,45 @@ async function findBlockCandidates(inbound, org_id, db) {
         seen.add(row.fan_id);
         rows.push(row);
       }
+
+    } else if (key === 'exact_name') {
+      const result = await db.query(
+        `SELECT il.fan_id
+         FROM identifier_link il
+         JOIN fan f ON f.id = il.fan_id
+         WHERE il.org_id = $1
+           AND il.identifier_type = 'name'
+           AND il.identifier_value = $2
+           AND f.deleted_at IS NULL
+         LIMIT $3`,
+        [org_id, inbound.name, probeLimit]
+      );
+      rows = result.rows;
+
+    } else if (key === 'nickname_surname') {
+      // Listed given name plus the exact surname. Birthday is not a filter.
+      // The cap applies after the nickname filter, same as similar_surname.
+      const firstName = words[0];
+      const surname = words[words.length - 1];
+      const result = await db.query(
+        `SELECT il.fan_id, il.identifier_value
+         FROM identifier_link il
+         JOIN fan f ON f.id = il.fan_id
+         WHERE il.org_id = $1
+           AND il.identifier_type = 'name'
+           AND il.name_last_word = $2
+           AND f.deleted_at IS NULL`,
+        [org_id, surname]
+      );
+      const seen = new Set();
+      rows = [];
+      for (const row of result.rows) {
+        if (seen.has(row.fan_id)) continue;
+        const storedFirst = nameWords(row.identifier_value)[0];
+        if (!givenNamesEquivalent(firstName, storedFirst)) continue;
+        seen.add(row.fan_id);
+        rows.push(row);
+      }
     }
 
     const block_size = rows.length;
@@ -247,13 +299,94 @@ async function findBlockCandidates(inbound, org_id, db) {
     blockResults.push({ key, block_size, dropped });
 
     if (!dropped) {
+      const ids = [];
       for (const row of rows) {
         fanIdSet.add(row.fan_id);
+        ids.push(row.fan_id);
       }
+      fansByKey[key] = ids;
     }
   }
 
-  return { fanIds: Array.from(fanIdSet), blockResults, keysAvailable };
+  return { fanIds: Array.from(fanIdSet), blockResults, keysAvailable, fansByKey };
+}
+
+function sameNormalizedName(left, right) {
+  if (left == null || right == null) return false;
+  const normalize = (value) => String(value).trim().toLowerCase().replace(/\s+/g, ' ');
+  const a = normalize(left);
+  const b = normalize(right);
+  return a !== '' && a === b;
+}
+
+function textOrNull(value) {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
+// When scoring would store a new person, hold a retrieved exact name with a
+// missing or conflicting birthday, or a retrieved nickname with a
+// conflicting birthday. Retrieval itself does not choose the person.
+function reviewForRetrievedCandidate(candidates, inbound, block) {
+  const rows = Array.isArray(candidates) ? candidates : [];
+  const missingBirthday = rows.find((candidate) =>
+    sameNormalizedName(candidate.name, inbound.name)
+    && (candidate.dob == null || inbound.dob == null)
+  );
+  if (missingBirthday) {
+    return {
+      fanId: missingBirthday.id,
+      signal: 'exact_name_missing_birthday',
+      withholdIdentifier: false,
+    };
+  }
+
+  // Shape 3. An exact name was retrieved and the birthdays differ.
+  // The disagreement stays a conflict and does not become a silent new person.
+  const birthdayConflict = rows.find((candidate) =>
+    sameNormalizedName(candidate.name, inbound.name)
+    && inbound.dob != null
+    && candidate.dob != null
+    && candidate.dob !== inbound.dob
+  );
+  if (birthdayConflict) {
+    return {
+      fanId: birthdayConflict.id,
+      signal: 'dob_veto',
+      withholdIdentifier: false,
+    };
+  }
+
+  const nicknameIds = new Set(
+    (block && block.fansByKey && block.fansByKey.nickname_surname) || []
+  );
+  const nicknameConflict = rows.find((candidate) =>
+    nicknameIds.has(candidate.id)
+    && inbound.dob != null
+    && candidate.dob != null
+    && candidate.dob !== inbound.dob
+  );
+  if (nicknameConflict) {
+    return {
+      fanId: nicknameConflict.id,
+      signal: 'nickname_birthday_conflict',
+      withholdIdentifier: false,
+    };
+  }
+  return null;
+}
+
+function applyHeldReview(trace, best, heldReview) {
+  best.score = 0;
+  best.signals = [{ signal: heldReview.signal }];
+  best.match = { id: heldReview.fanId };
+  trace.scoring_status = 'performed';
+  trace.skip_reason = null;
+  trace.best_score = 0;
+  trace.best_signals = best.signals;
+  trace.best_candidate_id = heldReview.fanId;
+  if (!trace.candidate_ids.includes(heldReview.fanId)) {
+    trace.candidate_ids.push(heldReview.fanId);
+  }
 }
 
 // RECEIVE
@@ -352,27 +485,67 @@ async function resolverEngine(input, db) {
     );
 
     let takeHardMatch = linkResult.rows.length > 0;
-    let emailDobVetoFanId = null;
-    let nameDobVetoFanId = null;
+    let heldReview = null;
     if (takeHardMatch && (identifier_type === 'email' || identifier_type === 'name')) {
-      const inboundDob = input.identifiers && typeof input.identifiers.dob === 'string'
-        ? input.identifiers.dob
-        : null;
-      if (inboundDob) {
-        const storedDob = await db.query(
-          `SELECT identifier_value
-             FROM identifier_link
-            WHERE fan_id = $1 AND org_id = $2 AND identifier_type = 'dob'`,
-          [linkResult.rows[0].fan_id, org_id]
-        );
-        const storedValues = storedDob.rows.map((row) => row.identifier_value);
-        const birthdayConflicts = storedValues.length > 0
-          && storedValues.every((value) => value !== inboundDob);
-        if (birthdayConflicts) {
-          takeHardMatch = false;
-          if (identifier_type === 'email') emailDobVetoFanId = linkResult.rows[0].fan_id;
-          else nameDobVetoFanId = linkResult.rows[0].fan_id;
-        }
+      const matchedFanId = linkResult.rows[0].fan_id;
+      const storedIds = await db.query(
+        `SELECT identifier_type, identifier_value
+           FROM identifier_link
+          WHERE fan_id = $1 AND org_id = $2
+            AND identifier_type IN ('name', 'dob')`,
+        [matchedFanId, org_id]
+      );
+      const storedNames = storedIds.rows
+        .filter((row) => row.identifier_type === 'name')
+        .map((row) => row.identifier_value);
+      const storedDobs = storedIds.rows
+        .filter((row) => row.identifier_type === 'dob')
+        .map((row) => row.identifier_value);
+      const extra = input.identifiers || {};
+      const inboundDob = textOrNull(identifier_type === 'dob' ? identifier_value : extra.dob);
+      const inboundName = textOrNull(identifier_type === 'name' ? identifier_value : extra.name);
+      const incomingEmail = textOrNull(identifier_type === 'email' ? identifier_value : extra.email);
+      const birthdayConflicts = inboundDob != null
+        && storedDobs.length > 0
+        && storedDobs.every((value) => value !== inboundDob);
+      const birthdaysEqual = inboundDob != null
+        && storedDobs.some((value) => value === inboundDob);
+      const eitherBirthdayMissing = inboundDob == null || storedDobs.length === 0;
+
+      if (birthdayConflicts) {
+        takeHardMatch = false;
+        heldReview = {
+          fanId: matchedFanId,
+          signal: 'dob_veto',
+          withholdIdentifier: identifier_type === 'email',
+        };
+      } else if (
+        identifier_type === 'email'
+        && populatedFirstNamesConflict(storedNames[0], inboundName)
+      ) {
+        // Decision 1. The email stays on the stored person.
+        takeHardMatch = false;
+        heldReview = {
+          fanId: matchedFanId,
+          signal: 'first_name_conflict',
+          withholdIdentifier: true,
+        };
+      } else if (identifier_type === 'name' && eitherBirthdayMissing) {
+        // Decision 6. The candidate stays, and the link is a review.
+        takeHardMatch = false;
+        heldReview = {
+          fanId: matchedFanId,
+          signal: 'exact_name_missing_birthday',
+          withholdIdentifier: false,
+        };
+      } else if (identifier_type === 'name' && birthdaysEqual && incomingEmail == null) {
+        // Decision 3. An incoming email, even a different one, keeps the hard match.
+        takeHardMatch = false;
+        heldReview = {
+          fanId: matchedFanId,
+          signal: 'exact_name_missing_email',
+          withholdIdentifier: false,
+        };
       }
     }
 
@@ -527,22 +700,20 @@ async function resolverEngine(input, db) {
         trace.best_candidate_id = bestMatch ? bestMatch.id : null;
       }
 
-      // An exact email or exact name was found, and both birthdays exist and
-      // differ. Review that fan. The name-and-birthday block cannot retrieve
-      // them, because it requires the same birthday, so record the lookup here.
-      const dobVetoFanId = emailDobVetoFanId || nameDobVetoFanId;
-      if (dobVetoFanId) {
-        bestScore = 0;
-        bestSignals = [{ signal: 'dob_veto' }];
-        bestMatch = { id: dobVetoFanId };
-        trace.scoring_status = 'performed';
-        trace.skip_reason = null;
-        trace.best_score = 0;
-        trace.best_signals = bestSignals;
-        trace.best_candidate_id = dobVetoFanId;
-        if (!trace.candidate_ids.includes(dobVetoFanId)) {
-          trace.candidate_ids.push(dobVetoFanId);
-        }
+      // Lookup holds (birthday conflict, first-name conflict, Decision 3,
+      // Decision 6) replace whatever the block scored. A retrieved exact
+      // name with a missing birthday, or a retrieved nickname with a
+      // birthday conflict, becomes a review only when scoring would
+      // otherwise store a new person.
+      if (!heldReview && pathForMatch(bestScore, bestSignals) === 'B') {
+        heldReview = reviewForRetrievedCandidate(candidateRows.rows, inbound, block);
+      }
+      if (heldReview) {
+        const best = { score: bestScore, signals: bestSignals, match: bestMatch };
+        applyHeldReview(trace, best, heldReview);
+        bestScore = best.score;
+        bestSignals = best.signals;
+        bestMatch = best.match;
       }
 
       // Soft link detection — guardian_email signal triggers staging write.
@@ -580,7 +751,7 @@ async function resolverEngine(input, db) {
         }
       }
 
-      const resolutionPath = (emailDobVetoFanId || nameDobVetoFanId)
+      const resolutionPath = heldReview
         ? 'D'
         : pathForMatch(bestScore, bestSignals);
 
@@ -631,7 +802,7 @@ async function resolverEngine(input, db) {
            VALUES ($1, $2, 'platform', 1, NOW(), NOW())`,
           [new_fan_id, org_id]
         );
-        if (!(emailDobVetoFanId && identifier_type === 'email')) {
+        if (!(heldReview && heldReview.withholdIdentifier)) {
           await db.query(
             `INSERT INTO identifier_link
                (fan_id, identifier_type, identifier_value, org_id, source_system,

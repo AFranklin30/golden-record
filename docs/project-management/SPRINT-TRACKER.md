@@ -254,4 +254,32 @@ Row 341 is a false merge. The demo labels it as a known weakness covered by Spri
 
 ## Remaining
 
-Sprint 1's task list is complete. Sprint 1.5 is approved and has no tasks here yet. Do not treat the S1-04 policy comparison as the identity measurement. The identity measurement is the S1-05 report. The buyer write-up of that measurement is the S1-06 report.
+Sprint 1's task list is complete. Do not treat the S1-04 policy comparison as the identity measurement. The identity measurement is the S1-05 report. The buyer write-up of that measurement is the S1-06 report.
+
+## Sprint 1.5
+
+Sprint 1.5 is not complete. S1.5-03 and S1.5-05 were run on Nov 22, 2026. The other Sprint 1.5 work is not on this list.
+
+| ID | Status |
+|---|---|
+| S1.5-03 False-merge rules in the matcher | COMPLETED |
+| S1.5-05 Re-run the 360-row identity metrics | COMPLETED |
+
+### S1.5-03 and S1.5-05 result
+
+The matcher now holds the approved cases for review. The numbers below are the measured re-run. The old S1-05 files were not replaced.
+
+| | S1-05 baseline | After S1.5-03 |
+|---|---|---|
+| Jest | 698 passed, 1 skipped | 720 passed, 8 failed, 1 skipped, 729 total |
+| 60-scenario benchmark | 60 scenarios, 0 mismatches, P 0.9048, R 0.7917, 27 reviews | 60 scenarios, 5 mismatches, P 0.875, R 0.7368, 32 reviews |
+| Pooled precision | 28/47 | 8/8 |
+| Pooled recall | 28/41 | 8/8 |
+| False merges | 19 | 0 |
+| Missed matches | 13 | 0 |
+| Reviews | 65/185 | 117/185 |
+| Found | 77/99 | 90/99 |
+
+The 8 Jest failures are `tests/eval.benchmark.test.js` and `tests/eval.level2.test.js`. Those fixtures still expect the old hard matches. They were not edited. Detail is in `eval/reports/sprint-1.5-rerun-report.md`.
+
+8/8 is every remaining automatic decision. It is not a claim that the hard cases were solved. Those cases are in the 117 reviews. Set A has no remaining automatic decision, so its precision and recall are null. The metrics rule of three on 8/8 is 3/8.

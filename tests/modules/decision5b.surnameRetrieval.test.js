@@ -343,7 +343,7 @@ describe('Decision 5B similar-surname retrieval', () => {
     }
   });
 
-  test('an exact name still hard-matches before retrieval keys run', async () => {
+  test('an exact name and equal birthday with no incoming email opens a review', async () => {
     const orgId = uuid();
     try {
       await seedOrg(orgId);
@@ -357,13 +357,18 @@ describe('Decision 5B similar-surname retrieval', () => {
         dob:  '1815-12-10',
       }, { type: 'name', value: 'ada lovelace' }), client);
       const trace = await getTrace(result.audit_event_id);
+      const review = await client.query(
+        `SELECT fan_id_a, status FROM conflict_queue WHERE id = $1`,
+        [result.conflict_id]
+      );
 
-      expect(result.match_type).toBe('hard');
-      expect(result.is_new_record).toBe(false);
-      expect(result.fan_id).toBe(stored);
-      expect(trace.resolution_path).toBe('A');
-      expect(trace.block_keys_available).toEqual([]);
-      expect(trace.block_results).toBeNull();
+      expect(result.match_type).toBe('conflict');
+      expect(result.is_new_record).toBe(true);
+      expect(result.fan_id).not.toBe(stored);
+      expect(trace.resolution_path).toBe('D');
+      expect(trace.best_candidate_id).toBe(stored);
+      expect(review.rows[0].fan_id_a).toBe(stored);
+      expect(review.rows[0].status).toBe('pending');
     } finally {
       await cleanupOrg(orgId);
     }
