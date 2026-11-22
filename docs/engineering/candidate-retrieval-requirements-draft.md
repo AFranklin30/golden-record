@@ -2,7 +2,7 @@
 
 Draft as of 2026-11-17. This document states what a candidate-retrieval layer must accomplish. It does not implement that layer, and it does not amend `docs/engineering/matching-policy.md`.
 
-Decision 3 and Decision 6 are identity decisions recorded in that policy and in `docs/engineering/sprint-1.5-failure-analysis.md`. They are not implemented. They do not change the retrieval evidence below. An exact normalized full name remains a candidate when either birthday is missing, and when both birthdays match and the incoming email is missing. A missing birthday leads to a human review. Both birthdays equal and an incoming email missing also leads to a human review. A missing birthday is still not a birthday conflict. Both birthdays equal, with an incoming email present, stays the existing exact-name hard match.
+Decision 3 and Decision 6 are identity decisions recorded in that policy and in `docs/engineering/sprint-1.5-failure-analysis.md`. The resolver now implements them. They do not change the retrieval evidence below. An exact normalized full name remains a candidate when either birthday is missing, and when both birthdays match and the incoming email is missing. A missing birthday leads to a human review. Both birthdays equal and an incoming email missing also leads to a human review. A missing birthday is still not a birthday conflict. Both birthdays equal, with an incoming email present, stays the existing exact-name hard match.
 
 Experiment 6 is evidence. The agreed direction in the review is the source of the requirements marked **agreed**. Anything this file does not have agreement for is marked **proposed** or **unresolved**. None of these statements are production policy until the canonical policy is explicitly changed.
 
@@ -338,11 +338,11 @@ The conflicts in section 10 are recorded. This draft does not apply them. A late
 
 ### Later approval — Decision 3 and Decision 6, read together
 
-**Status:** approved. Not implemented. Decision 3 is the more specific exception. Decision 6 governs a missing birthday. This does not close UR-1, UR-2, or UR-3.
+**Status:** approved. Decision 3 is the more specific exception. Decision 6 governs a missing birthday. The resolver now opens those reviews, retrieves a listed nickname with the exact surname, and treats a populated non-equivalent first name as a review. This does not close UR-1, UR-2, or UR-3.
 
 Question 2 in the failure analysis asked whether MB-3 and MB-4 both go to review. Decision 6 says yes, whichever side is missing the birthday. Question 3 asked whether CA-4 and A-NO-EMAIL both go to review. Decision 3 says yes: both birthdays are present and equal, and the incoming email is missing. Retrieval of the exact name stays, which is CR-R1. The synthetic labels stay as written, and the fields still cannot tell MB-3 from MB-4, or CA-4 from A-NO-EMAIL. The tables in this draft are the Experiment 6 evidence. They are not relabeled. An exact-email hard match, including MB-1, is outside this pair of decisions. In shape 1, an incoming email is present when it is non-missing. It does not have to equal the stored email. The 15 A-NO-EMAIL probes remain shape 2, with CA-4.
 
-CR-R2 is approved as retrieval permission. A listed nickname with the exact surname may enter the candidate set even when the birthdays differ. That permission is not implemented in the resolver's block keys. The birthday disagreement stays attached for identity evaluation. It does not authorize a hard match, and a nickname is not an exact first name under Decision 5A.
+CR-R2 is implemented as retrieval permission. A listed nickname with the exact surname may enter the candidate set even when the birthdays differ. The birthday disagreement stays attached for identity evaluation. It does not authorize a hard match, and a nickname is not an exact first name under Decision 5A. A retrieved nickname pair that would otherwise be stored as a new person is held for review.
 
 A populated first-name difference is an identity conflict when the names are not exact and the pair is not on the explicit variant list. The nickname groups are the located list. Fuzzy similarity is not equivalence. No spelling-variant inventory beyond those groups was approved here. This identity rule does not add a retrieval signal.
 

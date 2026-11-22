@@ -50,4 +50,13 @@ Nov 16, 2026, about 3:09 PM CT. Aaron approved S1-04. All 360 rows were imported
 ## Counts
 
 Sprint 0: 7 tasks, 7 COMPLETED.
-Sprint 1: 7 tasks, 7 COMPLETED. Sprint status is COMPLETED as of Nov 18, 2026. The second report is `eval/reports/synthetic-200-report.md`. The four demo picks are in `docs/demo/demo-examples.md`. Sprint 1.5 is approved (D-022) and is not on this board.
+Sprint 1: 7 tasks, 7 COMPLETED. Sprint status is COMPLETED as of Nov 18, 2026. The second report is `eval/reports/synthetic-200-report.md`. The four demo picks are in `docs/demo/demo-examples.md`.
+
+## Sprint 1.5 — not complete
+
+S1.5-03 and S1.5-05 are recorded from the re-run on Nov 22, 2026. The sprint is not complete. Aaron decides that.
+
+| ID | Description | Priority | Status | Depends on | Deliverable | Result |
+|---|---|---|---|---|---|---|
+| S1.5-03 | Put the approved false-merge rules in the matcher. | P0 | COMPLETED | Decision 3, Decision 6, Decision 1, nickname retrieval | `src/modules/resolverEngine.js`, `tests/modules/sprint15.falseMerge.test.js` | Exact email plus a conflicting first name, exact name with a missing birthday, and exact name with equal birthdays and no incoming email open a review. A listed nickname and an exact full name can retrieve a candidate. Retrieval does not hard-match. |
+| S1.5-05 | Re-run the 360-row import and the S1-05 metrics. | P0 | COMPLETED | S1.5-03 | `eval/reports/sprint-1.5-rerun-report.md` | Pooled precision 8/8, recall 8/8, false merges 0, missed matches 0, reviews 117/185, found 90/99. The 19 false merges and 13 missed matches are reviews. No new false merge and no new miss. The 60-scenario benchmark is 5 policy mismatches, precision 0.875, recall 0.7368. Jest is 720 passed, 8 failed, 1 skipped. The failures are the old fixtures. |

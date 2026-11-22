@@ -1,3 +1,25 @@
+# S1.5-03 false-merge holds and S1.5-05 re-run
+
+## Context
+Approved policy still hard-matches the risky exact-email and exact-name cases, and it does not retrieve a listed nickname. Sprint 1.5-03 puts those decisions in the matcher. Sprint 1.5-05 re-measures the synthetic import. Datasets, labels, and the 60-scenario fixtures stay unchanged.
+
+## Files
+- `src/modules/probabilisticMatcher.js` — first-name conflict helper only
+- `src/modules/resolverEngine.js` — review holds and two retrieval keys
+- `tests/modules/sprint15.falseMerge.test.js` — one test per new rule
+- `docs/engineering/matching-policy.md` — describe the resolver after the change
+- `eval/reports/sprint-1.5-rerun-report.md` — new numbers only
+- `docs/project-management/TASK-BOARD.md`, `SPRINT-TRACKER.md`
+
+## THE FIX
+Exact email plus two populated non-equivalent first names opens a review and does not copy the email. Exact name with either birthday missing opens a review. Exact name, equal birthdays, and no incoming email opens a review. Equal birthdays with an incoming email stay a hard match. A listed nickname plus the same surname can retrieve a candidate even when the birthdays differ; that retrieval is not a hard match. An exact full name can retrieve a candidate when the birthday is missing; a missing birthday on that candidate opens a review.
+
+## THE TEST
+Seed a fresh org. Assert review versus hard match for SFE-2, SFE-3, MB-1, MB-3, CA-4, shape 1, CO-1, and MB-2. Assert the email hard-match regression when the first names agree.
+
+## DO NOT
+Do not edit synthetic labels, CSVs, or `eval/fixtures/benchmarkCases.js`. Do not tune thresholds. Do not merge the pull request.
+
 # Test cleanup after the benchmark
 
 ## Context

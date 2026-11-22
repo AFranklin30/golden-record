@@ -169,8 +169,9 @@ describe('findBlockCandidates', () => {
         { name: 'bob smith', dob: '1991-01-01' }, testOrgId, client
       );
 
-      expect(result.fanIds).toEqual([]);
       expect(result.blockResults).toContainEqual({ key: 'name_dob', block_size: 0, dropped: false });
+      expect(result.blockResults).toContainEqual({ key: 'nickname_surname', block_size: 1, dropped: false });
+      expect(result.fanIds).toEqual([fanId]);
     } finally {
       await client.query(`DELETE FROM identifier_link WHERE fan_id = $1`, [fanId]);
       await client.query(`DELETE FROM fan WHERE id = $1`, [fanId]);

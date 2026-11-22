@@ -174,7 +174,11 @@ describe('resolverEngine — trace block instrumentation', () => {
       expect(trace.block_keys_available).toEqual(
         expect.arrayContaining(['email', 'guardian_email', 'name_dob', 'similar_surname'])
       );
-      expect(trace.block_keys_available.length).toBe(4);
+      expect(trace.block_keys_available).toEqual(
+        expect.arrayContaining(['exact_name'])
+      );
+      expect(trace.block_keys_available).not.toContain('nickname_surname');
+      expect(trace.block_keys_available.length).toBe(5);
     } finally {
       await cleanupOrg(orgId);
     }
@@ -345,15 +349,16 @@ describe('resolverEngine — trace block instrumentation', () => {
     }
   });
 
-  // 9 — PRECEDENCE: no_block_key beats everything. Name alone (no dob) builds
-  // no key at all — no probe should run, no fans should be needed to prove it.
+  // 9 — PRECEDENCE: no_block_key beats everything. A ZIP alone builds
+  // no key. A multi-word name is the exact_name key even when the
+  // birthday is missing, so it is not this case.
   test('9 — PRECEDENCE: no_block_key beats everything', async () => {
     const orgId = uuid();
     try {
       await seedOrg(orgId, 't9');
 
       const result = await resolverEngine(
-        baseInput(orgId, { identifiers: { name: 'trace nine person' } }),
+        baseInput(orgId, { identifiers: { zip: '73101' } }),
         client
       );
       const trace = await getTrace(result.audit_event_id);

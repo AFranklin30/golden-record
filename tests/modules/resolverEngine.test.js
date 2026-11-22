@@ -16,9 +16,12 @@ jest.mock('@google-cloud/firestore', () => ({
 jest.mock('../../src/modules/probabilisticMatcher', () => {
   const actual = jest.requireActual('../../src/modules/probabilisticMatcher');
   return {
-    scoreMatch:            jest.fn(),
-    SCORER_VERSION:        'v1+testmock',
-    levenshteinDistance:   actual.levenshteinDistance,
+    scoreMatch:                    jest.fn(),
+    SCORER_VERSION:                'v1+testmock',
+    levenshteinDistance:           actual.levenshteinDistance,
+    givenNamesEquivalent:          actual.givenNamesEquivalent,
+    isListedGivenName:             actual.isListedGivenName,
+    populatedFirstNamesConflict:   actual.populatedFirstNamesConflict,
   };
 });
 
@@ -95,6 +98,9 @@ function buildMockDb(overrides = {}) {
     blockGuardianEmail:   { rows: [] },
     blockNameDob:         { rows: [] },
     blockSimilarSurname:  { rows: [] },
+    blockExactName:       { rows: [] },
+    blockNickname:        { rows: [] },
+    storedNameAndDob:     { rows: [] },
     candidateJoin:        { rows: [] },
     staging:              { rows: [] },
     insertFan:            { rows: [] },
@@ -135,6 +141,15 @@ function buildMockDb(overrides = {}) {
     // exact SQL text — parameterized identifier_type ($1), not a literal.
     if (/il\.identifier_type = \$1/i.test(text) && /JOIN fan f/i.test(text)) {
       return respond('hardMatchLink');
+    }
+    if (/identifier_type IN \('name', 'dob'\)/i.test(text)) {
+      return respond('storedNameAndDob');
+    }
+    if (/SELECT il\.fan_id/i.test(text) && /identifier_type = 'name'/i.test(text)) {
+      return respond('blockExactName');
+    }
+    if (/FROM identifier_link il\b/i.test(text) && /il\.name_last_word/i.test(text)) {
+      return respond('blockNickname');
     }
     // findBlockCandidates probes — distinguished from the candidate JOIN's
     // own `il_email.identifier_type = 'email'` alias by the bare `SELECT
