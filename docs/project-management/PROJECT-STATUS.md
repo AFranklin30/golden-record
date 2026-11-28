@@ -1,104 +1,114 @@
 # Golden Record — Project Status
 
-Updated Nov 16, 2026. Sprint 0 is COMPLETED. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
+Snapshot dated Nov 27, 2026 (CT), about 9:45 PM. Draft. Not committed.
 
-Sprint 1 is IN PROGRESS. S1-01 and S1-02 are COMPLETED. The 60-scenario benchmark was re-run and did not move. Aaron approved expanding the labeled set from 200 to 360 rows on Nov 16 (D-021). Those rows have not been imported.
+`main` is the source of truth at `7737475b9bf5e725e43faea70c7aa2f9637d7d72`. That is the merge of pull request #18 (admin safety fixes and `migration_022`), Nov 27, 2026, 9:50 PM CT. Before it: `855997e` (pull request #17, operator authorization, 9:31 PM CT) and `04eb817` (pull request #16, fixtures only, 9:23 PM CT). `render.yaml` sets `branch: main` (D-020).
 
-`main` is the source of truth at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` sets `branch: main` (D-020). The first audit's claim that `main` was still `7fa878d` and that the tip was unmerged is historical only.
+Numbers marked "reported" were not run by PM. They are labeled UNVERIFIED. Nothing here is a new measurement.
 
 ## Dashboard
 
 | | |
 |---|---|
-| Health | Green for Sprint 0 and for S1-01. S1-02 labels are saved. The 200-row import is not measured yet. |
+| Health | Amber. Code is merged and tests are reported green. No verified run is recorded on `7737475`. The hosted database still must not get `migration_021` and `migration_022` until Aaron checks the hosted admin result. |
 | Current milestone | Commercial demo on the existing engine. |
-| Current sprint | Sprint 1. IN PROGRESS since Nov 16, 2026. Sprint 0 is COMPLETED. |
-| `main` | `f867e62921e6332e6e02aeebeacba86351844699`. Render deploys this branch. |
+| Current sprint | Sprint 1.5, Matching Quality Fixes. Not complete. Aaron decides when it is. |
+| `main` | `7737475b9bf5e725e43faea70c7aa2f9637d7d72`. Render deploys this branch. |
 | Sprint 0 tasks | 7 of 7 COMPLETED. |
-| Sprint 1 tasks | 2 of 7 COMPLETED. Next is S1-03. |
-| Current task | S1-03. Generate `demo/synthetic-customers-200.csv`. Do not import it until S1-04. |
-| Blockers | None for S1-01 or S1-02. `*.csv` is still gitignored. `node scripts/seedDemoOrg.js` still needs `--unhandled-rejections=warn` when Firestore has no credentials, because the household child write rejects outside `index.js`. The 60-scenario test still overwrites `eval/reports/benchmark-report.md`, so the later 200-row report needs its own file. |
-| Next action | S1-03, then wait for Aaron before S1-04. |
-| Next three priorities | 1. Keep the 60-scenario report unchanged. 2. Generate the local CSV from the existing script. 3. Import that file through `importCustomers` only after Aaron says to start S1-04, and write a separate report. |
+| Sprint 1 tasks | 7 of 7 COMPLETED (Nov 18, 2026). |
+| Sprint 1.5 tasks | 6 of 9 COMPLETED. S1.5-06 (this draft) is IN PROGRESS. S1.5-07 (D-023 docs and pending fixtures) and S1.5-09 (stable lookup order) are NOT STARTED. |
+| Pulled forward | Operator authorization (D-024): built and merged. Aaron's confirmation of the move is not recorded (D-025). The admin fix (`migration_022`, AUTH-02) is merged in PR #18 (`7737475`). The hosted run is still gated. |
+| Sprint 2 | Planned on the task board. 8 tasks, all NOT STARTED. Waits on the entry gates below. |
+| Blockers | Hosted hold stays: do not run `migration_021` and `migration_022` on the hosted database until Aaron checks that the hosted admin result is him (D-029). PR #18 is merged, so the code fix exists. PM has no record that the two pre-merge checks were done (hosted result; same lock key at all three call sites). |
+| Next action | Aaron closes Sprint 1.5 or says what is still needed. S2-00 records the benchmark baseline. |
 
-## Corrected test run
+## What is done
 
-Command, from a detached worktree at `cc83b1b97867d70257b2445afd07221d817c996b`, after `scripts/resetLocalDb.sh` and `node scripts/seedDemoOrg.js`, with `web/` built so `web/dist/index.html` exists:
-
-```
-env -u FIRESTORE_EMULATOR_HOST -u FIRESTORE_SYNC -u GOOGLE_APPLICATION_CREDENTIALS \
-  DATABASE_URL=postgresql://postgres:postgres@localhost:5432/golden_record \
-  FIRESTORE_PROJECT_ID=local-audit \
-  JWT_PRIVATE_KEY=<local test PEM> \
-  JWT_PUBLIC_KEY=<local test PEM> \
-  npx jest --forceExit
-```
-
-No application-default credential file was present, so `firestoreSyncEnabled()` in `src/modules/resolverEngine.js` skips the wallet write. `FIRESTORE_EMULATOR_HOST` was unset. An earlier run that inherited `FIRESTORE_EMULATOR_HOST=127.0.0.1:8099` stalled and was discarded.
-
-Output:
-
-```
-Test Suites: 39 passed, 39 total
-Tests:       1 skipped, 691 passed, 692 total
-```
-
-The one skip is `tests/modules/resolverEngine.trace.test.js`, "all_candidates_gated", marked `test.skip` in the file.
-
-Without `web/dist`, the same command was `689 passed, 3 skipped, 692 total`, because `tests/routes/dashboardStatic.test.js` skips both of its tests when `web/dist/index.html` is missing.
-
-`tests/seedDemoOrg.test.js` does not seed the database itself. It fails if `node scripts/seedDemoOrg.js` has not already been run. That is why a fresh database is not a fair run of this suite.
-
-Jest config in `package.json` ignores `/web/`. The 9 Vitest files under `web/` were not run. Their result is UNVERIFIED.
-
-File counts from `git ls-tree`: 39 `*.test.js` files on the tip, 24 on `main`. The "61 files vs 46" count was not reproduced by that listing.
-
-## Corrected benchmark
-
-`npx jest --forceExit` runs `tests/eval.benchmark.test.js`, which executes every case in `eval/fixtures/benchmarkCases.js` and rewrites:
-
-- `eval/reports/benchmark-report.md`
-- `eval/reports/benchmark-report.json`
-
-Those generated files were restored after the run (`git checkout -- eval/reports`). The regenerated summary matched the committed report:
-
-| | |
+| Piece | State |
 |---|---|
-| Scenarios | 60 |
-| Policy mismatches | 0 |
-| Precision | 0.9048 |
-| Recall | 0.7917 |
-| Reviews | 27 |
-| True positives | 19 |
-| False positives | 2 |
-| False negatives | 5 |
-| True negatives | 7 |
+| PR #13 (Sprint 1 report and demo examples) | Merged Nov 18, 2026 (`d547a06`). |
+| Direct commits to `main` | Nov 20–21, 2026 CT: `52a99f0` retrieval requirements, `a651d44` one-edit surname retrieval, `bad944d` Decision 6, `644cecd` Decisions 3 and 6 reconciled, `756a6eb` nickname retrieval and first-name conflict. |
+| PR #15 (false-merge holds) | Merged Nov 21, 2026, 10:56 PM CT (`f332b97`). 14 files. Risky exact-email and exact-name cases now open a review instead of a hard match. Retrieval adds candidates and does not decide. |
+| PR #16 (fixtures only) | Merged Nov 27, 2026, 9:23 PM CT (merge `04eb817`, branch commit `b80b60b`). 2 files, 12 edits: 7 cases in `level2-cases.json` and 5 scenarios in `benchmarkCases.js`, all moved to the review outcome. `src/` untouched. `same-name-one-birthday-matches` was left unchanged on purpose. |
+| PR #17 (operator authorization) | Merged Nov 27, 2026, 9:31 PM CT (merge `855997e`, branch commit `d60aff0`). 34 files, 1 commit. Operator roles, admin-only operator management, a block that stops integrations from confirming, rejecting, or unmerging, and audit attribution. Adds `migrations/migration_021.sql`. Does not touch the resolver, the matcher, or the evaluation fixtures. |
+| PR #18 (admin safety fixes) | Merged Nov 27, 2026, 9:50 PM CT (merge `7737475b9bf5e725e43faea70c7aa2f9637d7d72`, branch commit `fd6cd3d`). 6 files, +490 −3. Adds `migrations/migration_022.sql` (earliest-created active operator becomes admin in any org with no active admin, by `created_at`, then `id`), last-admin protection, `scripts/promoteOperator.js`, and a generic duplicate-email error. Reported Jest 739 passed and 1 skipped (Antigravity, not verified). Touches no resolver, fixtures, or project docs. |
+| PR #14 (older copy of the failure analysis) | Still open. Not merged. The file on `main` is newer. Aaron decides whether to close it. |
+| Dashboard | `web/` is on `main` with these screens: Overview, Imports, Records, Reviews, Exports, Account. Confirm, reject, and unmerge are in the review detail. |
 
-`eval/fixtures/benchmarkCases.js` contains 60 `scenario({...})` calls. The test asserts `summary.total === cases.length` and `summary.policy_mismatches === 0`.
+## Numbers
 
-Precision and recall here exclude reviews. A review is not counted as an automatic match. See `docs/engineering/matching-policy.md` and `eval/benchmark.js`.
+| | Value | Label |
+|---|---|---|
+| Jest on `main` at `04eb817` | 728 passed, 1 skipped | Reported by Antigravity. Not independently verified. |
+| Jest on the auth branch (PR #17) | 733 passed, 1 skipped (44 suites, 734 total) | Reported by Antigravity. Not independently verified. The PR body says the same. |
+| Jest on `7737475` | Not recorded | S2-00 records it. |
+| Web tests | 32 of 32 | Reported by Systems Architect. Not verified. The PR #17 body says 34 passed in 10 files on its branch. |
+| 60-scenario benchmark | NOT YET RUN on `7737475` (and not on `04eb817`). Last recorded after PR #15: 5 policy mismatches, precision 0.875, recall 0.7368, 32 reviews. | PR #16 edited the five scenarios that mismatched. So the mismatch count has likely changed. That is an expectation, not a result. S2-00 records it. |
+| 360-row set | False merges 0, missed matches 0, reviews 117/185, found 90/99. 8 automatic decisions, all correct (MB-1 and CA-2). | Measured right after PR #15 (`eval/reports/sprint-1.5-rerun-report.md`). It comes before PR #16 and PR #17. The repo shows no re-run since. |
+| Earlier baseline (Sprint 1) | 698 passed, 1 skipped. 60 scenarios, 0 mismatches, precision 0.9048, recall 0.7917, 27 reviews. 19 false merges, 13 missed matches. | Recorded in `SPRINT-TRACKER.md`. |
 
-## Original audit, for the record
+Rules that still hold: 8/8 means every automatic decision that is left was correct. It does not mean the hard cases were solved. They are in the 117 reviews. The rule of three on a perfect 8 is 3/8. All data is synthetic.
 
-On `main` at `7fa878d`, `npx jest --runInBand` with a local Postgres and no Google credentials reported `541 passed, 46 failed, 1 skipped, 588 total`. That run is explained in `SPRINT-TRACKER.md`. It is not the tip.
+## Decisions since the last snapshot
 
-## Finding table
+All in `DECISION-LOG.md`.
 
-| Finding | Original (`main` `7fa878d`) | Reconciled (`cc83b1b`) | Still valid? |
-|---|---|---|---|
-| Commit audited | `7fa878d` on `main` | Tip is `cc83b1b` on `productization/remove-thunder`, 8 commits past the merge-base. `main` has not moved. | The first commit hash was right for `main`. It was the wrong tip. |
-| Root Jest | 541 passed, 46 failed, 1 skipped, 588 total | 691 passed, 1 skipped, 0 failed, 692 total, 39 suites, after seed and `web/dist` | Original number described `main` only. Aaron's 691 is reproduced on the tip. |
-| 46 failures | Classified as 2 intentional test failures, 5 empty-demo-org setup failures, 39 Firestore credential rejections | Those suites were changed on the tip. The tip run had 0 failures. Firestore writes are skipped when no credential file exists (`b388ad419c85e03c5c384590c4403a27b049dc51`). | The classification stands for the `main` run. It is not the tip's status. |
-| 588 vs 691 | Treated as one suite | `main` has 24 `*.test.js` files. The tip has 39. Jest on the tip reports 692 tests. | The gap is a different commit, not a missing smoke run. |
-| 60-scenario benchmark | Reported absent on `main` | Present: `eval/benchmark.js`, `eval/fixtures/benchmarkCases.js`, `tests/eval.benchmark.test.js`, `eval/reports/benchmark-report.md`. Re-ran: 60 scenarios, 0 policy mismatches, precision 0.9048, recall 0.7917, 27 reviews. | Absent on `main`. Present and reproduced on the tip. |
-| Dashboard | Reported absent | `web/` (Vite, React, TypeScript), `src/routes/dashboard.js`, `docs/engineering/golden-record-dashboard.md`, served from `web/dist` by `index.js`. Commit `5e394acd8baef908073e0ba1b4dcb6bbbd3a9167`. | Absent on `main`. Present on the tip. Overlooked because the audit never left `main`. |
-| Vercel homepage | HTTP 500 on 2026-11-16 | Same observation. `render.yaml` on the tip deploys this branch to the Render service `golden-record` in Ohio. The live SHA is still UNVERIFIED. | The 500 is still a fact. It is not this dashboard's source. |
-| Path C / D | Both mint a new fan and a pending review. Thresholds 0.85 and 0.60. No auto-merge. | Same, plus two policy changes: a name-and-birthday agreement under 0.60 is still path D (`pathForMatch`), and an exact email or exact name whose stored birthdays all differ is held for review. Documented in `docs/engineering/matching-policy.md`. | "No auto-merge" and "path C does not return the existing fan" still hold. The path rules are not identical to `main`. |
-| README path C sentence | Says the existing fan is returned | The same sentence is still in `README.md` on the tip (line 131). | Still a doc bug. Do not change the engine to match it. |
-| RLS | Policies exist; local superuser bypasses them; hosted role UNVERIFIED | `tests/routes/tenantIsolation.test.js` creates `golden_record_app` with `NOSUPERUSER NOBYPASSRLS` and passed inside the 691. `operator` and `operator_session` are auth tables without RLS (`migration_019.sql`). | Policies are now tested with a non-superuser role on the tip. The default local URL used here was still the `postgres` superuser. |
-| CSV upload | No ingest route | `POST /v1/dashboard/imports` and `POST /v1/dashboard/imports/preview` read CSV text through `src/modules/customerImport.js`. Migration `018`. | The "no CSV upload" finding is false on the tip. |
-| Decision export | Fan snapshot only, no score or signals | `GET /v1/dashboard/exports/fans` forwards to `GET /v1/export/fans`. `CSV_HEADER` in `src/routes/export.js` is still the fan snapshot without score or signals. | The fan-export gap remains. Reviews are on screen, not in that CSV. |
-| Unmerge | API exists; multi-hop blocked | API still in `src/routes/conflicts.js`. The dashboard calls `POST /v1/dashboard/conflicts/:id/unmerge` (`web/src/features/reviews/ReviewDetail.tsx`). | Unmerge was not missing. The screen to use it is on the tip. |
-| CI | No workflow | Still no `.github` workflow on the tip. | Still valid. |
-| Customer data | None in the `main` tree. A deleted script remains in git history. | Not re-copied. The tip's benchmark fixtures are synthetic. | Still do not restore that history. |
-| 200-record set | Not in the tree | The CSV is still not committed. `demo/synthetic-200-ground-truth.json` is the first label file. `demo/synthetic-ground-truth-v2.json` is the 360-row file approved in D-021. The rows have not been imported. | The labels are saved. The measured import result is still UNVERIFIED. |
+| ID | One line | State |
+|---|---|---|
+| D-023 | Several exact-name candidates with a DOB conflict go to Path D. No automatic match, even on an exact email. | Policy approved Nov 23, 2026, 2:33 PM CT. Implementation approved Nov 27, 2026, 9:39 PM CT, reported by Systems Architect, not verified. |
+| D-024 | Operator authorization. | As merged in PR #17. PM added a note. |
+| D-025 | Authorization pulled forward from Sprint 3. | PENDING Aaron's confirmation. |
+| D-026 | Held-review Decision 2 is Option A: candidates live inside the `conflict_queue` record. No new table. One small migration allowed (`migration_023`: make `confidence_score` nullable). | Reported approved, not verified. Migration allowance: Aaron, Nov 27, 2026, 9:46 PM CT, relayed by Systems Architect. |
+| D-027 | A hold that was never scored stores a null `confidence_score` plus a `not_scored` flag, never 0. | Reported approved, not verified. The column conflict is settled by the D-026 migration. |
+| D-028 | Resolver and review-screen work added to Sprint 2. | Reported approved, not verified. Scope change. |
+| D-029 | Do not run `migration_021` and `migration_022` on the hosted database until Aaron checks the hosted admin result is him. Rule: earliest-created active operator per org becomes admin (`created_at`, then `id`). | Rule reported by Systems Architect, not verified. `migration_022` is merged (PR #18). The hosted hold stays. |
+
+The held-review Decisions 1, 2, and 3 are not defined in the repo. The only repo mention is `tasks/handoff.md`. Decision 1 is PR #16's title. Decision 2 is Option A as reported. Decision 3, and questions Q2 to Q6, have no reported answer.
+
+## Open
+
+- Aaron: close Sprint 1.5, or name what is still needed.
+- Aaron: confirm the authorization pull-forward (D-025).
+- S2-06b confirm design (optional candidate fan id, checked on the server) comes from Systems Architect as a detail within the approved scope. Aaron has not approved it separately.
+- S2-06a: `migration_023` is still the next free number (checked on `main` `7737475`: `022` is the last file, no open PR adds one). Re-check before building. Every reader of `confidence_score` must handle null (`GET /v1/conflicts` sorting, API contract docs, dashboard display).
+- Hosted database: Aaron checks that the hosted admin result is him (earliest-created active operator in the hosted org) before `migration_021` then `migration_022` run there. PM has no record that the two PR #18 pre-merge checks were done: hosted result, and the same advisory-lock key at all three call sites. PM did not read the code.
+- Aaron: PR #17 open questions 1 and 3 (integration reads, demo init admin). Question 2 (last admin) is handled in code by merged PR #18.
+- Aaron: decide on PR #14, and the score-and-signal columns on the fan export (S2-04).
+- S1.5-07 is NOT STARTED. S1.5-09 is NOT STARTED.
+- Confirm the Render service branch is `main` (`render.yaml` says so; the live service is not read here).
+- No CI workflow in the repo (`.github` is absent).
+- The README path C sentence is still wrong (README says the existing fan is returned). Do not change the resolver to match it.
+- Held-review Decision 3 and Q2 to Q6: status not reported.
+
+## Entry gates for Sprint 2
+
+| Gate | State |
+|---|---|
+| Aaron closes Sprint 1.5 | NOT MET. His decision. |
+| Operator authorization merged with green tests | Merged (PR #17). Tests reported green, UNVERIFIED on `main`. |
+| `main` green | NOT MET. No verified run on `7737475`. |
+| Benchmark summary recorded on current `main` | NOT MET. S2-00. |
+
+Hosted gate for Sprint 3: `migration_022` (PR #18) is merged. Met. Still gated: Aaron checks the hosted admin result before `021` and `022` run on the hosted database.
+
+## Risks
+
+- **Hosted database and `migration_021` + `migration_022`.** Reported: `migration_021` gives every existing operator the `operator` role, so existing orgs have no admin. `migration_022` (merged in PR #18) fixes that by making each org's earliest-created active operator the admin, by `created_at`, then `id` (rule reported by Systems Architect). Hold: do not run `021` and `022` on the hosted database until Aaron checks that the hosted admin result is him. Run `021` first, then `022`. PM has no record that the two PR #18 pre-merge checks were done (hosted result; same advisory-lock key at all three call sites). Jest 739 passed and 1 skipped is reported by Antigravity, not verified. UNVERIFIED by PM.
+- **Deploy and database out of step.** `render.yaml` points at `main`. The `Dockerfile` starts `node index.js` and has no migration step. If Render redeployed after PR #17 and the hosted database has not had `migration_021`, sign-in may fail, because PR #17 says the session lookup reads the role. PM cannot see the hosted service or the hosted database. Someone with access should check.
+- **Resolver work in Sprint 2.** S2-06a changes the matcher on the email path and the name path. The benchmark and the 360-row results can move. S2-00 records the baseline first. S2-06a must show no new false merges.
+- **Null scores reach every reader of `confidence_score`.** The migration makes the column nullable. Any reader that assumes a number can break. S2-06a lists them and tests each. PM checked only `src/routes/dashboard.js`, not the other readers.
+- **Flaky scenario.** `same-name-one-birthday-matches` depends on an unordered lookup. It can fail on a later run with no code change (S1.5-09, or S2-06a).
+- **Stale numbers.** The 360-row results and the last benchmark numbers come before PR #16 and PR #17.
+- **PR #16 test coverage.** It ran 11 suites, not the full suite. The full suite is not recorded on that branch.
+- **Repo visibility.** GitHub's API shows `AFranklin30/golden-record` with `private: false`. The task brief calls it private. Check the setting in GitHub.
+
+## Unverified
+
+- Every Jest and Vitest number above except the old Sprint 1 baseline. This includes PR #18's 739 passed and 1 skipped.
+- The Nov 27 approvals relayed by Systems Architect (D-023 amendment, D-026, D-027, D-028), Aaron's 9:46 PM CT migration quote, and the `migration_022` rule and the `migration_021` admin blocker.
+- Whether the hosted database has `migration_021`, and the live Render commit.
+- Whether any code that reads `conflict_queue.signals_matched` can handle a candidate list. PM did not read that code.
+
+## Earlier audit
+
+The corrected test run, the corrected benchmark, the original audit, and the finding table from the Nov 16, 2026 version of this file are in git history for this file. `SPRINT-TRACKER.md` keeps the Sprint 1 and Sprint 1.5 run records. They are not repeated here.

@@ -3,6 +3,8 @@
 Corrected 2026-11-16 against `cc83b1b97867d70257b2445afd07221d817c996b`.
 D-019 records Aaron's approval of the MVP scope. D-020 records that `main` is the source of truth. Earlier D-numbers stay as the audit history.
 
+Updated Nov 27, 2026 (CT) against `main` at `7737475b9bf5e725e43faea70c7aa2f9637d7d72` (PR #18 merge, 9:50 PM CT; PR #17 merge was `855997e`). Added D-023 and D-025 to D-029 (D-026 and D-027 updated Nov 27, 2026, 9:46 PM CT; D-029 updated after PR #18 merged). D-024 is exactly as merged in PR #17, with a PM note. Entries marked "reported by Systems Architect" come from Systems Architect's message relaying Aaron's approval of Nov 27, 2026, 9:39 PM CT. PM has not verified them. Older entries are unchanged.
+
 ## D-012 — The audit target is the unmerged tip, not `main`
 
 **Status:** SUPERSEDED by D-020 on Nov 16, 2026
@@ -107,6 +109,42 @@ Measured again on 2026-11-16 during `npx jest --forceExit`: 60 scenarios, 0 poli
 
 **What this decision does not do.** It does not change thresholds, signals, the resolver, or the importer. It does not set the Sprint 1.5 tasks. The 3–5 day figure is the estimate attached to the approval. It was not measured. `PROJECT-PLAN.md` is not edited here. That file still describes Sprint 2 as the next planned block. The order change is this decision.
 
+## D-023 — Decision 2 clarification: multiple exact-name candidates with a DOB conflict
+
+**Status:** Approved policy (Nov 23, 2026). Original status: approved for documentation and fixture reconciliation; implementation NOT authorized. **Amended Nov 27, 2026: implementation approved. See the amendment at the end of this entry.**
+
+**Approved by** Aaron Franklin on Nov 23, 2026, at 2:33 PM CT.
+
+**Decision.** When an incoming record has multiple existing candidates whose normalized full names exactly match the incoming normalized full name, and at least one candidate has a populated DOB conflict, the incoming record must be sent to Path D for human review. No candidate may be automatically matched, including a candidate with an exact email match, while this condition exists.
+
+*(As written Nov 23, kept as history. Superseded by the Nov 27 amendment below.)* This is a policy clarification. It does not authorize resolver implementation, schema changes, or review UI changes. Those require a later, separate authorization.
+
+**Numbering.** Aaron approved this text under the title "Decision 2 — Multiple Exact-Name Candidates with a DOB Conflict." That title is different from the earlier Sprint 1.5 "Decision 2" in `docs/engineering/sprint-1.5-failure-analysis.md` section 11, which is "Exact name with missing birthday" and was later recorded and implemented as Decision 6. It is also different from "held-review Decision 2" (Option A or B for where a candidate list is stored), which is defined outside the repo. See D-026. This log entry does not replace or amend the section 11 Decision 2 or Decision 6. Call this entry D-023 when a unique PM number is needed. Keep Aaron's "Decision 2" title in the policy text, and do not overwrite the section 11 heading.
+
+**Clarifications, approved together, verbatim in substance:**
+
+1. Email precedence: An exact email match does not override this record-level escalation rule. The resolver must evaluate the multiple-exact-name-candidate DOB condition before finalizing an otherwise eligible automatic match, including matches identified through earlier email-based lookup. Existing identifier ownership must remain protected.
+
+2. Exact-name definition: Exact-name equality is determined by comparing normalized full-name values. Normalization ignores capitalization and leading, trailing, and repeated whitespace. The following do not qualify: nickname equivalence; partial-name matches; missing or additional name components; reordered name components; fuzzy spelling or surname similarity. Approved nickname equivalence remains governed by its separate policy.
+
+3. DOB conflict definition: A candidate has a DOB conflict when the incoming record has a populated DOB, the candidate has one or more populated DOB values, and none of the candidate's populated DOB values equals the incoming DOB. If any populated DOB value matches, that candidate does not trigger this conflict rule. Missing DOB values do not independently establish a conflict under this rule. Existing missing-DOB review policies remain unchanged.
+
+4. Review behavior: When the rule triggers: send the incoming record to Path D; create one provisional fan record; create one pending conflict-queue record; preserve all qualifying exact-name candidates in the review record; preserve each candidate's individual score and matching signals; identify which candidate or candidates triggered the DOB veto; do not automatically merge or link the incoming record to any existing candidate; protect existing identifier ownership.
+
+5. Candidate disposition vocabulary: Each candidate must receive exactly one individual disposition: would_match, vetoed_dob_conflict, needs_review, not_eligible. Candidate-level disposition must remain distinct from the overall incoming-record resolution path. A candidate with would_match may still be included in a Path D review because another exact-name candidate triggered the record-level escalation.
+
+6. Scope limitation: This rule applies only to multiple exact normalized full-name candidates. A DOB conflict involving an unrelated fuzzy-name candidate, nickname candidate, or similar-surname candidate does not independently trigger this record-level escalation rule. Existing candidate-specific DOB veto and other review policies remain in effect.
+
+7. Implementation authorization *(Nov 23 wording, superseded by the Nov 27 amendment)*: This decision authorizes policy documentation and fixture reconciliation only. Resolver implementation, schema changes, and review UI changes require separate authorization.
+
+**Fixtures.** The exact-email-match case is mandatory. Otherwise it is easy to implement the rule only on the name-search path and leave an earlier email-match path able to bypass it. New fixtures that state the required Path D outcome are expected to fail against the current resolver. They must be marked pending so the suite stays honest (S1.5-07). The separate PR #15 fixture reconciliation was done by PR #16 and is not part of this work. Under the Nov 27 amendment, S2-06a converts these pending fixtures into live tests.
+
+**Why.** Aaron approved these clarifications together on Nov 23, 2026. `docs/engineering/matching-policy.md` still says that when several people share an exact name, the lookup reads one of them with no set order, and that an exact email, or an exact name with equal birthdays and an incoming email, can still be a hard match. This decision is the approved direction. It is not yet implemented behavior.
+
+**Open.** Systems Architect sent open questions about the D-023 definitions to Chief of Staff on Nov 27, 2026. Whether the definitions changed in that review is not recorded here. PM has not seen a revised text. The text above is the Nov 23 text. One gap PM found: the text says never to merge or link automatically, but does not say how a person confirms one candidate from a multi-candidate review, because a `conflict_queue` row holds one existing fan (`fan_id_a`). Systems Architect's design for this is in S2-06b: confirm takes an optional candidate fan id. Reported by Systems Architect as a design detail within the approved scope. It is not a separate Aaron approval.
+
+**Amendment, Nov 27, 2026 — implementation approved.** Reported by Systems Architect; Aaron's approval Nov 27, 2026, 9:39 PM CT; not verified by PM. D-023 is now to be built in the resolver and in the review screen. The Nov 23 text above stays as history. Work is split in `TASK-BOARD.md` as S2-06a (resolver) and S2-06b (review screen). This is a scope change from the Sprint 2 plan; see D-028. Storage follows D-026 (Option A: no new table; one small migration to make `confidence_score` nullable, approved Nov 27, 2026, 9:46 PM CT, relayed by Systems Architect) and D-027 (null plus a `not_scored` flag). Thresholds and other matching policies are not changed by this amendment. PM has no record that the amendment changes the seven clarifications above.
+
 ## D-024 — Operator authorization, first-operator admin, integration boundary, and audit attribution
 
 **Status:** APPROVED & IMPLEMENTED (Nov 27, 2026)
@@ -118,6 +156,66 @@ Measured again on 2026-11-16 during `npx jest --forceExit`: 60 scenarios, 0 poli
 - Integrations (org Bearer API key) retain their machine-to-machine endpoints (`/v1/resolve`, `/v1/ingest/nfc`, `/v1/session`, `/v1/fan/:id/profile`, `/v1/household/*`, `/v1/export/fans`, `GET /v1/conflicts`), but are blocked (`403`) from human conflict-review mutations (`POST /v1/conflicts/:id/{confirm,reject,unmerge}`) and cannot access `/v1/dashboard/*` (`401`).
 - Authorization is enforced at the request boundary using DB-backed session/API-key identity (`req.context.principal_type`, `operator_id`, `operator_email`, `operator_role`); request-body identity/role fields are never trusted.
 - Audit and provenance records (`audit_log.actor_type/operator_id/actor_email`, `conflict_queue.reviewed_by`, `merge_history.merged_by/reversed_by`, `import_batch.created_by_*`, `export_run.requested_by`) attribute every action to the actual authenticated operator or integration principal (`migrations/migration_021.sql`).
+
+**PM note, Nov 27, 2026.** The entry above is exactly as merged to `main` in PR #17 (merge commit `855997e`, merged by AFranklin30 on Nov 27, 2026 at 9:31 PM CT). PM did not edit it. PM did not find, in the repo, a separate record of when or how Aaron approved the model. The PR body lists four open questions: (1) which read routes integrations should keep (profiles, households, export, `GET /v1/conflicts`); (2) whether an admin can deactivate the last other admin, and how a new admin is made if the only admin leaves; (3) `scripts/initHostedDemo.js` makes the demo operator the first admin when it runs first on a fresh database; (4) `migration_021.sql` might need renumbering if held-review Decision 2 also needed `migration_021`. Question 4 is closed by D-026: the one allowed migration for held-review Decision 2 is `migration_023`, not `021`. A new blocker was reported after the merge: see D-029. PR #18 (merged Nov 27, 2026, 9:50 PM CT, merge commit `7737475`) changes the code for question 2: it refuses to deactivate the last active admin, and adds a recovery command. Questions 1 and 3 are still open.
+
+## D-025 — Operator authorization pulled forward from Sprint 3 to Sprint 1.5/2
+
+**Status:** PENDING Aaron's confirmation. The PR is merged. The scope confirmation is not recorded.
+
+**Decision.** Record that operator authorization (D-024, PR #17) was built ahead of its planned place. Systems Architect's note says it was planned for Sprint 3. PM could not find that in the repo: `PROJECT-PLAN.md` describes Sprint 3 as the hosted demo and does not list operator authorization. `SCOPE-AND-BACKLOG.md` lists "a multi-tenant admin product" as excluded, and D-019 approved that scope as written. So this is a scope question for Aaron, not only a scheduling one.
+
+**What exists.** Aaron merged PR #17 on Nov 27, 2026 at 9:31 PM CT. PM treats the merge as acceptance of the code. It is not a recorded decision to move the work earlier.
+
+**What is needed.** Aaron states, in his own words, that operator authorization moves from Sprint 3 into Sprint 1.5/2, and whether it counts as inside the D-019 scope. PM then changes this status to APPROVED with the date and time.
+
+**Why.** The log should show every scope move and who approved it. A merge shows the code was accepted. It does not show the scope move was.
+
+## D-026 — Held-review Decision 2 is Option A: no new table; one small migration allowed (make `conflict_queue.confidence_score` nullable)
+
+**Status:** Reported approved. Reported by Systems Architect; Aaron's approval Nov 27, 2026, 9:39 PM CT; amended Nov 27, 2026, 9:46 PM CT (relayed verbatim by Systems Architect). Not verified by PM.
+
+**Decision.** The candidate list for a multi-candidate review is stored inside the existing `conflict_queue` record. No new table. Held-review Decision 2 (Option A or Option B) is defined outside the repo. PM describes it here only as reported.
+
+**Amendment, Nov 27, 2026, 9:46 PM CT.** Reported by Systems Architect; Aaron's words, relayed: "Yes, allow one small migration so the score can be empty." The Option A text is now: no new table; one small migration is allowed, to make `conflict_queue.confidence_score` nullable. The original wording (9:39 PM, "no new table, no migration") is kept above as history. No other schema change is approved.
+
+**Migration number.** `main` (`7737475`, checked Nov 27, 2026, about 9:55 PM CT) has migrations `001`–`022`. `migration_022` came in with PR #18, now merged. No open PR adds a migration (open PRs are #14 and #6, neither does). So `migration_023` is the next free number. Check again before building.
+
+**Effect.** Option B might have added `migration_021`. That number is used by operator authorization (D-024), so that clash is closed.
+
+**PM check against the repo (migrations `001`–`021` on `main`, read Nov 27, 2026).** `conflict_queue` has these columns: `id`, `fan_id_a` and `fan_id_b` (both required, both point to a fan), `org_id`, `confidence_score` (`NUMERIC(4,3) NOT NULL`), `signals_matched` (`JSONB NOT NULL`), `status`, `created_at`, `reviewed_at`, `reviewed_by`. A unique index covers `(fan_id_a, fan_id_b, org_id)` for pending rows only. A check requires `fan_id_a` to differ from `fan_id_b`. Row-level security is on. PM found no later migration that changes `confidence_score`. The candidate list can likely fit in `signals_matched`. Any code that reads that column or `confidence_score` must still work. PM read only the dashboard routes in `src/routes/dashboard.js`: the reviews list and the records query both select `confidence_score`. Other readers are not checked (see S2-06a).
+
+## D-027 — A never-scored hold stores a null `confidence_score` plus a `not_scored` flag, never 0
+
+**Status:** Reported approved. Reported by Systems Architect; Aaron's approval Nov 27, 2026, 9:39 PM CT. Storage question settled Nov 27, 2026, 9:46 PM CT (see D-026). Not verified by PM.
+
+**Decision.** When a candidate or review is held without a score being calculated, the stored `confidence_score` is null and a `not_scored` flag is set. It is never stored as 0. A zero would read as "scored and found no match." Screens show "Not scored."
+
+**How it is stored.** `conflict_queue.confidence_score` was `NUMERIC(4,3) NOT NULL`. D-026 allows one small migration (`migration_023`) that makes it nullable. That settles the conflict PM raised earlier. Every reader of `confidence_score` must handle null. S2-06a lists them: `GET /v1/conflicts` sorting, the API contract docs, and the dashboard display.
+
+## D-028 — Scope change: resolver and review-screen work for D-023 is added to Sprint 2
+
+**Status:** Reported approved with the D-023 implementation approval. Reported by Systems Architect; Aaron's approval Nov 27, 2026, 9:39 PM CT; not verified by PM.
+
+**What changes.** The Sprint 2 plan was "show the decisions" with no matcher changes and no new UI stack (`PROJECT-PLAN.md`; D-014; D-022). Sprint 2 now includes resolver work (S2-06a) and an extension of the existing review screen (S2-06b). The "no new UI stack" rule stays. No threshold change is approved. No other matching rule is approved. One small migration is allowed (D-026): `conflict_queue.confidence_score` becomes nullable.
+
+**Effort and impact.** S2-06a is sized L, a planning size, not measured. No day estimate is given. It touches `src/modules/resolverEngine.js` on both the email path and the name path. The 60-scenario benchmark and the 360-row results can move: more reviews, and possibly fewer automatic decisions, for records that have two or more exact-name candidates. How much is not measured. S2-00 records the baseline first so the change can be compared. S2-06a is not done until the benchmark and the 360-row set are re-run and recorded, with no new false merges.
+
+## D-029 — Do not run `migration_021` and `migration_022` on the hosted database until Aaron checks the hosted admin result
+
+**Status:** Reported blocker, partly cleared. Reported by Systems Architect; not verified by PM. The fix, `migration_022`, is merged (PR #18, merge commit `7737475b9bf5e725e43faea70c7aa2f9637d7d72`, Nov 27, 2026, 9:50 PM CT, merged by AFranklin30). The hosted hold stays.
+
+**Decision.** Do not apply `migration_021.sql` to the hosted database until Aaron checks that the admin result there is him. As reported, `migration_021` adds `operator.role` with default `operator`, so every operator that already exists in a hosted org gets `operator` and the org has no admin. Then nobody can manage operators there. The fix is `migration_022`, which now exists on `main`. Run `021` first, then `022`, on the hosted database. Only after the check.
+
+**The rule for `migration_022`.** Reported by Systems Architect: each org's earliest-created active operator becomes admin, ordered by `created_at`, then `id`. PR #18 (branch commit `fd6cd3d`) says it does this for any org with at least one active operator and no active admin, and that it is safe to run twice. It changed 6 files (+490 −3). It also adds last-admin protection, a recovery CLI (`scripts/promoteOperator.js`), and a generic duplicate-email error. Those go beyond the migration. It reported Jest 739 passed and 1 skipped (45 suites), reported by Antigravity, not independently verified.
+
+**The check Aaron still owes.** Aaron confirms that the operator the rule picks in the hosted org is him, meaning he is the earliest-created active operator there. PM cannot see the hosted database.
+
+**Not recorded.** Before the merge, two checks were asked for: (1) the hosted result is Aaron, and (2) all three advisory-lock call sites use the same key. PR #18's body names the key `hashtext('operator_org_' + org_id)` for operator creation and deactivation. PM has no record that either check was done before the merge. PM did not read the code and did not identify the third call site. Check (1) is the hosted check above. Check (2) is still open as a code review item.
+
+**Plan.** AUTH-02 on the task board is COMPLETED as a merge, with the hosted run still gated. "Aaron checks the hosted admin result before `021` and `022` run on hosted" is a gate on all Sprint 3 hosted work and is a risk in `PROJECT-STATUS.md`.
+
+**PM notes, unverified.** `render.yaml` sets `branch: main`, so Render may already have deployed the code in PR #17 and PR #18. The `Dockerfile` starts `node index.js` and has no migration step. If the hosted database has not had `migration_021`, the new code may fail on sign-in, because PR #17 says the session lookup reads the role. Aaron or Systems Architect should check the hosted state first. PM has no access to it.
 
 ## D-004 — Do not restore the deleted client evaluation
 
