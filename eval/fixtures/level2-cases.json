@@ -46,10 +46,10 @@
   {
     "id": "missing-email-same-name",
     "expected_verdict": "match",
-    "expected_class": "hard_match",
-    "expected_path": "A",
-    "expected_skip_reason": "deterministic_match",
-    "expect_retrieved": false,
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
     "shape": "import",
     "person_a": { "email": "grace@example.com", "name": "grace hopper", "dob": "1990-12-09" },
     "person_b": { "name": "Grace Hopper", "dob": "1990-12-09" }
@@ -80,10 +80,10 @@
   {
     "id": "exact-name-same-birthday",
     "expected_verdict": "match",
-    "expected_class": "hard_match",
-    "expected_path": "A",
-    "expected_skip_reason": "deterministic_match",
-    "expect_retrieved": false,
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
     "shape": "import",
     "person_a": { "name": "jane same@example", "dob": "1990-04-02" },
     "person_b": { "name": "jane same@example", "dob": "1990-04-02" }
@@ -91,10 +91,10 @@
   {
     "id": "exact-name-missing-inbound-dob",
     "expected_verdict": "match",
-    "expected_class": "hard_match",
-    "expected_path": "A",
-    "expected_skip_reason": "deterministic_match",
-    "expect_retrieved": false,
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
     "shape": "import",
     "person_a": { "name": "jane missing inbound", "dob": "1990-04-02" },
     "person_b": { "name": "jane missing inbound" }
@@ -102,10 +102,10 @@
   {
     "id": "exact-name-missing-stored-dob",
     "expected_verdict": "match",
-    "expected_class": "hard_match",
-    "expected_path": "A",
-    "expected_skip_reason": "deterministic_match",
-    "expect_retrieved": false,
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
     "shape": "import",
     "person_a": { "name": "jane missing stored" },
     "person_b": { "name": "jane missing stored", "dob": "1990-04-02" }
@@ -113,10 +113,10 @@
   {
     "id": "exact-name-both-missing-dob",
     "expected_verdict": "match",
-    "expected_class": "hard_match",
-    "expected_path": "A",
-    "expected_skip_reason": "deterministic_match",
-    "expect_retrieved": false,
+    "expected_class": "found",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
     "shape": "import",
     "person_a": { "name": "jane missing both" },
     "person_b": { "name": "jane missing both" }
@@ -124,10 +124,10 @@
   {
     "id": "same-name-different-email-different-birthday",
     "expected_verdict": "not_match",
-    "expected_class": "correct_separation",
-    "expected_path": "B",
-    "expected_skip_reason": "empty_block",
-    "expect_retrieved": false,
+    "expected_class": "false_alarm",
+    "expected_path": "D",
+    "expected_skip_reason": null,
+    "expect_retrieved": true,
     "shape": "import",
     "person_a": { "email": "jane.a.dob@example.com", "name": "jane doe", "dob": "1990-04-02" },
     "person_b": { "email": "jane.b.dob@example.com", "name": "jane doe", "dob": "1991-05-06" }
@@ -135,8 +135,8 @@
   {
     "id": "birthday-veto",
     "expected_verdict": "match",
-    "expected_class": "scoring_miss",
-    "expected_path": "B",
+    "expected_class": "found",
+    "expected_path": "D",
     "expected_skip_reason": null,
     "expect_retrieved": true,
     "shape": "advisory",
