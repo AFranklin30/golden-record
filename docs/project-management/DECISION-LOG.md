@@ -3,7 +3,7 @@
 Corrected 2026-11-16 against `cc83b1b97867d70257b2445afd07221d817c996b`.
 D-019 records Aaron's approval of the MVP scope. D-020 records that `main` is the source of truth. Earlier D-numbers stay as the audit history.
 
-Updated Nov 27, 2026 (CT) against `main` at `7737475b9bf5e725e43faea70c7aa2f9637d7d72` (PR #18 merge, 9:50 PM CT; PR #17 merge was `855997e`). Added D-023 and D-025 to D-029 (D-026 and D-027 updated Nov 27, 2026, 9:46 PM CT; D-029 updated after PR #18 merged). D-024 is exactly as merged in PR #17, with a PM note. Entries marked "reported by Systems Architect" come from Systems Architect's message relaying Aaron's approval of Nov 27, 2026, 9:39 PM CT. PM has not verified them. Older entries are unchanged.
+Updated Nov 27, 2026 (CT) against `main` at `15c52f9565c5f6771032686191d99c8614bd2b98` (PR #19 merge, 11:20 PM CT; earlier merges: PR #18 `7737475`, PR #17 `855997e`). Added D-023 and D-025 to D-029 earlier the same day, and D-030 (Sprint 1.5 closeout) after Aaron closed the sprint at 11:29 PM CT. D-029 is updated with the reported hosted run. D-025 is still PENDING Aaron's confirmation. D-024 is exactly as merged in PR #17, with a PM note. Entries marked "reported by Systems Architect" come from Systems Architect's message relaying Aaron's approval of Nov 27, 2026, 9:39 PM CT. PM has not verified them. Older entries are unchanged.
 
 ## D-012 — The audit target is the unmerged tip, not `main`
 
@@ -203,19 +203,37 @@ Measured again on 2026-11-16 during `npx jest --forceExit`: 60 scenarios, 0 poli
 
 ## D-029 — Do not run `migration_021` and `migration_022` on the hosted database until Aaron checks the hosted admin result
 
-**Status:** Reported blocker, partly cleared. Reported by Systems Architect; not verified by PM. The fix, `migration_022`, is merged (PR #18, merge commit `7737475b9bf5e725e43faea70c7aa2f9637d7d72`, Nov 27, 2026, 9:50 PM CT, merged by AFranklin30). The hosted hold stays.
+**Status:** Hosted run done, reported. Reported by Systems Architect and relayed by Aaron from Antigravity; not verified by PM. The fix, `migration_022`, is merged (PR #18, merge commit `7737475b9bf5e725e43faea70c7aa2f9637d7d72`, Nov 27, 2026, 9:50 PM CT, merged by AFranklin30). Two checks stay open: dashboard sign-in on Render, and the three advisory-lock call sites.
 
 **Decision.** Do not apply `migration_021.sql` to the hosted database until Aaron checks that the admin result there is him. As reported, `migration_021` adds `operator.role` with default `operator`, so every operator that already exists in a hosted org gets `operator` and the org has no admin. Then nobody can manage operators there. The fix is `migration_022`, which now exists on `main`. Run `021` first, then `022`, on the hosted database. Only after the check.
 
 **The rule for `migration_022`.** Reported by Systems Architect: each org's earliest-created active operator becomes admin, ordered by `created_at`, then `id`. PR #18 (branch commit `fd6cd3d`) says it does this for any org with at least one active operator and no active admin, and that it is safe to run twice. It changed 6 files (+490 −3). It also adds last-admin protection, a recovery CLI (`scripts/promoteOperator.js`), and a generic duplicate-email error. Those go beyond the migration. It reported Jest 739 passed and 1 skipped (45 suites), reported by Antigravity, not independently verified.
 
-**The check Aaron still owes.** Aaron confirms that the operator the rule picks in the hosted org is him, meaning he is the earliest-created active operator there. PM cannot see the hosted database.
+**Hosted run, reported (Nov 27, 2026, after PR #19 merged).** Aaron relayed an Antigravity report that `migration_021` and `migration_022` both ran on the hosted database with zero errors. The hosted database has one org. The rule promoted that org's only operator, Aaron's account, to admin. Afterward: 1 active operator, 1 active admin. `/health` returned 200. This is labeled reported, not verified by PM. PM cannot see the hosted database. It answers the question the hold was written for: the admin result is Aaron.
 
-**Not recorded.** Before the merge, two checks were asked for: (1) the hosted result is Aaron, and (2) all three advisory-lock call sites use the same key. PR #18's body names the key `hashtext('operator_org_' + org_id)` for operator creation and deactivation. PM has no record that either check was done before the merge. PM did not read the code and did not identify the third call site. Check (1) is the hosted check above. Check (2) is still open as a code review item.
+**Checks.** Before the PR #18 merge, two checks were asked for: (1) the hosted result is Aaron, and (2) all three advisory-lock call sites use the same key. Check (1) is now reported done (the hosted run above). Check (2) is still open. PR #18's body names the key `hashtext('operator_org_' + org_id)` for operator creation and deactivation. PM did not read the code and did not identify the third call site. **Still open now:** (a) sign in to the dashboard on Render and confirm it works, and (b) check that all three advisory-lock call sites use the same key.
 
-**Plan.** AUTH-02 on the task board is COMPLETED as a merge, with the hosted run still gated. "Aaron checks the hosted admin result before `021` and `022` run on hosted" is a gate on all Sprint 3 hosted work and is a risk in `PROJECT-STATUS.md`.
+**Plan.** AUTH-02 on the task board is COMPLETED as a merge, with the hosted run reported done and the two checks above open. The Sprint 3 hosted gate (`migration_022` merged before any hosted migration) is met. The two open checks stay in `PROJECT-STATUS.md` as open items.
 
-**PM notes, unverified.** `render.yaml` sets `branch: main`, so Render may already have deployed the code in PR #17 and PR #18. The `Dockerfile` starts `node index.js` and has no migration step. If the hosted database has not had `migration_021`, the new code may fail on sign-in, because PR #17 says the session lookup reads the role. Aaron or Systems Architect should check the hosted state first. PM has no access to it.
+**PM notes, unverified.** `render.yaml` sets `branch: main`, so Render may already have deployed the code in PR #17 and PR #18. The `Dockerfile` starts `node index.js` and has no migration step. Before the hosted run, new code could have failed on sign-in, because PR #17 says the session lookup reads the role. The reported hosted run and the `/health` 200 answer part of that. A real dashboard sign-in is the check that is left. PM has no access to the hosted service.
+
+## D-030 — Sprint 1.5 is closed; two tasks carry into Sprint 2
+
+**Status:** APPROVED by Aaron, Nov 27, 2026, 11:29 PM CT. Aaron's words, in the PM's chat: "close sprint 1.5".
+
+**Decision.** Sprint 1.5, Matching Quality Fixes (D-022), is COMPLETED as of Nov 27, 2026. It started Nov 18, 2026. Sprint 2 is IN PROGRESS from Nov 27, 2026.
+
+**What closed it.** Seven of nine tasks are COMPLETED, including S1.5-06 (the docs, merged as PR #19, merge commit `15c52f9565c5f6771032686191d99c8614bd2b98`, Nov 27, 2026, 11:20 PM CT). The S2-00 baseline on that commit is recorded in `SPRINT-TRACKER.md`. It is reported by Antigravity and not independently re-run by PM: Jest 739 passed, 0 failed, 1 skipped; 60-scenario benchmark with 0 policy mismatches; 360-row set with 0 false merges and 0 missed matches.
+
+**What carries into Sprint 2. These two tasks are not completed.**
+- S1.5-07 (D-023 policy docs and the pending fixtures) is CARRIED TO SPRINT 2 as a dependency of S2-06a.
+- S1.5-09 (stable lookup order for `same-name-one-birthday-matches`) is CARRIED TO SPRINT 2 as acceptance item 9 of S2-06a.
+
+**Entry gates for Sprint 2.** All met: Sprint 1.5 closed; operator authorization merged (PR #17 and PR #18); `main` green per S2-00 (reported); benchmark recorded on current `main` (S2-00).
+
+**Not part of this decision.** D-025 (operator authorization pulled forward) is still PENDING Aaron's confirmation. Closing the sprint does not confirm it. The two open hosted checks in D-029 are also not closed by this decision.
+
+**Why.** Aaron decides when a sprint closes. The two carried tasks stay visible and are tied to the work that needs them, so they are not dropped and not counted as done.
 
 ## D-004 — Do not restore the deleted client evaluation
 
