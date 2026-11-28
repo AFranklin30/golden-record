@@ -9,6 +9,8 @@ const FAN_ID_A         = 'cccccccc-0000-0000-0000-000000000003';
 const FAN_ID_B         = 'dddddddd-0000-0000-0000-000000000004';
 const CONFLICT_ID      = 'eeeeeeee-0000-0000-0000-000000000005';
 const MERGE_HISTORY_ID = 'ffffffff-0000-0000-0000-000000000006';
+const OPERATOR_ID      = '11111111-0000-0000-0000-000000000007';
+const OPERATOR_EMAIL   = 'reviewer@example.com';
 
 let mockDb;
 
@@ -21,7 +23,15 @@ function buildApp(orgId = CONTEXT_ORG_ID) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.context = { org_id: orgId, org_name: 'Test Org', correlation_id: 'test-corr-id' };
+    req.context = {
+      org_id: orgId,
+      org_name: 'Test Org',
+      correlation_id: 'test-corr-id',
+      principal_type: 'operator',
+      operator_id: OPERATOR_ID,
+      operator_email: OPERATOR_EMAIL,
+      operator_role: 'operator',
+    };
     req.db = mockDb;
     next();
   });
@@ -655,7 +665,8 @@ describe('POST /v1/conflicts/:id/unmerge', () => {
     expect(conflictUpdateCall[1][0]).toBe(CONFLICT_ID);
   });
 
-  test('STEP 4 — merge_history status set to reversed with reversed_by = org_name', async () => {
+  // Updated from reversed_by = org_name ('Test Org') to operator_email per approved operator attribution model.
+  test('STEP 4 — merge_history status set to reversed with reversed_by = operator_email', async () => {
     setupSuccessfulUnmerge();
 
     await request(app).post(`/v1/conflicts/${CONFLICT_ID}/unmerge`).send();
@@ -666,7 +677,7 @@ describe('POST /v1/conflicts/:id/unmerge', () => {
            c[0].includes("'reversed'")
     );
     expect(mergeHistoryUpdateCall).toBeDefined();
-    expect(mergeHistoryUpdateCall[1][0]).toBe('Test Org');     // reversed_by = org_name
+    expect(mergeHistoryUpdateCall[1][0]).toBe(OPERATOR_EMAIL);
     expect(mergeHistoryUpdateCall[1][1]).toBe(MERGE_HISTORY_ID);
   });
 

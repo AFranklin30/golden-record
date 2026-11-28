@@ -97,7 +97,7 @@ async function recordError(client, { batchId, orgId, rowNumber, rowKey, message 
   );
 }
 
-async function attachRemaining(client, { orgId, fanId, path, fields, rowKey }) {
+async function attachRemaining(client, { orgId, fanId, path, fields, rowKey, actor }) {
   const skipped = {};
   await client.query('BEGIN');
   try {
@@ -129,9 +129,18 @@ async function attachRemaining(client, { orgId, fanId, path, fields, rowKey }) {
 
     await client.query(
       `INSERT INTO audit_log
-         (fan_id, org_id, event_type, status, idempotency_key, schema_version)
-       VALUES ($1, $2, 'import_identifiers_attached', 'success', $3, $4)`,
-      [fanId, orgId, rowKey, SCHEMA_VERSION]
+         (fan_id, org_id, event_type, status, idempotency_key, schema_version,
+          actor_type, operator_id, actor_email)
+       VALUES ($1, $2, 'import_identifiers_attached', 'success', $3, $4, $5, $6, $7)`,
+      [
+        fanId,
+        orgId,
+        rowKey,
+        SCHEMA_VERSION,
+        actor ? actor.actorType : 'system',
+        actor ? actor.operatorId : null,
+        actor ? actor.actorEmail : null,
+      ]
     );
     await client.query(
       `UPDATE import_row
@@ -147,7 +156,7 @@ async function attachRemaining(client, { orgId, fanId, path, fields, rowKey }) {
   }
 }
 
-async function importOne(client, { batchId, orgId, rowNumber, raw }) {
+async function importOne(client, { batchId, orgId, rowNumber, raw, actor }) {
   const parsed = parseCustomerRow(raw);
   if (!parsed.ok) {
     await recordError(client, { batchId, orgId, rowNumber, message: parsed.error });
@@ -234,7 +243,7 @@ async function importOne(client, { batchId, orgId, rowNumber, raw }) {
 
   try {
     const skipped = await attachRemaining(client, {
-      orgId, fanId, path: resolutionPath, fields, rowKey,
+      orgId, fanId, path: resolutionPath, fields, rowKey, actor,
     });
     return {
       row_number: rowNumber,
@@ -261,13 +270,21 @@ async function importOne(client, { batchId, orgId, rowNumber, raw }) {
 async function importCustomers(client, options) {
   const orgId = options.orgId;
   const filename = options.filename || null;
+  const actor = options.actor || null;
   const rows = typeof options.csv === 'string' ? parseCsv(options.csv) : options.rows;
 
   await client.query("SELECT set_config('app.current_org_id', $1, false)", [orgId]);
 
   const batch = await client.query(
-    `INSERT INTO import_batch (org_id, filename) VALUES ($1, $2) RETURNING id`,
-    [orgId, filename]
+    `INSERT INTO import_batch (org_id, filename, created_by_operator_id, created_by_email)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id`,
+    [
+      orgId,
+      filename,
+      actor ? actor.operatorId : null,
+      actor ? actor.actorEmail : null,
+    ]
   );
   const batchId = batch.rows[0].id;
   const results = [];
@@ -275,7 +292,7 @@ async function importCustomers(client, options) {
   for (let index = 0; index < rows.length; index++) {
     try {
       results.push(await importOne(client, {
-        batchId, orgId, rowNumber: index + 1, raw: rows[index],
+        batchId, orgId, rowNumber: index + 1, raw: rows[index], actor,
       }));
     } catch (err) {
       logger.error('customer import row failed', {

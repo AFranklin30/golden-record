@@ -135,7 +135,7 @@ async function initializeHostedDemo(client, { orgName, email, password }) {
     );
     const operator = await createOperator(client, { orgId, email, password });
     await client.query('COMMIT');
-    return { orgId, orgName: name, email: operator.email };
+    return { orgId, orgName: name, email: operator.email, role: operator.role };
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) { /* the transaction is already closed */ }
     throw err;

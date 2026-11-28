@@ -26,8 +26,13 @@ async function main() {
   }
   const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const operator = await createOperator(client, { orgId, email, password });
-    console.log(`operator ${operator.email} created for org ${operator.org_id}`);
+    await client.query('COMMIT');
+    console.log(`operator ${operator.email} (${operator.role}) created for org ${operator.org_id}`);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
   } finally {
     client.release();
     await pool.end();

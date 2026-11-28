@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 
 const SESSION_MS = 12 * 60 * 60 * 1000;
+const VALID_ROLES = ['admin', 'operator'];
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -19,7 +20,7 @@ function normalizeEmail(email) {
   return String(email).trim().toLowerCase();
 }
 
-async function createOperator(client, { orgId, email, password }) {
+async function insertOperatorRow(conn, { orgId, email, password, role }) {
   const normalized = normalizeEmail(email);
   if (!normalized || !normalized.includes('@') || normalized.length > 320) {
     throw new Error('operator email is invalid');
@@ -27,15 +28,44 @@ async function createOperator(client, { orgId, email, password }) {
   if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
     throw new Error('operator password must be 8 to 200 characters');
   }
+  if (role !== undefined && !VALID_ROLES.includes(role)) {
+    throw new Error('operator role must be admin or operator');
+  }
+
+  await conn.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`operator_org_${orgId}`]);
+  const existing = await conn.query(
+    'SELECT COUNT(*)::int AS n FROM operator WHERE org_id = $1',
+    [orgId]
+  );
+  const assignedRole = existing.rows[0].n === 0 ? 'admin' : (role || 'operator');
+
   const salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = hashPassword(password, salt);
-  const result = await client.query(
-    `INSERT INTO operator (org_id, email, password_salt, password_hash)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, org_id, email`,
-    [orgId, normalized, salt, passwordHash]
+  const result = await conn.query(
+    `INSERT INTO operator (org_id, email, role, password_salt, password_hash)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, org_id, email, role, is_active, created_at`,
+    [orgId, normalized, assignedRole, salt, passwordHash]
   );
   return result.rows[0];
+}
+
+async function createOperator(client, options) {
+  if (typeof client.connect === 'function' && typeof client.totalCount === 'number') {
+    const conn = await client.connect();
+    try {
+      await conn.query('BEGIN');
+      const created = await insertOperatorRow(conn, options);
+      await conn.query('COMMIT');
+      return created;
+    } catch (err) {
+      await conn.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      conn.release();
+    }
+  }
+  return insertOperatorRow(client, options);
 }
 
 async function openSession(pool, { email, password }) {
@@ -43,7 +73,7 @@ async function openSession(pool, { email, password }) {
   const client = await pool.connect();
   try {
     const result = await client.query(
-      `SELECT op.id, op.org_id, op.email, op.password_salt, op.password_hash, op.is_active,
+      `SELECT op.id, op.org_id, op.email, op.role, op.password_salt, op.password_hash, op.is_active,
               org.name AS org_name, org.is_active AS org_active
          FROM operator op
          JOIN org ON org.id = op.org_id
@@ -76,9 +106,10 @@ async function openSession(pool, { email, password }) {
         [operator.id, operator.org_id, hashToken(token), expiresAt]
       );
       await client.query(
-        `INSERT INTO audit_log (org_id, event_type, status, schema_version)
-         VALUES ($1, 'dashboard_session_issued', 'success', '1.0')`,
-        [operator.org_id]
+        `INSERT INTO audit_log
+           (org_id, event_type, status, schema_version, actor_type, operator_id, actor_email)
+         VALUES ($1, 'dashboard_session_issued', 'success', '1.0', 'operator', $2, $3)`,
+        [operator.org_id, operator.id, operator.email]
       );
       await client.query('COMMIT');
     } catch (err) {
@@ -89,7 +120,9 @@ async function openSession(pool, { email, password }) {
     return {
       token,
       expires_at: expiresAt,
+      operator_id: operator.id,
       email: operator.email,
+      role: operator.role,
       org_id: operator.org_id,
       org_name: operator.org_name,
     };
@@ -101,7 +134,7 @@ async function openSession(pool, { email, password }) {
 async function readSession(client, token) {
   if (!token) return null;
   const result = await client.query(
-    `SELECT s.id, s.org_id, s.expires_at, op.email, op.is_active,
+    `SELECT s.id, s.operator_id, s.org_id, s.expires_at, op.email, op.role, op.is_active,
             org.name AS org_name, org.is_active AS org_active
        FROM operator_session s
        JOIN operator op ON op.id = s.operator_id
@@ -126,4 +159,5 @@ module.exports = {
   readSession,
   closeSession,
   SESSION_MS,
+  VALID_ROLES,
 };

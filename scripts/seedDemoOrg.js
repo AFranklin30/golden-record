@@ -80,19 +80,25 @@ const pool = require('../src/db/pool');
 const { SCORER_VERSION } = require('../src/modules/probabilisticMatcher');
 
 const orgAuthMiddleware       = require('../src/middleware/orgAuthMiddleware');
+const dashboardSessionMiddleware = require('../src/middleware/dashboardSessionMiddleware');
 const rlsContextMiddleware    = require('../src/middleware/rlsContextMiddleware');
 const correlationIdMiddleware = require('../src/middleware/correlationIdMiddleware');
 const jwtMiddleware            = require('../src/middleware/jwtMiddleware');
+const { createOperator }       = require('../src/modules/operatorAuth');
 
 const resolveRouter    = require('../src/routes/resolve');
 const nfcRouter        = require('../src/routes/nfc');
 const sessionRouter    = require('../src/routes/session');
 const conflictsRouter  = require('../src/routes/conflicts');
 const householdRouter  = require('../src/routes/household');
+const dashboardSessionRouter = require('../src/routes/dashboardSession');
+const dashboardRouter  = require('../src/routes/dashboard');
 
 const DEMO_ORG_ID     = 'aaaaaaaa-0000-0000-0000-000000000001';
 const DEMO_ORG_NAME   = 'Equip AI Labs';
 const DEMO_API_KEY    = 'demo-seed-key-do-not-use-in-production';
+const DEMO_ADMIN_EMAIL = 'demo.admin@example.com';
+const DEMO_ADMIN_PASS  = 'demo-admin-pass-local';
 const SCHEMA_VERSION  = 'v1';
 const AUTH_HEADER     = `Bearer ${DEMO_API_KEY}`;
 
@@ -113,6 +119,14 @@ function log(line) {
 function buildApp() {
   const app = express();
   app.use(express.json());
+  app.use(dashboardSessionRouter);
+
+  const dashboardClosed = express.Router();
+  dashboardClosed.use('/v1/dashboard', dashboardSessionMiddleware);
+  dashboardClosed.use('/v1/dashboard', rlsContextMiddleware);
+  dashboardClosed.use('/v1/dashboard', correlationIdMiddleware);
+  dashboardClosed.use(dashboardRouter);
+  app.use(dashboardClosed);
 
   const protectedRouter = express.Router();
   protectedRouter.use(orgAuthMiddleware);
@@ -159,10 +173,16 @@ async function nfcResolve(app, body) {
 }
 
 async function confirmConflict(app, conflictId) {
-  const res = await request(app)
-    .post(`/v1/conflicts/${conflictId}/confirm`)
-    .set('Authorization', AUTH_HEADER)
-    .send();
+  const agent = request.agent(app);
+  const signed = await agent
+    .post('/v1/dashboard/session')
+    .send({ email: DEMO_ADMIN_EMAIL, password: DEMO_ADMIN_PASS });
+  if (signed.status !== 200) {
+    throw new Error(`demo operator sign-in failed (${signed.status}): ${JSON.stringify(signed.body)}`);
+  }
+  const res = await agent
+    .post(`/v1/dashboard/conflicts/${conflictId}/confirm`)
+    .send({});
   if (res.status !== 200) {
     throw new Error(`confirm failed (${res.status}): ${JSON.stringify(res.body)}`);
   }
@@ -629,6 +649,11 @@ async function main() {
       `INSERT INTO org (id, name, is_active, org_api_key_hash) VALUES ($1, $2, true, $3)`,
       [DEMO_ORG_ID, DEMO_ORG_NAME, apiKeyHash]
     );
+    await createOperator(client, {
+      orgId: DEMO_ORG_ID,
+      email: DEMO_ADMIN_EMAIL,
+      password: DEMO_ADMIN_PASS,
+    });
     log(`Org created: ${DEMO_ORG_ID} (${DEMO_ORG_NAME})`);
 
     // RLS context for this script's own direct-SQL reads/writes below

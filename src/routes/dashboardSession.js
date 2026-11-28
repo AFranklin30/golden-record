@@ -31,7 +31,12 @@ router.post('/v1/dashboard/session', async (req, res) => {
       return res.status(401).json({ error: 'unauthorized', message: 'invalid credentials' });
     }
     res.cookie(COOKIE_NAME, session.token, cookieOptions());
-    return res.status(200).json({ email: session.email, org_name: session.org_name });
+    return res.status(200).json({
+      operator_id: session.operator_id,
+      email: session.email,
+      role: session.role,
+      org_name: session.org_name,
+    });
   } catch (err) {
     logger.error('dashboard sign-in failed', { error: err.message });
     return res.status(500).json({ error: 'internal error' });

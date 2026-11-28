@@ -2,7 +2,13 @@ import { api, ApiError } from '../../api';
 
 export const sessionKey = ['session'] as const;
 
-export type Session = { email: string; org_name: string };
+export type OperatorRole = 'admin' | 'operator';
+export type Session = {
+  operator_id?: string;
+  email: string;
+  role?: OperatorRole;
+  org_name: string;
+};
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

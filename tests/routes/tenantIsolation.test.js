@@ -35,7 +35,8 @@ async function ensureAppRole(password) {
     END $$
   `);
   await pool.query('GRANT USAGE ON SCHEMA public TO golden_record_app');
-  await pool.query('GRANT SELECT ON org, operator TO golden_record_app');
+  await pool.query('GRANT SELECT ON org TO golden_record_app');
+  await pool.query('GRANT SELECT, INSERT, UPDATE ON operator TO golden_record_app');
   await pool.query('GRANT SELECT, INSERT, DELETE ON operator_session TO golden_record_app');
   await pool.query(`
     GRANT SELECT, INSERT, UPDATE ON

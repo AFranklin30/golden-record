@@ -48,7 +48,7 @@ describe('dashboard authentication and authorization', () => {
   afterAll(async () => {
     for (const orgId of [orgA.id, orgB.id]) {
       await pool.query('DELETE FROM operator_session WHERE org_id = $1', [orgId]);
-      await pool.query('DELETE FROM operator WHERE org_id = $1', [orgId]);
+      await pool.query('DELETE FROM operator WHERE org_id = $1', [orgId]).catch(() => {});
       await pool.query('DELETE FROM import_row WHERE org_id = $1', [orgId]);
       await pool.query('DELETE FROM import_batch WHERE org_id = $1', [orgId]);
       await pool.query('DELETE FROM conflict_queue WHERE org_id = $1', [orgId]).catch(() => {});

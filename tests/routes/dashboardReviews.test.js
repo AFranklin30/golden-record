@@ -60,7 +60,7 @@ describe('dashboard review history and unmerge', () => {
   afterAll(async () => {
     for (const orgId of [orgA.id, orgB.id]) {
       await pool.query('DELETE FROM operator_session WHERE org_id = $1', [orgId]);
-      await pool.query('DELETE FROM operator WHERE org_id = $1', [orgId]);
+      await pool.query('DELETE FROM operator WHERE org_id = $1', [orgId]).catch(() => {});
       await pool.query('DELETE FROM export_run WHERE org_id = $1', [orgId]).catch(() => {});
       await pool.query('DELETE FROM merge_history WHERE org_id = $1', [orgId]).catch(() => {});
       await pool.query('DELETE FROM related_fans WHERE org_id = $1', [orgId]).catch(() => {});

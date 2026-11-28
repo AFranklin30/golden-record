@@ -34,7 +34,10 @@ async function dashboardSessionMiddleware(req, res, next) {
     req.context = {
       org_id: session.org_id,
       org_name: session.org_name,
+      principal_type: 'operator',
+      operator_id: session.operator_id,
       operator_email: session.email,
+      operator_role: session.role,
     };
     next();
   } catch (err) {

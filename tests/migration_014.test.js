@@ -658,7 +658,31 @@ describe('migration_014 — resolution_trace, trace_label, evaluation_corpus', (
       countRows.map(r => [r.table_name, parseInt(r.col_count, 10)])
     );
 
-    expect(counts['audit_log']).toBe(14);
+    // Verify all 14 original audit_log columns remain intact (migration_021
+    // adds actor_type, operator_id, actor_email; see lessons.md #24).
+    const { rows: auditColRows } = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'audit_log'
+    `);
+    const auditCols = auditColRows.map(r => r.column_name);
+    expect(auditCols).toEqual(expect.arrayContaining([
+      'id',
+      'fan_id',
+      'org_id',
+      'event_type',
+      'match_type',
+      'confidence_score',
+      'is_new_record',
+      'idempotency_key',
+      'identifier_type',
+      'schema_version',
+      'jti',
+      'status',
+      'error_detail',
+      'created_at',
+    ]));
     expect(counts['conflict_queue']).toBe(10);
     expect(counts['merge_history']).toBe(10);
 

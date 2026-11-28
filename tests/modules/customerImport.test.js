@@ -7,6 +7,7 @@ const { Client } = require('pg');
 const request = require('supertest');
 const app = require('../../index');
 const { parseCustomerRow, importCustomers } = require('../../src/modules/customerImport');
+const { createOperator } = require('../../src/modules/operatorAuth');
 
 const FILE = [
   'first_name,last_name,email,birthday,zip,phone',
@@ -51,6 +52,8 @@ async function valuesFor(client, orgId, fanId, type) {
 describe('customer CSV import', () => {
   let client;
   let orgId;
+  let operatorEmail;
+  const operatorPassword = 'import-operator-pass';
   const rawKey = `import-test-${crypto.randomUUID()}`;
 
   beforeAll(async () => {
@@ -58,18 +61,22 @@ describe('customer CSV import', () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     orgId = crypto.randomUUID();
+    operatorEmail = `import-op-${orgId.slice(0, 8)}@example.com`;
     const hash = crypto.createHash('sha256').update(rawKey).digest('hex');
     await client.query(
       `INSERT INTO org (id, name, org_api_key_hash, is_active)
        VALUES ($1, $2, $3, true)`,
       [orgId, 'customer-import-test', hash]
     );
+    await createOperator(client, { orgId, email: operatorEmail, password: operatorPassword });
     await client.query("SELECT set_config('app.current_org_id', $1, false)", [orgId]);
   });
 
   afterAll(async () => {
     if (!client) return;
     await client.query("SELECT set_config('app.current_org_id', $1, false)", [orgId]);
+    await client.query('DELETE FROM operator_session WHERE org_id = $1', [orgId]).catch(() => {});
+    await client.query('DELETE FROM operator WHERE org_id = $1', [orgId]).catch(() => {});
     await client.query('DELETE FROM import_row WHERE org_id = $1', [orgId]);
     await client.query('DELETE FROM import_batch WHERE org_id = $1', [orgId]);
     await client.query('DELETE FROM export_run WHERE org_id = $1', [orgId]).catch(() => {});
@@ -187,10 +194,16 @@ describe('customer CSV import', () => {
     expect(afterConflicts.rows[0].n).toBe(5);
     expect(afterLinks.rows[0].n).toBe(beforeLinks.rows[0].n);
 
+    const opAgent = request.agent(app);
+    const signedIn = await opAgent
+      .post('/v1/dashboard/session')
+      .send({ email: operatorEmail, password: operatorPassword });
+    expect(signedIn.status).toBe(200);
+
     const johnConflict = pair(johnIds[0], jonIds[0]);
-    const confirmed = await request(app)
-      .post(`/v1/conflicts/${johnConflict.id}/confirm`)
-      .set('Authorization', `Bearer ${rawKey}`);
+    const confirmed = await opAgent
+      .post(`/v1/dashboard/conflicts/${johnConflict.id}/confirm`)
+      .send({});
     expect(confirmed.status).toBe(200);
 
     const jon = await client.query('SELECT deleted_at FROM fan WHERE id = $1', [jonIds[0]]);
@@ -211,9 +224,9 @@ describe('customer CSV import', () => {
     expect(exportedFanIds).toContain(aliceNewId);
 
     const bobConflict = pair(robertIds[0], bobIds[0]);
-    const firstSmith = await request(app)
-      .post(`/v1/conflicts/${bobConflict.id}/confirm`)
-      .set('Authorization', `Bearer ${rawKey}`);
+    const firstSmith = await opAgent
+      .post(`/v1/dashboard/conflicts/${bobConflict.id}/confirm`)
+      .send({});
     expect(firstSmith.status).toBe(200);
 
     const bob = await client.query('SELECT deleted_at FROM fan WHERE id = $1', [bobIds[0]]);
@@ -227,16 +240,16 @@ describe('customer CSV import', () => {
     );
     expect(stillPending.rows).toHaveLength(3);
 
-    const repeated = await request(app)
-      .post(`/v1/conflicts/${bobConflict.id}/confirm`)
-      .set('Authorization', `Bearer ${rawKey}`);
+    const repeated = await opAgent
+      .post(`/v1/dashboard/conflicts/${bobConflict.id}/confirm`)
+      .send({});
     expect(repeated.status).toBe(409);
 
     const intoRobert = stillPending.rows.find((row) => row.fan_id_a === robertIds[0]);
     if (intoRobert) {
-      const second = await request(app)
-        .post(`/v1/conflicts/${intoRobert.id}/confirm`)
-        .set('Authorization', `Bearer ${rawKey}`);
+      const second = await opAgent
+        .post(`/v1/dashboard/conflicts/${intoRobert.id}/confirm`)
+        .send({});
       expect(second.status).toBe(409);
       expect(second.body.error).toBe('multi-hop merge not supported');
     }

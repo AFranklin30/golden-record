@@ -35,6 +35,7 @@ describe('openSession tenant setting', () => {
     id: 'bbbbbbbb-0000-0000-0000-0000000000bb',
     org_id: orgId,
     email: 'ada@example.com',
+    role: 'admin',
     password_salt: salt,
     password_hash: hashPassword(password, salt),
     is_active: true,
@@ -47,6 +48,8 @@ describe('openSession tenant setting', () => {
     const session = await openSession(fake.pool, { email: operator.email, password });
 
     expect(session.org_id).toBe(orgId);
+    expect(session.operator_id).toBe(operator.id);
+    expect(session.role).toBe('admin');
     const sql = fake.queries.map((query) => query.sql);
     const beginAt = sql.findIndex((text) => text === 'BEGIN');
     const settingAt = sql.findIndex((text) => text.includes('set_config'));
@@ -60,6 +63,7 @@ describe('openSession tenant setting', () => {
     expect(fake.queries[settingAt].sql).toContain('app.current_org_id');
     expect(fake.queries[settingAt].sql).toContain('true');
     expect(fake.queries[settingAt].params).toEqual([orgId]);
+    expect(fake.queries[auditAt].params).toEqual([orgId, operator.id, operator.email]);
     expect(fake.released()).toBe(true);
   });
 

@@ -105,8 +105,11 @@ function toCsvValue(value) {
 
 router.get('/v1/export/fans', async (req, res) => {
   // RECEIVE
-  const org_id   = req.context.org_id;
-  const org_name = req.context.org_name;
+  const org_id       = req.context.org_id;
+  const org_name     = req.context.org_name;
+  const requested_by = req.context.principal_type === 'operator' && req.context.operator_email
+    ? req.context.operator_email
+    : org_name;
 
   // GUARD — in-memory only. This endpoint takes no query parameters: a full
   // snapshot every call, no `since`, no incremental export (see CLAUDE.md).
@@ -126,7 +129,7 @@ router.get('/v1/export/fans', async (req, res) => {
     await req.db.query(
       `INSERT INTO export_run (id, org_id, export_type, status, started_at, requested_by)
        VALUES ($1, $2, $3, 'running', NOW(), $4)`,
-      [export_run_id, org_id, EXPORT_TYPE, org_name]
+      [export_run_id, org_id, EXPORT_TYPE, requested_by]
     );
 
     const fanResult    = await req.db.query(FAN_PROJECTION_QUERY, [org_id]);
