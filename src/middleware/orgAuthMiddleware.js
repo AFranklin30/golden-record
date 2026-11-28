@@ -41,7 +41,7 @@ async function orgAuthMiddleware(req, res, next) {
       return res.status(403).json({ error: 'forbidden', message: 'org account is inactive' });
     }
 
-    req.context = { org_id: org.id, org_name: org.name };
+    req.context = { org_id: org.id, org_name: org.name, principal_type: 'integration' };
     next();
   } catch (err) {
     logger.error('org auth db failure', { error: err.message, ip: req.ip });

@@ -9,6 +9,15 @@ const router           = express.Router();
 const { UUID_RE }      = require('../lib/validate');
 const ALLOWED_STATUSES = ['pending', 'confirmed', 'rejected', 'unmerged'];
 
+function isHumanReviewer(ctx) {
+  return Boolean(
+    ctx
+    && ctx.principal_type === 'operator'
+    && ctx.operator_id
+    && (ctx.operator_role === 'admin' || ctx.operator_role === 'operator')
+  );
+}
+
 // COMPONENT 18 — GET /v1/conflicts
 router.get('/v1/conflicts', async (req, res) => {
   // RECEIVE
@@ -94,6 +103,14 @@ router.post('/v1/conflicts/:id/confirm', async (req, res) => {
   const org_id      = req.context.org_id;
 
   // GUARD
+  if (!isHumanReviewer(req.context)) {
+    return res.status(403).json({
+      error:   'forbidden',
+      message: 'integrations cannot perform human conflict-review actions'
+    });
+  }
+  const actor_id    = req.context.operator_id;
+  const actor_email = req.context.operator_email;
   if (!conflict_id || !String(conflict_id).trim()) {
     return res.status(400).json({ error: 'conflict_id is required' });
   }
@@ -179,9 +196,9 @@ router.post('/v1/conflicts/:id/confirm', async (req, res) => {
     // STEP 3 — close conflict as confirmed
     await req.db.query(
       `UPDATE conflict_queue
-       SET status = 'confirmed', reviewed_at = NOW()
+       SET status = 'confirmed', reviewed_at = NOW(), reviewed_by = $2
        WHERE id = $1`,
-      [conflict_id]
+      [conflict_id, actor_email]
     );
 
     // STEP 3B — write merge_history record for unmerge audit trail
@@ -189,14 +206,15 @@ router.post('/v1/conflicts/:id/confirm', async (req, res) => {
       `INSERT INTO merge_history
          (id, fan_id_source, fan_id_target, org_id, conflict_id, merged_by, status, merged_at)
        VALUES ($1, $2, $3, $4, $5, $6, 'active', NOW())`,
-      [crypto.randomUUID(), conflict.fan_id_b, conflict.fan_id_a, org_id, conflict_id, req.context.org_name]
+      [crypto.randomUUID(), conflict.fan_id_b, conflict.fan_id_a, org_id, conflict_id, actor_email]
     );
 
     // STEP 4 — audit event — always last write in transaction
     await req.db.query(
-      `INSERT INTO audit_log (id, fan_id, org_id, event_type, status, created_at)
-       VALUES ($1, $2, $3, 'conflict_confirmed', 'success', NOW())`,
-      [crypto.randomUUID(), conflict.fan_id_a, org_id]
+      `INSERT INTO audit_log
+         (id, fan_id, org_id, event_type, status, actor_type, operator_id, actor_email, created_at)
+       VALUES ($1, $2, $3, 'conflict_confirmed', 'success', 'operator', $4, $5, NOW())`,
+      [crypto.randomUUID(), conflict.fan_id_a, org_id, actor_id, actor_email]
     );
 
     await req.db.query('COMMIT');
@@ -228,6 +246,14 @@ router.post('/v1/conflicts/:id/reject', async (req, res) => {
   const org_id      = req.context.org_id;
 
   // GUARD
+  if (!isHumanReviewer(req.context)) {
+    return res.status(403).json({
+      error:   'forbidden',
+      message: 'integrations cannot perform human conflict-review actions'
+    });
+  }
+  const actor_id    = req.context.operator_id;
+  const actor_email = req.context.operator_email;
   if (!conflict_id || !String(conflict_id).trim()) {
     return res.status(400).json({ error: 'conflict_id is required' });
   }
@@ -261,9 +287,9 @@ router.post('/v1/conflicts/:id/reject', async (req, res) => {
     // Both fan records stay separate — no identifier moves, no soft delete
     const rejectResult = await req.db.query(
       `UPDATE conflict_queue
-       SET status = 'rejected', reviewed_at = NOW()
+       SET status = 'rejected', reviewed_at = NOW(), reviewed_by = $2
        WHERE id = $1 AND status = 'pending'`,
-      [conflict_id]
+      [conflict_id, actor_email]
     );
     if (rejectResult.rowCount === 0) {
       await req.db.query('ROLLBACK').catch(() => {});
@@ -272,9 +298,10 @@ router.post('/v1/conflicts/:id/reject', async (req, res) => {
 
     // STEP 2 — audit event — always last write in transaction
     await req.db.query(
-      `INSERT INTO audit_log (id, fan_id, org_id, event_type, status, created_at)
-       VALUES ($1, $2, $3, 'conflict_rejected', 'success', NOW())`,
-      [crypto.randomUUID(), conflict.fan_id_a, org_id]
+      `INSERT INTO audit_log
+         (id, fan_id, org_id, event_type, status, actor_type, operator_id, actor_email, created_at)
+       VALUES ($1, $2, $3, 'conflict_rejected', 'success', 'operator', $4, $5, NOW())`,
+      [crypto.randomUUID(), conflict.fan_id_a, org_id, actor_id, actor_email]
     );
 
     await req.db.query('COMMIT');
@@ -305,6 +332,14 @@ router.post('/v1/conflicts/:id/unmerge', async (req, res) => {
   const org_id      = req.context.org_id;
 
   // GUARD
+  if (!isHumanReviewer(req.context)) {
+    return res.status(403).json({
+      error:   'forbidden',
+      message: 'integrations cannot perform human conflict-review actions'
+    });
+  }
+  const actor_id    = req.context.operator_id;
+  const actor_email = req.context.operator_email;
   if (!conflict_id || !String(conflict_id).trim()) {
     return res.status(400).json({ error: 'conflict_id is required' });
   }
@@ -376,9 +411,9 @@ router.post('/v1/conflicts/:id/unmerge', async (req, res) => {
     // STEP 3 — update conflict_queue status to unmerged
     await req.db.query(
       `UPDATE conflict_queue
-       SET status = 'unmerged', reviewed_at = NOW()
+       SET status = 'unmerged', reviewed_at = NOW(), reviewed_by = $2
        WHERE id = $1`,
-      [conflict_id]
+      [conflict_id, actor_email]
     );
 
     // STEP 4 — update merge_history status to reversed (CAS — only if still active)
@@ -388,7 +423,7 @@ router.post('/v1/conflicts/:id/unmerge', async (req, res) => {
            reversed_at = NOW(),
            reversed_by = $1
        WHERE id = $2 AND status = 'active'`,
-      [req.context.org_name, mergeRecord.id]
+      [actor_email, mergeRecord.id]
     );
     if (unmergeResult.rowCount === 0) {
       await req.db.query('ROLLBACK').catch(() => {});
@@ -405,9 +440,10 @@ router.post('/v1/conflicts/:id/unmerge', async (req, res) => {
 
     // STEP 6 — audit event — always last write in transaction
     await req.db.query(
-      `INSERT INTO audit_log (id, fan_id, org_id, event_type, status, created_at)
-       VALUES ($1, $2, $3, 'merge_reversed', 'success', NOW())`,
-      [crypto.randomUUID(), mergeRecord.fan_id_target, org_id]
+      `INSERT INTO audit_log
+         (id, fan_id, org_id, event_type, status, actor_type, operator_id, actor_email, created_at)
+       VALUES ($1, $2, $3, 'merge_reversed', 'success', 'operator', $4, $5, NOW())`,
+      [crypto.randomUUID(), mergeRecord.fan_id_target, org_id, actor_id, actor_email]
     );
 
     await req.db.query('COMMIT');

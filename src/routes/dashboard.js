@@ -4,6 +4,8 @@ const express = require('express');
 const logger = require('../lib/logger');
 const { UUID_RE } = require('../lib/validate');
 const { readCustomerCsv, parseCustomerRow, importCustomers } = require('../modules/customerImport');
+const { createOperator, VALID_ROLES } = require('../modules/operatorAuth');
+const { requireOperator } = require('../middleware/requireRoleMiddleware');
 const conflictsRouter = require('./conflicts');
 const exportRouter = require('./export');
 
@@ -50,9 +52,148 @@ function dispatch(target, req, res, url) {
 
 router.get('/v1/dashboard/session', (req, res) => {
   return res.status(200).json({
+    operator_id: req.context.operator_id,
     email: req.context.operator_email,
+    role: req.context.operator_role,
     org_name: req.context.org_name,
   });
+});
+
+router.get('/v1/dashboard/operators', requireOperator('admin'), async (req, res) => {
+  try {
+    const result = await req.db.query(
+      `SELECT id, email, role, is_active, created_at
+         FROM operator
+        WHERE org_id = $1
+        ORDER BY created_at ASC`,
+      [req.context.org_id]
+    );
+    return res.status(200).json({ operators: result.rows });
+  } catch (err) {
+    logger.error('dashboard operator list failed', {
+      error: err.message,
+      org_id: req.context.org_id,
+      correlation_id: req.context.correlation_id,
+    });
+    return res.status(500).json({ error: 'internal error' });
+  }
+});
+
+router.post('/v1/dashboard/operators', requireOperator('admin'), async (req, res) => {
+  const email = req.body && req.body.email;
+  const password = req.body && req.body.password;
+  const role = req.body && req.body.role !== undefined ? req.body.role : 'operator';
+
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'email and password are required' });
+  }
+  if (typeof role !== 'string' || !VALID_ROLES.includes(role)) {
+    return res.status(400).json({ error: 'role must be admin or operator' });
+  }
+
+  try {
+    await req.db.query('BEGIN');
+    const created = await createOperator(req.db, {
+      orgId: req.context.org_id,
+      email,
+      password,
+      role,
+    });
+    await req.db.query(
+      `INSERT INTO audit_log
+         (org_id, event_type, status, schema_version, actor_type, operator_id, actor_email)
+       VALUES ($1, 'operator_created', 'success', '1.0', 'operator', $2, $3)`,
+      [req.context.org_id, req.context.operator_id, req.context.operator_email]
+    );
+    await req.db.query('COMMIT');
+    return res.status(201).json({
+      operator: {
+        id: created.id,
+        email: created.email,
+        role: created.role,
+        is_active: created.is_active,
+        created_at: created.created_at,
+      },
+    });
+  } catch (err) {
+    await req.db.query('ROLLBACK').catch(() => {});
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'operator email already exists' });
+    }
+    if (err.message && (err.message.includes('operator email') || err.message.includes('operator password') || err.message.includes('operator role'))) {
+      return res.status(400).json({ error: err.message });
+    }
+    logger.error('dashboard operator create failed', {
+      error: err.message,
+      org_id: req.context.org_id,
+      correlation_id: req.context.correlation_id,
+    });
+    return res.status(500).json({ error: 'operator could not be created' });
+  }
+});
+
+router.post('/v1/dashboard/operators/:id/deactivate', requireOperator('admin'), async (req, res) => {
+  const targetId = req.params.id;
+  if (!UUID_RE.test(targetId)) {
+    return res.status(400).json({ error: 'operator id must be a uuid' });
+  }
+  if (targetId === req.context.operator_id) {
+    return res.status(409).json({ error: 'cannot deactivate your own account' });
+  }
+
+  try {
+    await req.db.query('BEGIN');
+    const existing = await req.db.query(
+      `SELECT id, email, role, is_active
+         FROM operator
+        WHERE id = $1 AND org_id = $2
+        FOR UPDATE`,
+      [targetId, req.context.org_id]
+    );
+    if (existing.rows.length === 0) {
+      await req.db.query('ROLLBACK');
+      return res.status(404).json({ error: 'operator not found' });
+    }
+    if (!existing.rows[0].is_active) {
+      await req.db.query('ROLLBACK');
+      return res.status(409).json({ error: 'operator already inactive' });
+    }
+
+    await req.db.query(
+      `UPDATE operator
+          SET is_active = false
+        WHERE id = $1 AND org_id = $2`,
+      [targetId, req.context.org_id]
+    );
+    await req.db.query(
+      `DELETE FROM operator_session
+        WHERE operator_id = $1 AND org_id = $2`,
+      [targetId, req.context.org_id]
+    );
+    await req.db.query(
+      `INSERT INTO audit_log
+         (org_id, event_type, status, schema_version, actor_type, operator_id, actor_email)
+       VALUES ($1, 'operator_deactivated', 'success', '1.0', 'operator', $2, $3)`,
+      [req.context.org_id, req.context.operator_id, req.context.operator_email]
+    );
+    await req.db.query('COMMIT');
+    return res.status(200).json({
+      operator: {
+        id: existing.rows[0].id,
+        email: existing.rows[0].email,
+        role: existing.rows[0].role,
+        is_active: false,
+      },
+    });
+  } catch (err) {
+    await req.db.query('ROLLBACK').catch(() => {});
+    logger.error('dashboard operator deactivate failed', {
+      error: err.message,
+      org_id: req.context.org_id,
+      correlation_id: req.context.correlation_id,
+    });
+    return res.status(500).json({ error: 'operator could not be deactivated' });
+  }
 });
 
 router.post('/v1/dashboard/imports/preview', (req, res) => {
@@ -96,6 +237,11 @@ router.post('/v1/dashboard/imports', async (req, res) => {
       orgId: req.context.org_id,
       rows: read.rows,
       filename,
+      actor: {
+        actorType: 'operator',
+        operatorId: req.context.operator_id,
+        actorEmail: req.context.operator_email,
+      },
     });
     const rows = result.rows.map((row) => ({
       row_number: row.row_number,
@@ -313,7 +459,7 @@ router.get('/v1/dashboard/reviews', async (req, res) => {
   }
   try {
     const result = await req.db.query(
-      `SELECT id, fan_id_a, fan_id_b, confidence_score, status, created_at, reviewed_at
+      `SELECT id, fan_id_a, fan_id_b, confidence_score, status, created_at, reviewed_at, reviewed_by
          FROM conflict_queue
         WHERE org_id = $1 AND status = $2
           AND (
@@ -340,6 +486,7 @@ router.get('/v1/dashboard/reviews', async (req, res) => {
         status: row.status,
         created_at: row.created_at,
         reviewed_at: row.reviewed_at,
+        reviewed_by: row.reviewed_by,
         person_a: people[row.fan_id_a] || {},
         person_b: people[row.fan_id_b] || {},
       })),
@@ -359,7 +506,7 @@ router.get('/v1/dashboard/reviews/:id', async (req, res) => {
   }
   try {
     const result = await req.db.query(
-      `SELECT id, fan_id_a, fan_id_b, confidence_score, signals_matched, status, created_at, reviewed_at
+      `SELECT id, fan_id_a, fan_id_b, confidence_score, signals_matched, status, created_at, reviewed_at, reviewed_by
          FROM conflict_queue
         WHERE id = $1 AND org_id = $2`,
       [req.params.id, req.context.org_id]
@@ -376,6 +523,7 @@ router.get('/v1/dashboard/reviews/:id', async (req, res) => {
       status: row.status,
       created_at: row.created_at,
       reviewed_at: row.reviewed_at,
+      reviewed_by: row.reviewed_by,
       person_a: people[row.fan_id_a] || {},
       person_b: people[row.fan_id_b] || {},
     });
@@ -429,9 +577,10 @@ router.post('/v1/dashboard/fans/:id/hide', async (req, res) => {
       return res.status(hidden.status).json({ error: hidden.error });
     }
     await req.db.query(
-      `INSERT INTO audit_log (fan_id, org_id, event_type, status, schema_version)
-       VALUES ($1, $2, 'record_hidden', 'success', '1.0')`,
-      [hidden.fanId, req.context.org_id]
+      `INSERT INTO audit_log
+         (fan_id, org_id, event_type, status, schema_version, actor_type, operator_id, actor_email)
+       VALUES ($1, $2, 'record_hidden', 'success', '1.0', 'operator', $3, $4)`,
+      [hidden.fanId, req.context.org_id, req.context.operator_id, req.context.operator_email]
     );
     await req.db.query('COMMIT');
     return res.status(200).json({ fan_id: hidden.fanId, hidden: true });
@@ -530,9 +679,10 @@ router.post('/v1/dashboard/imports/:id/remove', async (req, res) => {
       [file.id, req.context.org_id]
     );
     await req.db.query(
-      `INSERT INTO audit_log (org_id, event_type, status, schema_version)
-       VALUES ($1, 'record_hidden', 'success', '1.0')`,
-      [req.context.org_id]
+      `INSERT INTO audit_log
+         (org_id, event_type, status, schema_version, actor_type, operator_id, actor_email)
+       VALUES ($1, 'record_hidden', 'success', '1.0', 'operator', $2, $3)`,
+      [req.context.org_id, req.context.operator_id, req.context.operator_email]
     );
     await req.db.query('COMMIT');
     return res.status(200).json({

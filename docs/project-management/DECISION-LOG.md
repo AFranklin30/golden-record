@@ -107,6 +107,18 @@ Measured again on 2026-11-16 during `npx jest --forceExit`: 60 scenarios, 0 poli
 
 **What this decision does not do.** It does not change thresholds, signals, the resolver, or the importer. It does not set the Sprint 1.5 tasks. The 3–5 day figure is the estimate attached to the approval. It was not measured. `PROJECT-PLAN.md` is not edited here. That file still describes Sprint 2 as the next planned block. The order change is this decision.
 
+## D-024 — Operator authorization, first-operator admin, integration boundary, and audit attribution
+
+**Status:** APPROVED & IMPLEMENTED (Nov 27, 2026)
+
+**Decision.**
+- The first operator created for an organization becomes `admin` for that organization; subsequent operators default to `operator`.
+- Administrators can list, add, and deactivate operators within their organization, plus perform all normal identity-resolution and conflict-review actions. Deactivation immediately revokes active `operator_session` rows.
+- Regular authorized operators can resolve/import records, review conflicts, confirm/reject matches, and unmerge records where permitted by existing product rules, but cannot manage operators (`403`).
+- Integrations (org Bearer API key) retain their machine-to-machine endpoints (`/v1/resolve`, `/v1/ingest/nfc`, `/v1/session`, `/v1/fan/:id/profile`, `/v1/household/*`, `/v1/export/fans`, `GET /v1/conflicts`), but are blocked (`403`) from human conflict-review mutations (`POST /v1/conflicts/:id/{confirm,reject,unmerge}`) and cannot access `/v1/dashboard/*` (`401`).
+- Authorization is enforced at the request boundary using DB-backed session/API-key identity (`req.context.principal_type`, `operator_id`, `operator_email`, `operator_role`); request-body identity/role fields are never trusted.
+- Audit and provenance records (`audit_log.actor_type/operator_id/actor_email`, `conflict_queue.reviewed_by`, `merge_history.merged_by/reversed_by`, `import_batch.created_by_*`, `export_run.requested_by`) attribute every action to the actual authenticated operator or integration principal (`migrations/migration_021.sql`).
+
 ## D-004 — Do not restore the deleted client evaluation
 
 **Status:** PROPOSED. Unchanged.

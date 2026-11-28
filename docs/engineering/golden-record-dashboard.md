@@ -16,7 +16,7 @@ An operator signs in with an email and password. The server sets an httpOnly coo
 
 `operator` and `operator_session` are auth tables, like `org`: no RLS, because the lookup happens before `app.current_org_id` is set. Every query still filters by the session's `org_id`.
 
-Creating the organization and the first operator is `scripts/createOperator.js`. It is not a public signup.
+Creating the organization and the first operator is `scripts/createOperator.js` (or `scripts/initHostedDemo.js`). It is not a public signup. The first operator created for an organization automatically receives the `admin` role. Administrators can list, add, and deactivate operators in their organization from `/account` (`/v1/dashboard/operators`, `/v1/dashboard/operators/:id/deactivate`); regular operators receive `403`. Integrations (org Bearer API keys) cannot access `/v1/dashboard/*` (`401`) and cannot call human conflict-review mutations (`POST /v1/conflicts/:id/{confirm,reject,unmerge}`, `403`). Every operator action records `actor_type`, `operator_id`, and `actor_email` on `audit_log`, plus operator email on `conflict_queue.reviewed_by`, `merge_history.merged_by`/`reversed_by`, `import_batch.created_by_email`, and `export_run.requested_by`.
 
 Dashboard routes are a separate stack, not a change to the API-key stack:
 
@@ -78,4 +78,3 @@ These stay open for a later hosting slice. Slice 1 does not close them. The data
 - A CSV import runs to completion inside the request.
 - Sign-in uses `SameSite=Lax`. Origin and Referer checks are not added.
 - A real customer file needs a backup and restore step. A free-tier restore window is not that step.
-- More than one operator identity is future product work.

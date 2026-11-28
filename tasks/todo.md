@@ -1,3 +1,24 @@
+# Operator authorization, management, and audit attribution
+
+## Context
+Golden Record authenticates operators via httpOnly `gr_session` cookies and integrations via org Bearer API keys, but has no operator role model (`admin` vs `operator`), no first-operator administrator assignment, no operator-management endpoints/UI, no boundary preventing integrations from calling human conflict-review mutations (`confirm`, `reject`, `unmerge`), and writes `org_name` (or NULL) instead of actual operator/principal attribution in `audit_log`, `conflict_queue`, `merge_history`, and `export_run`.
+
+## Plan
+- [x] Verify local Postgres and baseline test counts (`FIRESTORE_SYNC=off`: 21 module/dashboard/route suites 375 passed, 1 skipped; `eval.level2` 7 expected Sprint 1.5 failures; `eval.benchmark` 5 expected Sprint 1.5 scenarios; `web/` Vitest 9 files / 32 tests passed).
+- [x] Add `migrations/migration_021.sql` (`operator.role`, `audit_log.actor_type/operator_id/actor_email`, `import_batch.created_by_operator_id/created_by_email`, `operator_created`/`operator_deactivated` audit event types) and apply to local Postgres.
+- [x] Establish principal identity (`principal_type`, `operator_id`, `operator_email`, `operator_role`) in `operatorAuth.js`, `dashboardSessionMiddleware.js`, `orgAuthMiddleware.js`, `dashboardSession.js`, and `dashboard.js`.
+- [x] Implement first-operator `admin` assignment in `createOperator()` (`operatorAuth.js`) and CLI/hosted-demo setup (`scripts/createOperator.js`, `src/modules/hostedDemoInit.js`).
+- [x] Add `src/middleware/requireRoleMiddleware.js` and admin-only operator-management routes (`GET /v1/dashboard/operators`, `POST /v1/dashboard/operators`, `POST /v1/dashboard/operators/:id/deactivate`) in `src/routes/dashboard.js`, plus `golden_record_app` grants in `tests/routes/tenantIsolation.test.js`.
+- [x] Enforce operator-only human-review boundary (`403` for integrations on `POST /v1/conflicts/:id/{confirm,reject,unmerge}`) while keeping integration endpoints working and updating `conflicts.js`, `dashboard.js`, `customerImport.js`, `export.js`, `session.js` audit attribution.
+- [x] Update frontend (`web/src/features/session/session.ts`, `Account.tsx`, `ReviewDetail.tsx`) for role display, admin-only operator management, and review attribution.
+- [x] Add `tests/routes/dashboardAuthorization.test.js`, `web/src/features/account/Account.test.tsx`, update affected tests (`conflicts.test.js`, `customerImport.test.js`, `export.test.js`, `seedDemoOrg.js`), and verify full suite.
+- [x] Update documentation (`DECISION-LOG.md`, `golden-record-dashboard.md`, `hosted-database-contract.md`, `tasks/handoff.md`).
+
+## DO NOT
+Do not modify `src/modules/resolverEngine.js`, `src/modules/probabilisticMatcher.js`, matching thresholds, candidate retrieval, blocking keys, nickname/DOB policy, merge/unmerge semantics, historical migrations (`001`–`020`), or frozen evaluation fixtures/labels.
+
+---
+
 # S1.5-03 false-merge holds and S1.5-05 re-run
 
 ## Context

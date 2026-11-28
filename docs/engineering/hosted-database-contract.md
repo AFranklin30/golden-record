@@ -65,6 +65,8 @@ psql "$DATABASE_URL" -f migrations/migration_019.sql
 | 017 | `export_run` with RLS | 016 |
 | 018 | narrows `uq_identifier_per_org`; adds `import_batch` and `import_row` with RLS | 017, and not inside a transaction |
 | 019 | `operator`, `operator_session`, and `dashboard_session_issued` | 018 |
+| 020 | `import_batch.data_removed_at` and `record_hidden` | 019 |
+| 021 | `operator.role`, `audit_log` actor attribution columns, `import_batch` creator columns, `operator_created` / `operator_deactivated` | 020 |
 
 `org`, `operator`, and `operator_session` have no RLS. Sign-in reads them before `app.current_org_id` exists. Every other application table has `ENABLE` and `FORCE ROW LEVEL SECURITY` and a `tenant_isolation` policy:
 
@@ -117,7 +119,8 @@ CREATE ROLE golden_record_app
 GRANT CONNECT ON DATABASE neondb TO golden_record_app;
 GRANT USAGE ON SCHEMA public TO golden_record_app;
 
-GRANT SELECT ON org, operator TO golden_record_app;
+GRANT SELECT ON org TO golden_record_app;
+GRANT SELECT, INSERT, UPDATE ON operator TO golden_record_app;
 GRANT SELECT, INSERT, DELETE ON operator_session TO golden_record_app;
 
 GRANT SELECT, INSERT, UPDATE ON

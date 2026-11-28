@@ -106,7 +106,7 @@ describe('dashboard imported records', () => {
   afterAll(async () => {
     for (const orgId of [orgA.id, orgB.id]) {
       await pool.query('DELETE FROM operator_session WHERE org_id = $1', [orgId]);
-      await pool.query('DELETE FROM operator WHERE org_id = $1', [orgId]);
+      await pool.query('DELETE FROM operator WHERE org_id = $1', [orgId]).catch(() => {});
       await pool.query('DELETE FROM merge_history WHERE org_id = $1', [orgId]).catch(() => {});
       await pool.query('DELETE FROM identifier_link WHERE org_id = $1', [orgId]).catch(() => {});
       await pool.query('DELETE FROM import_row WHERE org_id = $1', [orgId]).catch(() => {});

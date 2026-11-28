@@ -11,6 +11,7 @@ type Review = {
   confidence_score: string | number;
   signals_matched?: unknown;
   reviewed_at?: string | null;
+  reviewed_by?: string | null;
   person_a: Person;
   person_b: Person;
 };
@@ -99,7 +100,12 @@ export function ReviewDetail() {
       {signals.length > 0 ? (
         <p>Signals the server recorded: {signals.join(', ')}.</p>
       ) : null}
-      {data.reviewed_at ? <p>Decision recorded {new Date(data.reviewed_at).toLocaleString()}.</p> : null}
+      {data.reviewed_at ? (
+        <p>
+          Decision recorded {new Date(data.reviewed_at).toLocaleString()}
+          {data.reviewed_by ? ` by ${data.reviewed_by}` : ''}.
+        </p>
+      ) : null}
       {data.status === 'pending' ? (
         <div className="row">
           <Button type="button" disabled={pending} onClick={() => setDialog('confirm')}>Confirm same person</Button>

@@ -52,8 +52,8 @@ router.post('/v1/session', async (req, res) => {
 
     await req.db.query(
       `INSERT INTO audit_log
-         (id, fan_id, org_id, event_type, schema_version, jti, status, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+         (id, fan_id, org_id, event_type, schema_version, jti, status, actor_type, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'integration',NOW())`,
       [crypto.randomUUID(), fan_id, org_id, 'session_issued', schema_version, tokenResult.jti, 'success']
     );
   } catch (err) {

@@ -38,26 +38,38 @@ const { parse } = require('csv-parse/sync');
 
 const pool                    = require('../../src/db/pool');
 const orgAuthMiddleware       = require('../../src/middleware/orgAuthMiddleware');
+const dashboardSessionMiddleware = require('../../src/middleware/dashboardSessionMiddleware');
 const rlsContextMiddleware    = require('../../src/middleware/rlsContextMiddleware');
 const correlationIdMiddleware = require('../../src/middleware/correlationIdMiddleware');
 const exportRouter            = require('../../src/routes/export');
-const conflictsRouter         = require('../../src/routes/conflicts');
+const dashboardSessionRouter  = require('../../src/routes/dashboardSession');
+const dashboardRouter         = require('../../src/routes/dashboard');
+const { createOperator }      = require('../../src/modules/operatorAuth');
 
 const hashKey = (rawKey) => crypto.createHash('sha256').update(rawKey).digest('hex');
 
 function buildApp() {
   const app = express();
   app.use(express.json());
+  app.use(dashboardSessionRouter);
+
+  const dashboardClosed = express.Router();
+  dashboardClosed.use('/v1/dashboard', dashboardSessionMiddleware);
+  dashboardClosed.use('/v1/dashboard', rlsContextMiddleware);
+  dashboardClosed.use('/v1/dashboard', correlationIdMiddleware);
+  dashboardClosed.use(dashboardRouter);
+  app.use(dashboardClosed);
+
   app.use(orgAuthMiddleware);
   app.use(rlsContextMiddleware);
   app.use(correlationIdMiddleware);
   app.use(exportRouter);
-  app.use(conflictsRouter);
   return app;
 }
 
 let app;
-let orgId, rawKey;
+let orgId, rawKey, operatorEmail;
+const operatorPassword = 'export-operator-pass';
 let otherOrgId;
 let inactiveOrgId, inactiveRawKey;
 const fanIds          = [];
@@ -101,14 +113,15 @@ beforeAll(async () => {
   app = buildApp();
 
   ({ id: orgId, rawKey } = await createOrg('Export Test Org'));
+  operatorEmail = `export-op-${orgId.slice(0, 8)}@example.com`;
+  await createOperator(pool, { orgId, email: operatorEmail, password: operatorPassword });
   ({ id: otherOrgId } = await createOrg('Export Test Org — Other'));
   ({ id: inactiveOrgId, rawKey: inactiveRawKey } = await createOrg('Export Test Org — Inactive', { isActive: false }));
 });
 
 afterAll(async () => {
   // FK cleanup order: merge_history / conflict_queue -> identifier_link -> fan
-  // -> export_run -> org. audit_log is append-only by convention — this
-  // endpoint never writes to it, so there is nothing to leave behind there.
+  // -> export_run -> operator_session -> operator -> org.
   const allFanIds = [...fanIds, ...otherFanIds];
   const allOrgIds = [orgId, otherOrgId, inactiveOrgId];
 
@@ -123,6 +136,8 @@ afterAll(async () => {
     await pool.query(`DELETE FROM fan WHERE id = ANY($1::uuid[])`, [allFanIds]).catch(() => {});
   }
   await pool.query(`DELETE FROM export_run WHERE org_id = ANY($1::uuid[])`, [allOrgIds]).catch(() => {});
+  await pool.query(`DELETE FROM operator_session WHERE org_id = ANY($1::uuid[])`, [allOrgIds]).catch(() => {});
+  await pool.query(`DELETE FROM operator WHERE org_id = ANY($1::uuid[])`, [allOrgIds]).catch(() => {});
   await pool.query(`DELETE FROM org WHERE id = ANY($1::uuid[])`, [allOrgIds]).catch(() => {});
 
   await pool.end();
@@ -220,7 +235,9 @@ describe('GET /v1/export/fans', () => {
       [conflictId, fanA, fanB, orgId]
     );
 
-    const confirmRes = await auth(request(app).post(`/v1/conflicts/${conflictId}/confirm`), rawKey);
+    const opAgent = request.agent(app);
+    await opAgent.post('/v1/dashboard/session').send({ email: operatorEmail, password: operatorPassword });
+    const confirmRes = await opAgent.post(`/v1/dashboard/conflicts/${conflictId}/confirm`).send({});
     expect(confirmRes.status).toBe(200);
 
     const mergeRow = await pool.query(
