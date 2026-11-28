@@ -1,14 +1,18 @@
 # Golden Record — Sprint Tracker
 
-Corrected 2026-11-16.
+Corrected 2026-11-16. Updated Nov 27, 2026 (CT) for the Sprint 1.5 closeout and the S2-00 baseline.
 
 ## Current sprint
 
 Sprint 0 is COMPLETED as of Nov 16, 2026. Aaron approved the MVP scope in `SCOPE-AND-BACKLOG.md` as written (S0-06, D-019).
 
-Sprint 1 is COMPLETED as of Nov 18, 2026. It started Nov 16, 2026. S1-01 through S1-07 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). On Nov 16, about 3:09 PM CT, Aaron approved the import (S1-04). The raw results are recorded. S1-05 measured them against identity truth. S1-06 is the written report. S1-07 is the four demo picks. On Nov 18, 2026, Aaron approved Sprint 1.5, Matching Quality Fixes, inserted before Sprint 2 (D-022). The estimate is 3–5 days and is unverified. Sprints 2, 3, and 4 move back. Sprint 1.5 has no task list in this tracker yet.
+Sprint 1 is COMPLETED as of Nov 18, 2026. It started Nov 16, 2026. S1-01 through S1-07 are COMPLETED. On Nov 16, about 1:04 PM CT, Aaron approved expanding the labeled set from 200 rows to 360 before any engine run (D-021). On Nov 16, about 3:09 PM CT, Aaron approved the import (S1-04). The raw results are recorded. S1-05 measured them against identity truth. S1-06 is the written report. S1-07 is the four demo picks. On Nov 18, 2026, Aaron approved Sprint 1.5, Matching Quality Fixes, inserted before Sprint 2 (D-022). The estimate is 3–5 days and is unverified. Sprints 2, 3, and 4 move back. The Sprint 1.5 task list is in the Sprint 1.5 section below and on `TASK-BOARD.md`.
 
-Source of truth is `main` at `f867e62921e6332e6e02aeebeacba86351844699`. Pull request #9 merged the earlier tip. `render.yaml` on that commit sets `branch: main` (D-020).
+Sprint 1.5 is COMPLETED as of Nov 27, 2026. Aaron closed it at 11:29 PM CT (D-030). 7 of 9 tasks are COMPLETED. S1.5-07 (D-023 docs and pending fixtures) and S1.5-09 (stable lookup order) are CARRIED TO SPRINT 2, not completed.
+
+Sprint 2 is IN PROGRESS, started Nov 27, 2026. S2-00 (baseline on current `main`) is COMPLETED. All entry gates are met.
+
+Source of truth is `main` at `15c52f9565c5f6771032686191d99c8614bd2b98` (pull request #19 merge, Nov 27, 2026, 11:20 PM CT). `render.yaml` sets `branch: main` (D-020). The Sprint 0 and Sprint 1 records below were written against earlier commits and are unchanged.
 
 ## What changed in the correction
 
@@ -258,12 +262,19 @@ Sprint 1's task list is complete. Do not treat the S1-04 policy comparison as th
 
 ## Sprint 1.5
 
-Sprint 1.5 is not complete. S1.5-03 and S1.5-05 were run on Nov 22, 2026. The other Sprint 1.5 work is not on this list.
+Sprint 1.5 is COMPLETED as of Nov 27, 2026, closed by Aaron at 11:29 PM CT (D-030). It started Nov 18, 2026. S1.5-03 and S1.5-05 were run on Nov 22, 2026. S1.5 IDs other than S1.5-03 and S1.5-05 are PM labels from planning notes and commit history. They are not defined anywhere else in the repo. Titles follow `TASK-BOARD.md`.
 
 | ID | Status |
 |---|---|
-| S1.5-03 False-merge rules in the matcher | COMPLETED |
+| S1.5-01 Record the approved policy decisions in the failure analysis | COMPLETED |
+| S1.5-02 Record the candidate-retrieval requirements and one-edit surname retrieval | COMPLETED |
+| S1.5-03 False-merge rules in the matcher | COMPLETED (PR #15) |
+| S1.5-04 One test per new rule, and the policy doc updated | COMPLETED (PR #15) |
 | S1.5-05 Re-run the 360-row identity metrics | COMPLETED |
+| S1.5-06 Review and update the project docs | COMPLETED (PR #19, merge `15c52f9`, Nov 27, 2026, 11:20 PM CT) |
+| S1.5-07 D-023 policy docs and pending fixtures | CARRIED TO SPRINT 2 (dependency of S2-06a). Not completed. |
+| S1.5-08 Reconcile the stale fixture expectations | COMPLETED (PR #16) |
+| S1.5-09 Stable lookup order for the same-name lookup | CARRIED TO SPRINT 2 (acceptance item 9 of S2-06a). Not completed. |
 
 ### S1.5-03 and S1.5-05 result
 
@@ -280,6 +291,59 @@ The matcher now holds the approved cases for review. The numbers below are the m
 | Reviews | 65/185 | 117/185 |
 | Found | 77/99 | 90/99 |
 
-The 8 Jest failures are `tests/eval.benchmark.test.js` and `tests/eval.level2.test.js`. Those fixtures still expect the old hard matches. They were not edited. Detail is in `eval/reports/sprint-1.5-rerun-report.md`.
+The 8 Jest failures are `tests/eval.benchmark.test.js` and `tests/eval.level2.test.js`. Those fixtures still expected the old hard matches when this was written, and were not edited then. PR #16 reconciled them later. Detail is in `eval/reports/sprint-1.5-rerun-report.md`.
 
 8/8 is every remaining automatic decision. It is not a claim that the hard cases were solved. Those cases are in the 117 reviews. Set A has no remaining automatic decision, so its precision and recall are null. The metrics rule of three on 8/8 is 3/8.
+
+## S2-00 result (Sprint 2 baseline)
+
+Date: Nov 27, 2026 (CT), on `main` at `15c52f9565c5f6771032686191d99c8614bd2b98` (pull request #19 merge). Run by Antigravity in Aaron's terminal. **The results below were reported by Antigravity. PM did not re-run them. The command list below was also reported by Antigravity.**
+
+### Commands
+
+These are the exact commands Antigravity ran, as reported in its log (Nov 28, 2026). No environment-variable wrappers were used.
+
+```
+git checkout main && git pull
+scripts/resetLocalDb.sh
+node --unhandled-rejections=warn scripts/seedDemoOrg.js
+npm --prefix web run build && npm --prefix web test
+npx jest --forceExit
+node --unhandled-rejections=warn eval/syntheticImport.js
+node eval/syntheticMetrics.js   # exited 2 on EXPECTED.import_results_sha256; metrics then computed via exported joinRows + evaluate
+git checkout -- eval/reports
+git checkout -- scripts/demo-org-summary.txt
+git status
+```
+
+The 360-row metrics were computed through the exported `joinRows` and `evaluate` functions in `eval/syntheticMetrics.js`, with no file edits (see the hash note below). `eval/reports` and `scripts/demo-org-summary.txt` were restored with `git checkout`, and the working tree was clean (reported).
+
+### Results (reported)
+
+| | Value |
+|---|---|
+| Jest | 45 of 45 suites. 739 passed, 0 failed, 1 skipped (740). |
+| Vitest | 10 files, 34 of 34. |
+| Web build | ok |
+| 60-scenario benchmark | 60 scenarios. 0 policy mismatches. Precision 0.875 (14 true positives, 2 false positives). Recall 0.7368 (14 true positives, 5 false negatives). 32 reviews. |
+| 360-row outcomes | new 220, replay 5, review 117, import_error 10, auto_merge 8 (360 total) |
+| 360-row identity | False merges 0. Missed matches 0. Reviews 117 of 185 (82 same person, 35 different people, 0 wrong target). Found 90 of 99. Automatic decisions 8, all correct. |
+
+### How it compares
+
+| | S1-05 baseline | After S1.5-03 (PR #15, Nov 22) | S2-00 (`15c52f9`, reported) |
+|---|---|---|---|
+| Jest | 698 passed, 1 skipped | 720 passed, 8 failed, 1 skipped | 739 passed, 0 failed, 1 skipped |
+| 60-scenario benchmark | 0 mismatches, P 0.9048, R 0.7917, 27 reviews | 5 mismatches, P 0.875, R 0.7368, 32 reviews | 0 mismatches, P 0.875, R 0.7368, 32 reviews |
+| False merges | 19 | 0 | 0 |
+| Missed matches | 13 | 0 | 0 |
+| Reviews | 65 of 185 | 117 of 185 | 117 of 185 |
+| Found | 77 of 99 | 90 of 99 | 90 of 99 |
+
+The 360-row identity results did not move after PR #15, so PR #16, #17, #18 and #19 did not change them (reported). 8 of 8 automatic decisions correct is every remaining automatic decision. It is not a claim that the hard cases were solved. They are in the 117 reviews. The rule of three on a perfect 8 is 3/8. All data is synthetic.
+
+### Hash pin note
+
+`eval/syntheticMetrics.js` pins `EXPECTED.import_results_sha256` to the S1-04 file (`33afd385...`). The fresh import hashed `865f6d1e...`. The script's own run therefore does not pass its check. The metrics were computed through the exported `joinRows` and `evaluate`, with no file edits. A small P2 backlog item (BL-01 on `TASK-BOARD.md`) covers making the pin optional or updatable. No change was made now.
+
+This is the baseline that S2-06a compares against: 0 false merges, 0 missed matches, 117 reviews of 185, 90 of 99 found, 8 automatic decisions, benchmark 0 mismatches and 32 reviews.
