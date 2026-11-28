@@ -118,7 +118,7 @@ router.post('/v1/dashboard/operators', requireOperator('admin'), async (req, res
   } catch (err) {
     await req.db.query('ROLLBACK').catch(() => {});
     if (err.code === '23505') {
-      return res.status(409).json({ error: 'operator email already exists' });
+      return res.status(409).json({ error: 'operator could not be created' });
     }
     if (err.message && (err.message.includes('operator email') || err.message.includes('operator password') || err.message.includes('operator role'))) {
       return res.status(400).json({ error: err.message });
@@ -143,6 +143,10 @@ router.post('/v1/dashboard/operators/:id/deactivate', requireOperator('admin'), 
 
   try {
     await req.db.query('BEGIN');
+    await req.db.query(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`operator_org_${req.context.org_id}`]
+    );
     const existing = await req.db.query(
       `SELECT id, email, role, is_active
          FROM operator
@@ -157,6 +161,20 @@ router.post('/v1/dashboard/operators/:id/deactivate', requireOperator('admin'), 
     if (!existing.rows[0].is_active) {
       await req.db.query('ROLLBACK');
       return res.status(409).json({ error: 'operator already inactive' });
+    }
+    if (existing.rows[0].role === 'admin') {
+      const activeAdmins = await req.db.query(
+        `SELECT COUNT(*)::int AS n
+           FROM operator
+          WHERE org_id = $1
+            AND is_active = true
+            AND role = 'admin'`,
+        [req.context.org_id]
+      );
+      if (activeAdmins.rows[0].n <= 1) {
+        await req.db.query('ROLLBACK');
+        return res.status(409).json({ error: 'cannot deactivate the last active admin' });
+      }
     }
 
     await req.db.query(
