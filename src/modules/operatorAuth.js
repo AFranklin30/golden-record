@@ -34,7 +34,11 @@ async function insertOperatorRow(conn, { orgId, email, password, role }) {
 
   await conn.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`operator_org_${orgId}`]);
   const existing = await conn.query(
-    'SELECT COUNT(*)::int AS n FROM operator WHERE org_id = $1',
+    `SELECT COUNT(*)::int AS n
+       FROM operator
+      WHERE org_id = $1
+        AND is_active = true
+        AND role = 'admin'`,
     [orgId]
   );
   const assignedRole = existing.rows[0].n === 0 ? 'admin' : (role || 'operator');
@@ -148,6 +152,64 @@ async function readSession(client, token) {
   return session;
 }
 
+async function promoteOperatorRow(conn, { orgId, email }) {
+  const normalized = normalizeEmail(email);
+  if (!normalized || !normalized.includes('@') || normalized.length > 320) {
+    throw new Error('operator email is invalid');
+  }
+  await conn.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`operator_org_${orgId}`]);
+  const existing = await conn.query(
+    `SELECT id, org_id, email, role, is_active
+       FROM operator
+      WHERE org_id = $1 AND email = $2
+      FOR UPDATE`,
+    [orgId, normalized]
+  );
+  if (existing.rows.length === 0) {
+    throw new Error('operator not found');
+  }
+  if (!existing.rows[0].is_active) {
+    throw new Error('cannot promote inactive operator');
+  }
+
+  const updated = await conn.query(
+    `UPDATE operator
+        SET role = 'admin'
+      WHERE id = $1 AND org_id = $2
+      RETURNING id, org_id, email, role, is_active`,
+    [existing.rows[0].id, orgId]
+  );
+  await conn.query(
+    `SELECT set_config('app.current_org_id', $1, true)`,
+    [orgId]
+  );
+  await conn.query(
+    `INSERT INTO audit_log
+       (org_id, event_type, status, schema_version, actor_type, operator_id, actor_email)
+     VALUES ($1, 'operator_promoted', 'success', '1.0', 'system', $2, $3)`,
+    [orgId, updated.rows[0].id, updated.rows[0].email]
+  );
+  return updated.rows[0];
+}
+
+async function promoteOperator(client, options) {
+  if (typeof client.connect === 'function' && typeof client.totalCount === 'number') {
+    const conn = await client.connect();
+    try {
+      await conn.query('BEGIN');
+      const promoted = await promoteOperatorRow(conn, options);
+      await conn.query('COMMIT');
+      return promoted;
+    } catch (err) {
+      await conn.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      conn.release();
+    }
+  }
+  return promoteOperatorRow(client, options);
+}
+
 async function closeSession(client, token) {
   if (!token) return;
   await client.query('DELETE FROM operator_session WHERE token_hash = $1', [hashToken(token)]);
@@ -155,6 +217,7 @@ async function closeSession(client, token) {
 
 module.exports = {
   createOperator,
+  promoteOperator,
   openSession,
   readSession,
   closeSession,

@@ -42,6 +42,9 @@ psql "$DATABASE_URL" -f migrations/migration_016.sql
 psql "$DATABASE_URL" -f migrations/migration_017.sql
 psql "$DATABASE_URL" -f migrations/migration_018.sql
 psql "$DATABASE_URL" -f migrations/migration_019.sql
+psql "$DATABASE_URL" -f migrations/migration_020.sql
+psql "$DATABASE_URL" -f migrations/migration_021.sql
+psql "$DATABASE_URL" -f migrations/migration_022.sql
 ```
 
 | File | What it adds | After |
@@ -67,6 +70,7 @@ psql "$DATABASE_URL" -f migrations/migration_019.sql
 | 019 | `operator`, `operator_session`, and `dashboard_session_issued` | 018 |
 | 020 | `import_batch.data_removed_at` and `record_hidden` | 019 |
 | 021 | `operator.role`, `audit_log` actor attribution columns, `import_batch` creator columns, `operator_created` / `operator_deactivated` | 020 |
+| 022 | backfill earliest active operator to `admin` for orgs without an active admin; add `operator_promoted` audit event type | 021 |
 
 `org`, `operator`, and `operator_session` have no RLS. Sign-in reads them before `app.current_org_id` exists. Every other application table has `ENABLE` and `FORCE ROW LEVEL SECURITY` and a `tenant_isolation` policy:
 
@@ -104,7 +108,7 @@ Two roles. The Neon owner runs migrations, creates the first organization, creat
 
 `golden_record_app` logs in. It is not a superuser, cannot bypass row-level security, and cannot create databases or roles. It does not own the tables, so it cannot drop them or turn RLS off. Its password is set in the Neon console or with a password command. The password is not written into this repository.
 
-Run the following as the database owner after migration 019. This SQL is not a migration file. `tests/routes/tenantIsolation.test.js` applies it on local Postgres and connects as `golden_record_app`. The Neon database does not exist yet.
+Run the following as the database owner after migration 022 (includes `INSERT, UPDATE` on `operator` required by `migration_021` operator management). This SQL is not a migration file. `tests/routes/tenantIsolation.test.js` applies it on local Postgres and connects as `golden_record_app`. The Neon database does not exist yet.
 
 ```sql
 CREATE ROLE golden_record_app
